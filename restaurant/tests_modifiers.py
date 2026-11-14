@@ -336,6 +336,20 @@ class CraftedTests(ModifierSetup):
         sauces = modifiers.save_group({"name_ar": "صوصات", "min_choices": "0", "max_choices": "1", "options": [{"name_ar": "باربكيو"}]}, self.owner)
         self.refused([self.medium.pk, sauces.options.get().pk], message="مش من اختيارات")
 
+    def test_free_choices_too_long_for_the_ticket_are_refused_not_cut(self):
+        # Review finding: four names of 69 characters are valid on the set-up page, but together they make 285 characters
+        # of free choices, and the line kept only the first 255: the kitchen would get part of what the guest asked for.
+        notes = modifiers.save_group({"name_ar": "ملاحظات", "min_choices": "0", "max_choices": "4", "sort": "3",
+                                      "options": [{"name_ar": f"{n} " + "ب" * 67} for n in range(1, 5)]}, self.owner)
+        modifiers.set_dish_groups(self.burger, [self.doneness, self.extras, notes], self.owner)
+        four = [option.pk for option in notes.options.order_by("sort", "pk")]
+        self.assertTrue(all(len(option.name_ar) == 69 for option in notes.options.all()))
+        self.refused([self.medium.pk, *four], message="أطول من اللي يتكتب على التذكرة")
+        # three of them fit (with «ميديم» and the separators): the line keeps every word
+        order = services.open_order(self.owner, table=self.t2)
+        line = services.add_item(order, self.burger, self.owner, 1, options=[self.medium.pk, *four[:3]])
+        self.assertEqual(line.options.split(modifiers.SEPARATOR), ["ميديم", *[f"{n} " + "ب" * 67 for n in range(1, 4)]])
+
     def test_options_for_a_dish_without_groups(self):
         self.refused([self.cheese_opt.pk], item=self.koshary, message="مش من اختيارات")
 
