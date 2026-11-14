@@ -8,6 +8,15 @@
 .ll-input{box-sizing:border-box;inline-size:100%;min-block-size:var(--hs-control-height-lg);padding-inline:var(--hs-space-4);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-size:var(--hs-text-xl);letter-spacing:.3em;text-align:center}
 .ll-input:focus-visible{outline:none;box-shadow:var(--hs-focus-ring);border-color:var(--hs-teal-deep)}
 .ll-msg{margin-block-start:var(--hs-space-4)}
+/* HG-106: the birth date is three numeric boxes in one left-to-right row (day, month, year), in Arabic and English alike; each box is as tall
+   as every other control on the page (--hs-control-height-lg, at least 44px) and no native date picker is used. */
+.ll-fieldset{margin:0;padding:0;border:0;min-inline-size:0}
+.ll-fieldset legend{padding:0}
+.ll-date{display:flex;gap:var(--hs-space-3);align-items:flex-end}
+.ll-datebox{display:flex;flex-direction:column;gap:var(--hs-space-1);flex:1 1 0;min-inline-size:0;text-align:center}
+.ll-datebox--year{flex:1.6 1 0}
+.ll-datebox .ll-label{margin-block-end:0;color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-medium)}
+.ll-input--part{letter-spacing:.1em;padding-inline:var(--hs-space-2)}
 .ll-tools{margin-block-start:0}
 
 /* The sheet (the printed sheet's partial) */

@@ -1,14 +1,16 @@
-"""M6 (HG-085): a lab patient opens their results of one day from a link.
+"""M6 (HG-085, hardened by HG-106): a lab patient opens their results of one day from a link.
 
 The lab makes the link (``make_link``) for one patient and one sample day and sends it by WhatsApp. The patient
 opens it on a phone, answers one question (the second factor), and sees the same content as the printed lab
 sheet. Until then the page shows only the lab's name and the question.
 
-The factor is the birth year when the file has a birth date, and only then; the last 4 digits of the phone are the
-factor only for a file with no birth date. The link goes to the phone on file, so if that number is wrong the
-stranger who receives it owns those 4 digits: they protect nothing in the mis-send case, and the lab is told so.
+The factor is the patient's full birth date (day, month and year, typed in three boxes) when the file has a birth
+date, and only then; the last 4 digits of the phone are the factor only for a file with no birth date. A birth
+year alone (about a hundred plausible values) was the first factor and was judged too weak (HG-106). The link goes to
+the phone on file, so if that number is wrong the stranger who receives it owns those 4 digits: they protect nothing
+in the mis-send case, and the lab is told so.
 
-Nothing is stored (no table, no migration):
+The link is stateless, with one small table for one number:
 
 - the link is a token signed with the SECRET_KEY and its own salt (not printing.share's), so a share link never
   opens this page and this token never opens a share page. It holds the patient's id, the day and a fingerprint,
@@ -19,15 +21,18 @@ Nothing is stored (no table, no migration):
   «ابعت تاني» simply makes a fresh one;
 - a passed second factor is remembered for this browser by a short-lived signed cookie bound to this token
   (never the Django session, so a staff login in the same browser neither bypasses nor is touched by it);
-- answers are counted per token and per address in Django's default cache (per process, as the booking and
-  payment pages do). A slot is taken before the answer is compared (so parallel answers cannot slip past the
-  limit) and given back for a right one. A token has at most TOKEN_LIFE (8) wrong answers in its whole life, then
-  it is dead; within that, 5 per 15 minutes, after which even the right answer waits.
+- a token has at most TOKEN_LIFE (8) wrong answers in its whole life, then it is dead. That count is a row
+  (``LabLinkCounter``, keyed by a keyed hash of the token, never the token), raised by one atomic guarded UPDATE
+  before the answer is compared and given back for a right one, so it is shared by every worker and survives a
+  restart; the row is made by the link's first counted answer (unique constraint, ``get_or_create``). A new link is a
+  new token, so a new row at zero;
+- the short windows (5 wrong answers per 15 minutes per token, 50 per hour per address, 60 page loads a minute per
+  address) are counted in Django's default cache (per process, as the booking and payment pages do). A slot is
+  taken before the answer is compared (so parallel answers cannot slip past the limit) and given back for a right one.
 
-Every failure (forged, altered, expired, stale, wrong patient or day, nothing left to prove) shows the same page
-with the same status. Nothing is shown when in doubt.
+Every failure (forged, altered, expired, stale, wrong patient or day, nothing left to prove, answers spent) shows the
+same page with the same status. Nothing is shown when in doubt.
 """
-
 import hashlib
 import hmac
 import json
@@ -38,6 +43,8 @@ from django.conf import settings
 from django.core import signing
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models import F
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
@@ -47,40 +54,44 @@ from django.views.decorators.csrf import csrf_protect
 
 from audit.models import AuditEventType, AuditLog
 
+from .models import LabLinkCounter
+
 SALT = "hesba.medical.lab.v1"
 FINGERPRINT_SALT = "hesba.medical.lab.fingerprint.v1"
 PASS_SALT = "hesba.medical.lab.pass.v1"
+LIFE_SALT = "hesba.medical.lab.life.v1"  # keys the counter row's fingerprint of a link
 PASS_SECONDS = 30 * 60  # how long a passed second factor is remembered in this browser
 COOKIE_PREFIX = "hs_lab_"
 MIN_PHONE_DIGITS = 7  # fewer digits is not a phone number; its last 4 would be a guess, not a factor
 
 # Wrong answers: per token is the real limit; per address is generous because behind the host's proxy many
 # visitors can share one address (HG-070), and a tight one would let one person lock every patient out.
-# (name, limit, window in seconds; None = the token's whole life, kept for its max age)
+# (name, limit, window in seconds). TOKEN_LIFE lives in the database (``LabLinkCounter.wrong_answers``), not in the cache: its window is None.
 TOKEN_LIFE = ("tokenlife", 8, None)  # then the link is dead: «ask the lab to send it again» (a re-sent link starts clean)
 TOKEN_SHORT = ("token15", 5, 15 * 60)
 ADDRESS_HOUR = ("ip", 50, 3600)
 PAGE_MINUTE = ("page", 60, 60)  # any request to the page, per address: blunts a flood
-YEAR, PHONE = "year", "phone"
+DATE, PHONE = "date", "phone"
 
 WORDS = {
     "ar": {
         "sub": "نتيجة التحاليل", "title": "نتيجة التحاليل",
         "ask_h": "نتيجة تحاليلك جاهزة",
-        "ask_year": "عشان نتأكد إنك صاحب النتيجة، اكتب سنة ميلادك (4 أرقام، زي 1985).", "label_year": "سنة الميلاد",
+        "ask_date": "عشان نتأكد إن حضرتك صاحب النتيجة، اكتب تاريخ ميلاد المريض: اليوم والشهر والسنة بالأرقام.", "label_date": "تاريخ ميلاد المريض",
+        "label_day": "اليوم", "label_month": "الشهر", "label_year": "السنة",
         "ask_phone": "عشان نتأكد إنك صاحب النتيجة، اكتب آخر 4 أرقام من رقم الموبايل اللي سجّلته في المعمل.", "label_phone": "آخر 4 أرقام من الموبايل",
         "open": "افتح النتيجة",
         "wrong": "البيانات دي مش مطابقة للي عندنا. اتأكد وجرّب تاني، أو تواصل مع المعمل.",
-        "format_year": "اكتب سنة ميلادك 4 أرقام (زي 1985).", "format_phone": "اكتب آخر 4 أرقام من الموبايل.",
+        "format_date": "اكتب تاريخ ميلاد حقيقي: اليوم والشهر والسنة بالأرقام.", "format_phone": "اكتب آخر 4 أرقام من الموبايل.",
         "busy": "محاولات كتير متتالية. جرّب تاني بعد دقايق، أو تواصل مع المعمل.",
         "print": "اطبع أو احفظ PDF", "private": "النتيجة دي خاصة بحضرتك، فياريت ماتشاركش الرابط مع حد.",
         "dead_h": "الرابط ده مبقاش شغال", "dead": "ممكن تكون صلاحيته انتهت أو النتيجة اتعدّلت. اطلب من المعمل يبعته تاني.",
         "call": "اتصل بالمعمل", "whatsapp": "واتساب",
         # the lab's side
         "no_results": "مفيش نتايج في اليوم ده.",
-        "no_factor": "مينفعش تبعت النتيجة أونلاين: ملف المريض مفيهوش سنة ميلاد ولا رقم موبايل، والمريض لازم يكتب واحد منهم عشان يفتحها. ضيف واحد منهم في ملف المريض.",
+        "no_factor": "مينفعش تبعت النتيجة أونلاين: ملف المريض مفيهوش تاريخ ميلاد ولا رقم موبايل، والمريض لازم يكتب واحد منهم عشان يفتحها. ضيف واحد منهم في ملف المريض.",
         "no_base_url": "عنوان الموقع مش متظبط (PUBLIC_BASE_URL)؛ ظبّطه الأول عشان الرابط يتبعت.",
-        "wa_text_year": "أهلاً، نتيجة تحاليل حضرتك من {lab} جاهزة. افتح الرابط واكتب سنة ميلاد حضرتك. الرابط صالح لمدة {days} أيام: {url}",
+        "wa_text_date": "أهلاً، نتيجة تحاليل حضرتك من {lab} جاهزة. افتح الرابط واكتب تاريخ ميلاد المريض: اليوم والشهر والسنة. الرابط صالح لمدة {days} أيام: {url}",
         "wa_text_phone": "أهلاً، نتيجة تحاليل حضرتك من {lab} جاهزة. افتح الرابط واكتب آخر 4 أرقام من موبايل حضرتك المسجّل عندنا. الرابط صالح لمدة {days} أيام: {url}",
         "phone_only": "ملف المريض ده مفيهوش تاريخ ميلاد، فرابط النتيجة محمي بآخر 4 أرقام من الموبايل بس، ودي مش بتحمي لو الرقم نفسه غلط "
                       "(اللي هيستلم الرابط هو صاحب الرقم). الأحسن تضيف تاريخ الميلاد في ملف المريض الأول.",
@@ -88,11 +99,12 @@ WORDS = {
     "en": {
         "sub": "Lab results", "title": "Lab results",
         "ask_h": "Your lab results are ready",
-        "ask_year": "To make sure the results are yours, type your birth year (4 digits, like 1985).", "label_year": "Birth year",
+        "ask_date": "To make sure the results are yours, type the patient's birth date: the day, the month and the year, in digits.", "label_date": "Patient's birth date",
+        "label_day": "Day", "label_month": "Month", "label_year": "Year",
         "ask_phone": "To make sure the results are yours, type the last 4 digits of the phone number you gave the lab.", "label_phone": "The phone's last 4 digits",
         "open": "Open the results",
         "wrong": "That does not match the details the lab has. Check and try again, or contact the lab.",
-        "format_year": "Type your birth year as 4 digits (like 1985).", "format_phone": "Type the last 4 digits of your phone.",
+        "format_date": "Type a real birth date: the day, the month and the year, in digits.", "format_phone": "Type the last 4 digits of your phone.",
         "busy": "Too many tries. Please wait a while and try again, or contact the lab.",
         "print": "Print or save as PDF", "private": "These results are private to you. Please do not share the link.",
         "dead_h": "This link no longer works", "dead": "It may have expired or the results were updated. Ask the lab to send it again.",
@@ -100,7 +112,7 @@ WORDS = {
         "no_results": "There are no results on that day.",
         "no_factor": "The results cannot be sent online: the patient's file has no birth date and no phone number, and the patient must type one of them to open the link. Add one of them to the patient's file.",
         "no_base_url": "The site address (PUBLIC_BASE_URL) is not set; set it first so the link can be sent.",
-        "wa_text_year": "Hello, your lab results from {lab} are ready. Open the link and type your birth year. The link works for {days} days: {url}",
+        "wa_text_date": "Hello, your lab results from {lab} are ready. Open the link and type the patient's birth date: the day, the month and the year. The link works for {days} days: {url}",
         "wa_text_phone": "Hello, your lab results from {lab} are ready. Open the link and type the last 4 digits of the phone number we have. The link works for {days} days: {url}",
         "phone_only": "This patient's file has no birth date, so the results link is protected only by the phone's last 4 digits, which does not help "
                       "if the number itself is wrong (whoever receives the link owns that number). Better add the birth date to the file first.",
@@ -137,19 +149,29 @@ def _file(patient):
 
 
 def factor(patient, file=None):
-    """(kind, the 4 digits) that open this patient's links, or None.
+    """(kind, the accepted answer) that opens this patient's links, or None.
 
-    The birth year when the file has a birth date, and then only it: the link goes to the phone on file, so a stranger
-    who got it through a wrong number owns that phone's last 4 digits. Those are the factor only when there is no
+    The full birth date (ISO, ``YYYY-MM-DD``) when the file has one, and then only it: the link goes to the phone on file, so a
+    stranger who got it through a wrong number owns that phone's last 4 digits. Those are the factor only when there is no
     birth date (and the lab is told what that means)."""
 
     file = file if file is not None else _file(patient)
     if file is not None and file.date_of_birth:
-        return YEAR, f"{file.date_of_birth.year:04d}"
+        return DATE, file.date_of_birth.isoformat()
     phone = _digits(patient.phone)
     if len(phone) >= MIN_PHONE_DIGITS:
         return PHONE, phone[-4:]
     return None
+
+
+def parse_date(post):
+    """The birth date typed in the three boxes (``day``, ``month``, ``year``) as an ISO string, or None when it is not a real calendar
+    date or its year is outside 1900 to this year: a format error, never counted as a wrong answer. It is the guardian portal's reader
+    (HG-101), imported here so the two public pages cannot disagree about what a date is (Arabic-Indic and Persian digits are read)."""
+
+    from education.portal import parse_date as portal_parse_date
+
+    return portal_parse_date(post)
 
 
 def can_share(patient):
@@ -268,7 +290,7 @@ def make_link(patient, day, user, lang="ar"):
             "warning": words["phone_only"] if found[0] == PHONE else ""}
 
 
-# ---- throttling (the booking and payment pages' pattern: Django's default cache, per process) ----
+# ---- throttling: the lifetime limit is a row; the short windows are the booking and payment pages' pattern (Django's default cache, per process) ----
 
 def _address(request):
     return (request.META.get("REMOTE_ADDR") or "")[:64]
@@ -276,14 +298,11 @@ def _address(request):
 
 def _key(bucket, who):
     name, limit, window = bucket
-    if window is None:  # the token's whole life
-        return f"medical-lab:{name}:{who}"
     return f"medical-lab:{name}:{who}:{int(timezone.now().timestamp()) // window}"
 
 
 def _ttl(bucket):
-    window = bucket[2]
-    return max_age() + 60 if window is None else window * 2
+    return bucket[2] * 2
 
 
 def _count(bucket, who):
@@ -310,23 +329,57 @@ def _digest(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def link_hash(token):
+    """The counter row's fingerprint of a link: a keyed hash (so a copy of the table says nothing about any token, and is not the plain hash the
+    cache keys and the cookie value already use). Never the token itself."""
+
+    return salted_hmac(LIFE_SALT, token, algorithm="sha256").hexdigest()
+
+
 def _slots(token, request):
-    return ((TOKEN_LIFE, _digest(token)), (TOKEN_SHORT, _digest(token)), (ADDRESS_HOUR, _address(request)))
+    return ((TOKEN_SHORT, _digest(token)), (ADDRESS_HOUR, _address(request)))
 
 
 def used_up(token):
-    """True once the token had its lifetime of wrong answers (TOKEN_LIFE): it is dead for any new answer."""
+    """True once the token had its lifetime of wrong answers (TOKEN_LIFE): it is dead for any new answer. Read from the row; never makes one."""
 
-    return (cache.get(_key(TOKEN_LIFE, _digest(token))) or 0) >= TOKEN_LIFE[1]
+    return LabLinkCounter.objects.filter(link_hash=link_hash(token), wrong_answers__gte=TOKEN_LIFE[1]).exists()
+
+
+def _life_take(token):
+    """The answer's slot in the link's lifetime: one atomic guarded UPDATE, shared by every worker; False when the limit is already reached.
+
+    The row is made lazily by the link's first counted answer: when the UPDATE finds no row, ``get_or_create`` makes it inside its own
+    transaction (the unique ``link_hash`` makes two first answers at once make one row: the loser's INSERT fails and it reads the winner's),
+    then the same guarded UPDATE runs again. Nothing here can raise the count past the limit or lose an increment."""
+
+    fingerprint = link_hash(token)
+
+    def raise_count():
+        return LabLinkCounter.objects.filter(link_hash=fingerprint, wrong_answers__lt=TOKEN_LIFE[1]).update(
+            wrong_answers=F("wrong_answers") + 1, updated_at=timezone.now()) == 1
+
+    if raise_count():
+        return True
+    with transaction.atomic():
+        LabLinkCounter.objects.get_or_create(link_hash=fingerprint)
+    return raise_count()
+
+
+def _life_give_back(token):
+    LabLinkCounter.objects.filter(link_hash=link_hash(token), wrong_answers__gt=0).update(wrong_answers=F("wrong_answers") - 1)
 
 
 def take(token, request):
-    """Count before comparing: take a slot in every bucket, then refuse if any is over its limit.
+    """Count before comparing: take a slot in the row's lifetime counter, then in every cache window, then refuse if any is over its limit.
 
-    Returns "ok" (the slots are held: keep them for a wrong answer, ``give_back`` them for a right one), "dead" (the
-    token's lifetime is used up) or "busy" (a window is full). A refused answer gives its slots back, so only answers
-    that were actually compared are counted, and N answers at once can never compare more than the limit."""
+    Returns "ok" (the slots are held: keep them for a wrong answer, ``give_back`` them for a right one), "dead" (the token's
+    lifetime is used up) or "busy" (a window is full). A refused answer gives its slots back, so only answers that were
+    actually compared are counted, and N answers at once can never compare more than the limit. An answer that takes a slot writes the
+    counter row and nothing else (the first one of a link also makes the row)."""
 
+    if not _life_take(token):
+        return "dead"
     taken = []
     for bucket, who in _slots(token, request):
         count = _count(bucket, who)
@@ -334,11 +387,13 @@ def take(token, request):
         if count > bucket[1]:
             for held in taken:
                 _give_back(*held)
-            return "dead" if bucket is TOKEN_LIFE else "busy"
+            _life_give_back(token)
+            return "busy"
     return "ok"
 
 
 def give_back(token, request):
+    _life_give_back(token)
     for bucket, who in _slots(token, request):
         _give_back(bucket, who)
 
@@ -405,8 +460,12 @@ def _page(request, token, found, lang, message="", status=200, sheet=False):
 def _answer(request, token, found, lang):
     words = _words(lang)
     kind = factor(found.patient, found.file)[0]
-    answer = _digits(request.POST.get("answer"))
-    if len(answer) != 4:  # not counted: a typo in the length proves nothing either way
+    if kind == DATE:
+        answer = parse_date(request.POST)  # an ISO date, or None: not a real date, or a year outside 1900 to now
+    else:
+        answer = _digits(request.POST.get("answer"))
+        answer = answer if len(answer) == 4 else None
+    if answer is None:  # not counted: a typo, or a date that cannot exist, proves nothing either way
         return _page(request, token, found, lang, words[f"format_{kind}"], status=400)
     outcome = take(token, request)  # the slot is taken before comparing
     if outcome == "dead":
