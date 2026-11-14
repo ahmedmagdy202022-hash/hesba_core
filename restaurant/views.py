@@ -137,7 +137,7 @@ def _error(exc, lang):
 def _ready_count(order):
     """R4: how many of an order's live lines the kitchen marked ready (there is no «served» step yet, so this stays until the bill)."""
 
-    return sum(1 for line in order.lines.all() if line.ready_at and not line.voided)
+    return sum(1 for line in order.lines.all() if line.ready_at and not line.voided and not line.parent_id)  # R1a: dishes, not their add-ons
 
 
 @require_any_permission(*FLOOR)
@@ -309,8 +309,12 @@ def ticket(request, pk):
     if upto.isdigit() and int(upto) > first.sequence:
         tickets += list(first.order.tickets.select_related("order", "order__table", "order__waiter", "sent_by", "station")
                         .filter(sequence__gt=first.sequence, sequence__lte=int(upto)))
-    cards = [{"ticket": one, "lines": one.lines.select_related("item"), "sent_at": timezone.localtime(one.sent_at),
-              "station": one.station.label(lang) if one.station_id else ""} for one in tickets]
+    from .modifiers import addon_label, grouped
+
+    # R1a (HG-109): each dish with its free choices and its add-ons printed under it; an add-on is never a dish of its own
+    cards = [{"ticket": one, "dishes": [{"line": line, "addons": [{"line": addon, "label": addon_label(addon)} for addon in addons]}
+                                        for line, addons in grouped(one.lines.select_related("item"))],
+              "sent_at": timezone.localtime(one.sent_at), "station": one.station.label(lang) if one.station_id else ""} for one in tickets]
     return render(request, "restaurant/ticket.html", _base(
         request, ticket=first, order=first.order, cards=cards, kind_label=_kind_label(first.order, lang), company=company_details(),
     ))

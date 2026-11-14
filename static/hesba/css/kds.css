@@ -36,6 +36,9 @@
 .kds-line__name{font-size:var(--hs-text-lg);font-weight:var(--hs-weight-semibold)}
 .kds-line__qty{display:inline-block;min-width:2.2em;color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
 .kds-line__note{font-size:var(--hs-text-md);font-weight:var(--hs-weight-semibold);color:var(--hs-warning)}
+/* R1a: a dish's free choices and add-ons, indented under it */
+.kds-line__extra{padding-inline-start:2.2em;font-size:var(--hs-text-md);font-weight:var(--hs-weight-semibold);color:var(--hs-navy)}
+.kds-line--void .kds-line__extra{text-decoration:line-through;color:var(--hs-danger)}
 .kds-line:focus-visible{outline:none;box-shadow:inset var(--hs-focus-ring)}
 .kds-line--ready{background:var(--hs-success-wash)}
 .kds-line--ready .kds-line__name::after{content:" \2713";color:var(--hs-success);font-weight:var(--hs-weight-bold)}

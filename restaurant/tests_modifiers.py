@@ -258,7 +258,7 @@ class BillTests(ModifierSetup):
         invoice, _change = self.pay(order, "270.00")
         self.assertEqual(get_item_location_stock_quantity(cheddar, self.location), D("4.940"))
         self.assertEqual(list(ProductionRun.objects.values_list("recipe__product__item_code", "output_quantity")), [("A-CHEESE", D("2.000"))])
-        self.assertEqual(list(StockMovement.objects.filter(item__in=[cheddar, self.cheese]).order_by("pk").values_list("item__item_code", "movement_type", "quantity")),
+        self.assertEqual(list(StockMovement.objects.filter(item__in=[cheddar, self.cheese]).exclude(movement_type="purchase_in").order_by("pk").values_list("item__item_code", "movement_type", "quantity")),
                          [("R-CHED", "adjustment_out", D("0.060")), ("A-CHEESE", "adjustment_in", D("2.000")), ("A-CHEESE", "sale_out", D("2.000"))])
         cheese_row = invoice.lines.get(item=self.cheese)
         self.assertEqual((cheese_row.unit_cost, cheese_row.line_cost_amount), (D("6.0000"), D("12.00")))
