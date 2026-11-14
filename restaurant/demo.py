@@ -1,11 +1,11 @@
-"""Restaurants R4: what the restaurant demos show of the kitchen screen; R1a: one add-on group and one required choice.
-Called from ``prepare_demo._floor``; safe to run twice."""
+"""Restaurants R4: what the restaurant demos show of the kitchen screen; R1a: one add-on group and one required choice;
+R1b: one combo. Called from ``prepare_demo._floor``; safe to run twice."""
 
 from datetime import timedelta
 
 from django.utils import timezone
 
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 
 from master_data.models import Category, Item
 
@@ -88,3 +88,32 @@ def seed_modifiers(catalog, dishes, owner):
         if not modifiers.groups_of(target):
             modifiers.set_dish_groups(target, wanted, owner)
     return [extras, required]
+
+
+COMBO_NAME = ("وجبة التوفير", "Saver combo")
+
+
+def seed_combo(catalog, dishes, items, owner):
+    """R1b (HG-112): one combo through the real set-up: «الطبق» (the first two dishes, the dearer one for half the difference
+    more) and «المشروب» (two other menu items, the bar's first), priced 10% under its cheapest choices, rounded down to 5.
+    Run after every demo order, so no seeded figure moves; nothing is ordered with it. Returns the combo, or None."""
+
+    from . import combos
+    from .models import Combo
+
+    existing = Combo.objects.filter(item__item_name=COMBO_NAME[0]).first()
+    if existing is not None or len(dishes) < 2:
+        return existing
+    first, second = dishes[0], dishes[1]
+    bar = [items[index] for index in (catalog.bar or ()) if index < len(items)]
+    others = [item for item in bar + list(items) if item.pk not in (first.pk, second.pk) and item.active]
+    drinks = list(dict.fromkeys(others))[:2]
+    if not drinks:
+        return None
+    step = Decimal("5")
+    extra = (max(Decimal("0"), Decimal(second.default_sale_price) - Decimal(first.default_sale_price)) / 2 / step).to_integral_value(rounding=ROUND_FLOOR) * step
+    cheapest = min(Decimal(first.default_sale_price), Decimal(second.default_sale_price) - extra) + min(Decimal(item.default_sale_price) for item in drinks)
+    price = (cheapest * Decimal("0.9") / step).to_integral_value(rounding=ROUND_FLOOR) * step
+    return combos.save_combo({"name_ar": COMBO_NAME[0], "name_en": COMBO_NAME[1], "price": str(price), "active": True,
+                              "slots": [{"name_ar": "الطبق", "name_en": "Main", "choices": [{"item": first}, {"item": second, "upcharge": str(extra)}]},
+                                        {"name_ar": "المشروب", "name_en": "Drink", "choices": [{"item": item} for item in drinks]}]}, owner)

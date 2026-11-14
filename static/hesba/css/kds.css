@@ -36,6 +36,8 @@
 .kds-line__name{font-size:var(--hs-text-lg);font-weight:var(--hs-weight-semibold)}
 .kds-line__qty{display:inline-block;min-width:2.2em;color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
 .kds-line__note{font-size:var(--hs-text-md);font-weight:var(--hs-weight-semibold);color:var(--hs-warning)}
+/* R1b: the combo a component came in, over its name */
+.kds-line__combo{display:block;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);color:var(--hs-muted)}
 /* R1a: a dish's free choices and add-ons, indented under it */
 .kds-line__extra{padding-inline-start:2.2em;font-size:var(--hs-text-md);font-weight:var(--hs-weight-semibold);color:var(--hs-navy)}
 .kds-line--void .kds-line__extra{text-decoration:line-through;color:var(--hs-danger)}

@@ -9,6 +9,8 @@ being worked in (HG-034):
 
 - dish figures are the order lines at their menu price, before the order's
   discount; a priced add-on (R1a) counts in its dish's money, never as a dish;
+- R1b (HG-112): a combo's components count as dishes at their menu price too, and what the combos took off them is the
+  period's «خصم الكومبو» (``totals["combo_discount"]``), so the dishes less that discount come to the lines' net money;
 - order totals are the invoice's net sales (before tax, after posted returns);
 - R2a (HG-111): a bill paid in parts is one order. A part (``Order.split_from``) adds its sales, but it is counted in its
   parent's order, table, waiter, kind, guests and stay: the order is counted once, at the first of its invoices in the
@@ -146,7 +148,7 @@ def period_report(first, last):
     days = (last - first).days + 1
     hours = OrderedDict((hour, {"hour": hour, "orders": 0, "sales": ZERO}) for hour in range(24))
     dishes, tables, waiters, kinds = {}, {}, {}, {}
-    total, guests, minutes = ZERO, 0, []
+    total, guests, minutes, combo_discount = ZERO, 0, [], ZERO
     for order in orders:
         sales = net_sales(order.invoice)
         total += sales
@@ -164,6 +166,7 @@ def period_report(first, last):
             if dish is line:
                 row["quantity"] += line.quantity
             row["sales"] += money_round(line.quantity * line.unit_price)
+            combo_discount += line.line_discount  # R1b: the combo's saving, kept out of the dish figures
         kind = kinds.setdefault(order.kind, {"kind": order.kind, "orders": 0, "sales": ZERO})
         kind["orders"] += 1 if stands else 0
         kind["sales"] += sales
@@ -197,7 +200,7 @@ def period_report(first, last):
         "waiters": sorted(waiters.values(), key=lambda row: -row["sales"]),
         "kinds": sorted(kinds.values(), key=lambda row: -row["orders"]),
         "totals": {"orders": count, "sales": money_round(total), "average": money_round(total / count) if count else ZERO,
-                   "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None},
+                   "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None, "combo_discount": money_round(combo_discount)},
     }
 
 
