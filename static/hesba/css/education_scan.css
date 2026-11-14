@@ -76,3 +76,14 @@
 .es-nursery .es-actions{margin-top:0}
 tr[data-pick]{background:var(--hs-teal-wash)}
 tr[data-scanned]{background:var(--hs-success-wash)}
+
+/* Education video finding 19 and 20: the nursery board fits a 390 px phone. The scan box's own width (a text input is about 20 characters
+   wide) used to set the grid's column, so the row came out 560 px wide and pushed the «وصل» button off the screen: the column is now the
+   form's width, the box shrinks into it, and the check-in and pickup forms in the child rows stack, each control a full touch target. These
+   rules are scoped to the nursery's own board; the scan screen (.es-scan) keeps its rules above. */
+.es-nursery{grid-template-columns:minmax(0,1fr);max-width:min(560px,100%)}
+.es-nursery .es-row{min-width:0}
+.es-nursery .es-box{inline-size:100%;min-width:0}
+[data-nursery-board] .edu-inline{display:grid;gap:var(--hs-space-2);width:100%;min-width:0}
+[data-nursery-board] .edu-inline input,[data-nursery-board] .edu-inline select,[data-nursery-board] .edu-inline button{box-sizing:border-box;inline-size:100%;min-width:0;min-height:var(--hs-control-height)}
+[data-nursery-board] .edu-inline input,[data-nursery-board] .edu-inline select{padding:0 var(--hs-space-3);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
