@@ -37,3 +37,8 @@ class SplitReceiptTests(ReceiptSetup):
 
     def test_the_cash_being_the_larger_part_keeps_it_a_cash_receipt(self):
         self.assertEqual(self.split("100.00", "64.00")["paymentMethod"], "C")
+
+    def test_a_sale_paid_one_way_into_the_card_machine_is_still_a_card_receipt(self):
+        invoice, _change = checkout(lines=[line(self.a, 1, "100.00")], customer=walk_in_customer(), location=self.location, cashbox=self.card,
+                                    discount=D("0"), tendered=D("0"), user=self.owner, card=True)
+        self.assertEqual(Receipt.objects.get(invoice=invoice).document["paymentMethod"], "V")

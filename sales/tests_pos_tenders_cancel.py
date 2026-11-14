@@ -128,3 +128,47 @@ class ReturnTests(TenderSetup):
         self.assertEqual((sales_return.total_amount, sales_return.cash_amount), (D("136.80"), D("136.80")))
         self.assertEqual(balance(self.walk_in), ZERO)
 
+
+
+class ReportsTests(TenderSetup):
+    """The cashbox report, the shift close, loyalty points and the invoice page agree with a bill paid two ways."""
+
+    def report(self):
+        from reports.selectors import cashbox_report
+
+        return {row["cashbox_code"]: row["balance"] for row in cashbox_report() if row["cashbox_code"] in ("CASH", "CARD")}
+
+    def test_the_cashbox_report_before_and_after_cancelling(self):
+        invoice, _ = self.split_307()
+        self.assertEqual(self.report(), {"CASH": D("200.00"), "CARD": D("107.80")})
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "غلط")
+        self.assertEqual(self.report(), {"CASH": ZERO, "CARD": ZERO})
+
+    def test_the_shift_closes_on_the_cash_part_with_no_difference(self):
+        from shifts.services import close_shift, open_shift_for
+
+        self.split_307()
+        shift = close_shift(open_shift_for(self.owner), self.shift.opening_float + D("200.00"), self.owner)
+        self.assertEqual((shift.expected_cash, shift.difference, shift.summary["groups"]), (self.shift.opening_float + D("200.00"), ZERO, {"sales": "200.00"}))
+
+    def test_loyalty_points_are_those_of_a_bill_paid_one_way(self):
+        from loyalty.models import PointsEntry
+        from settings_core.capabilities import set_capability_enabled
+
+        set_capability_enabled(self.profile, "loyalty", True, user=self.owner)
+        one_way, two_ways = make_customer(customer_code="C-ONE"), make_customer(customer_code="C-TWO")
+        self.sell(None, customer=one_way, tendered=D("307.80"))
+        self.split_307(two_ways)
+        points = {code: list(PointsEntry.objects.filter(customer__customer_code=code).values_list("kind", "points")) for code in ("C-ONE", "C-TWO")}
+        self.assertTrue(points["C-ONE"])
+        self.assertEqual(points["C-TWO"], points["C-ONE"])  # earned once, on the invoice's total; the split payment earns nothing
+
+    def test_the_invoice_page_shows_nothing_left_to_collect(self):
+        invoice, _ = self.split_307()
+        self.client.force_login(self.owner)
+        page = self.client.get(f"/sales/{invoice.pk}/", {"lang": "en"}).content.decode()
+        self.assertIn("data-invoice-applied", page)
+        remaining = page[page.index("data-invoice-remaining"):]
+        self.assertIn("Still to collect", remaining[:200])
+        self.assertIn("0.00", remaining[:260])
+        self.assertNotIn("hs-totals__due", remaining[:60])
