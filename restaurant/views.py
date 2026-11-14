@@ -35,7 +35,7 @@ def _takes_orders(user):
     return user_has_permission(user, TAKE) or user_has_permission(user, TAKE_ORDERS)
 WORDS = {
     "ar": {
-        "page_title": "الطاولات والطلبات", "title": "الطاولات والطلبات", "intro": "دوس على طاولة فاضية تفتح لها طلب، أو على طاولة مشغولة تكمّل طلبها.",
+        "page_title": "الطاولات والطلبات", "title": "الطاولات والطلبات", "intro": "اختار طاولة فاضية تفتح لها طلب، أو طاولة مشغولة تكمّل طلبها.",
         "free": "فاضية", "busy": "مشغولة", "seats": "كراسي", "minutes": "دقيقة", "open": "افتح", "tables": "الطاولات", "no_tables": "لسه مفيش طاولات. ضيف طاولات الصالة الأول.",
         "add_tables": "ضيف الطاولات", "others": "تيك أواي ودليفري مفتوحة", "none": "مفيش.", "new_takeaway": "تيك أواي جديد", "new_delivery": "دليفري جديد",
         "customer": "العميل", "walk_in": "— عميل نقدي —", "phone": "الموبايل", "address": "العنوان", "notes": "ملاحظات", "guests": "عدد الأفراد", "waiter": "الويتر",
