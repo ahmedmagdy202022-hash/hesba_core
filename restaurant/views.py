@@ -345,6 +345,7 @@ def order_detail(request, pk):
                     discount=_money(request.POST.get("discount"), words), tendered=_money(request.POST.get("tendered"), words),
                     customer=_pick(Customer, request.POST.get("customer"), active=True), lang=lang,
                     **({"tenders": _tenders(request.POST, order, words)} if split else {}),
+                    **_posted_offer(request, lang),  # R6 (HG-114): the coupon, the points and the gift card the bill box worked out
                 )
                 text = words["paid"].format(number=order.number, invoice=invoice.invoice_number, total=f"{invoice.total_amount:,.2f}")
                 if change:
@@ -382,8 +383,10 @@ def order_detail(request, pk):
     default_cashbox = shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first()
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     families = combos.blocks(modifiers.grouped(lines))  # R1b: each combo taken is one block of its components
+    offer_box = _offer_box(request, order, lines, lang) if order.status == OrderStatus.OPEN else None  # R6 (HG-114)
     return render(request, "restaurant/order.html", _base(
-        request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang), raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
+        request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang, offer_box), offer_box=offer_box, raw_ids=raw_ids,
+        categories=categories, kind_label=_kind_label(order, lang),
         families=families, sheets=choice_sheets, **_split_merge_context(order, families, request.user, lang),
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
         combo_sheets=combo_choice_sheets, cw=COMBO_WORDS[lang],
@@ -393,7 +396,7 @@ def order_detail(request, pk):
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
         cashboxes=cashboxes, default_cashbox=default_cashbox,
         split_rows=_split_defaults(cashboxes, default_cashbox) if order.status == OrderStatus.OPEN and len(cashboxes) > 1 else [],  # R2b
-        bill_total=services.bill_total(order, lines) if order.status == OrderStatus.OPEN else None,
+        bill_total=(offer_box["summary"]["cash_due"] if offer_box else services.bill_total(order, lines)) if order.status == OrderStatus.OPEN else None,
         branch_label=order.entity.display(lang) if is_multi_entity() else "",
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
@@ -424,20 +427,29 @@ CHARGE_WORDS = {
 }
 
 
-def _charge_context(order, lines, lang):
+def _charge_context(order, lines, lang, offer_box=None):
     """R3 (HG-113): the bill box's top-up and service rows and its total before VAT, from the same preview that ``pay`` posts.
     A closed order shows the charge lines its invoice really has. With both settings off and no charge line, the page is as
-    before: ``total`` is ``Order.total`` and nothing else is added."""
+    before: ``total`` is ``Order.total`` and nothing else is added.
 
-    from . import charges
+    R6 (HG-114): the offer is a row too, «عرض: …» with what it takes off, before the charges (the service is worked out after
+    it). An open order reads the preview whenever promotions are on (or the bill box's own, with its coupon and customer); a
+    paid one shows the offer its invoice recorded. With promotions off, or no offer running, nothing changes."""
+
+    from . import charges, offers
 
     words = CHARGE_WORDS[lang]
     config = charges.settings()
-    rows, note = [], ""
+    rows, note, offer_rows, bill = [], "", [], None
     if order.status == OrderStatus.OPEN:
-        if config.on:
+        if offer_box is not None:
+            bill = offer_box["bill"]
+        elif config.on or offers.promotions_on():
             bill = charges.preview(order, lines, lang, config)
+        if bill is not None:
             rows = [{"kind": row["kind"], "description": row["description"], "amount": row["net"]} for row in bill["rows"] if row["kind"] in ("min", "service")]
+            if bill["offer"]:
+                offer_rows = [{"description": offers.words(lang)["offer_row"].format(name=bill["promotion"].name), "amount": bill["offer"]}]
             if config.minimum is not None and order.kind == OrderKind.DINE_IN:
                 if order.split_from_id:
                     note = words["part_note"]
@@ -447,9 +459,135 @@ def _charge_context(order, lines, lang):
         kinds = {charges.MIN_ITEM_CODE: "min", charges.SERVICE_ITEM_CODE: "service"}
         rows = [{"kind": kinds[line.item.item_code], "description": line.description or line.item.item_name, "amount": line.line_total_amount}
                 for line in order.invoice.lines.select_related("item").filter(item__item_code__in=charges.CHARGE_CODES).order_by("line_number")]
-    total = money_round(order.total + sum((row["amount"] for row in rows), Decimal("0")))
-    return {"total": total, "charge_rows": rows, "charge_note": note, "chw": words,
-            "can_check": config.on and order.status == OrderStatus.OPEN and any(not line.voided for line in lines)}
+        from promotions.models import InvoicePromotion
+
+        offer_rows = [{"description": offers.words(lang)["offer_row"].format(name=use.promotion.name), "amount": use.discount}
+                      for use in InvoicePromotion.objects.filter(invoice_id=order.invoice_id).select_related("promotion")]
+    offer_off = sum((row["amount"] for row in offer_rows), Decimal("0"))
+    total = money_round(order.total - offer_off + sum((row["amount"] for row in rows), Decimal("0")))
+    shown = bool(offer_rows) or bool(offer_box and offer_box["active"])
+    return {"total": total, "charge_rows": rows, "charge_note": note, "chw": words, "offer_rows": offer_rows,
+            "can_check": (config.on or shown) and order.status == OrderStatus.OPEN and any(not line.voided for line in lines)}
+
+
+def _offer_fields(data):
+    """R6 (HG-114): the bill box's «خصم أو نقاط أو كارت هدية» as typed (the page's query, or the pay form's copy of it)."""
+
+    return {key: str(data.get(key) or "").strip()[:60] for key in ("phone", "customer", "coupon", "redeem_points", "gift_code", "gift_amount")}
+
+
+def _offer_box(request, order, lines, lang):
+    """R6 (HG-114): the bill worked out with what the cashier typed in the bill box (sent as the page's query, so the printed
+    check can carry it too): the customer by mobile (POS-002's directory) or by the list, the coupon, the points and the gift
+    card, each checked by the till's own rules. A refused one is named and left out; the rest still count. None when
+    promotions, loyalty and gift cards are all off (the page is then exactly as before R6)."""
+
+    from sales.pos import WALK_IN_CODE, _gift_card_part
+
+    from . import charges, offers
+
+    user = request.user
+    if not offers.any_on(user):
+        return None
+    text = offers.words(lang)
+    fields = _offer_fields(request.GET)
+    errors = []
+    customer = _pick(Customer, fields["customer"], active=True)
+    if fields["phone"] and customer is None:
+        customer = offers.find_customer(fields["phone"])
+        if customer is None:
+            errors.append(text["no_customer"])
+    named = customer or order.customer
+    payer = named or Customer.objects.filter(customer_code=WALK_IN_CODE).first()  # never made here: the page writes nothing
+    config = charges.settings()
+    coupon = fields["coupon"] if offers.promotions_on() else ""
+    try:
+        bill = charges.preview(order, lines, lang, config, offers.Offer(coupon=coupon, customer=payer))
+    except ValidationError as exc:
+        errors.append(_error(exc, lang))
+        coupon = ""
+        bill = charges.preview(order, lines, lang, config, offers.Offer(customer=payer))
+    spent, points_off = 0, Decimal("0.00")
+    raw_points = fields["redeem_points"] if offers.loyalty_on() else ""
+    if raw_points:
+        try:
+            spent, points_off = offers.points_part(payer, raw_points, bill["rows"], lang)
+        except ValidationError as exc:
+            errors.append(text["points_walk_in"] if named is None else _error(exc, lang))
+    gift = None
+    if fields["gift_code"] and offers.gift_cards_on(user):
+        try:
+            gift = _gift_card_part({"gift_code": fields["gift_code"], "gift_amount": fields["gift_amount"]}, lang, user)
+            _check_gift(gift, order, bill["total"] - points_off, lang)
+        except ValidationError as exc:
+            errors.append(_error(exc, lang))
+            gift = None
+    balance = None
+    if named is not None and offers.loyalty_on():
+        from loyalty.services import balance as points_balance
+
+        balance = points_balance(named)
+    kept = {"phone": fields["phone"], "customer": str(named.pk) if named else "", "coupon": coupon, "redeem_points": str(spent) if spent else "",
+            "gift_code": fields["gift_code"] if gift else "", "gift_amount": f"{gift[1]:.2f}" if gift else ""}
+    from urllib.parse import urlencode
+
+    from settings_core.templatetags.hesba_format import money
+
+    lines_text = {"customer_line": text["customer_found"].format(name=named.name) if named else "",
+                  "balance_line": text["balance"].format(points=max(balance["points"], 0), value=money(balance["value"])) if balance else "",
+                  "points_line": text["points_row"].format(points=spent) if spent else "",
+                  "gift_line": text["gift_row"].format(card=gift[0].number) if gift else ""}
+    return {"fields": fields, "kept": kept, "errors": errors, "bill": bill, "customer": named, "balance": balance, "words": text, **lines_text,
+            "summary": offers.summary(bill, spent, points_off, gift), "active": any(fields.values()),
+            "query": urlencode({key: value for key, value in kept.items() if value and key != "phone"}),
+            "coupon_on": offers.promotions_on(), "points_on": offers.loyalty_on(), "gift_on": offers.gift_cards_on(user)}
+
+
+def _check_gift(gift, order, due, lang):
+    """The card's own refusals, said on the bill box before paying (the payment checks them again in ``giftcards.redeem``):
+    a card of another branch's entity (R12, HG-034), a balance below the amount, an amount above what the bill asks."""
+
+    from giftcards import services as giftcards
+
+    from . import branches
+
+    card, amount = gift
+    text = giftcards.MESSAGES["en" if lang == "en" else "ar"]
+    location = branches.selling_location(order)
+    entity = getattr(location, "entity", None) if location is not None else None
+    if entity is None:
+        from entities.services import main_entity
+
+        entity = main_entity()
+    giftcards.check_card(card, entity, text)
+    held = giftcards.balance(card)
+    if amount > held:
+        raise ValidationError(text["above_balance"].format(balance=f"{held:,.2f}"))
+    if amount > due:
+        raise ValidationError("err_gift_amount")
+
+
+def _posted_offer(request, lang):
+    """R6 (HG-114): the pay form's copy of the bill box (hidden fields), as ``services.pay`` takes it. Nothing when none was
+    sent, so a bill paid without the box is the plain payment it always was."""
+
+    from sales.pos import _gift_card_part
+
+    from . import offers
+
+    post = request.POST
+    extra = {}
+    if (post.get("coupon") or "").strip():
+        extra["coupon"] = post["coupon"].strip()
+    if (post.get("redeem_points") or "").strip():
+        extra["points"] = post["redeem_points"].strip()
+    gift = _gift_card_part(post, lang, request.user)  # the till's own check: the switch, giftcards.sell, the code, the amount
+    if gift is not None:
+        extra["gift"] = gift
+    for key, name in (("promotion_seen", "promotion_seen"), ("points_seen", "points_seen")):
+        if name in post:
+            extra[key] = offers.seen_value(post.get(name))
+    return extra
 
 
 @require_any_permission(*FLOOR)
@@ -465,7 +603,9 @@ def check(request, pk):
     order = get_object_or_404(branches.orders(Order.objects.select_related("table", "waiter", "split_from__table")), pk=pk)  # R12
     if order.status != OrderStatus.OPEN:
         raise Http404("Only an open order has a check to print.")
-    bill = charges.preview(order, lang=lang)
+    lines = list(order.lines.select_related("item", "combo__item"))
+    offer_box = _offer_box(request, order, lines, lang)  # R6 (HG-114): the bill box's coupon, customer, points and card ride on the link
+    bill = offer_box["bill"] if offer_box is not None else charges.preview(order, lines, lang=lang)
     rows, seen = [], set()
     for row in bill["rows"]:
         line = row["line"]
@@ -482,9 +622,11 @@ def check(request, pk):
         rows.append({"row": row, "name": name, "combo": head, "bundle": line.bundle if line is not None else None})
     services._audit(order, request.user, "print_check", {"number": order.number, "subtotal": f"{bill['subtotal']:.2f}", "tax": f"{bill['tax']:.2f}",
                                                          "total": f"{bill['total']:.2f}", "service": f"{bill['service']:.2f}", "topup": f"{bill['topup']:.2f}",
-                                                         "rows": len(rows)})
+                                                         "rows": len(rows), **({"offer": f"{bill['offer']:.2f}"} if bill["offer"] else {})})
+    summary = offer_box["summary"] if offer_box is not None else None
     return render(request, "restaurant/check.html", _base(request, order=order, bill=bill, rows=rows, chw=CHARGE_WORDS[lang], kind_label=_kind_label(order, lang),
-                                                        company=company_details(), now=timezone.localtime()))
+                                                        company=company_details(), now=timezone.localtime(), summary=summary,
+                                                        ow=offer_box["words"] if offer_box is not None else None))
 
 
 def _save_charges(request, lang):
