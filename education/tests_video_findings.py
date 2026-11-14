@@ -241,11 +241,11 @@ class TrainingWordsAndSearchTests(VideoDemoCase):
 
         teacher = Employee.objects.order_by("pk").first()
         html = self.get(reverse("staff:detail", args=[teacher.pk]) + "?lang=ar")
-        heading = element(html, r"<h2>شغله الشهر ده.*?</h2>")
+        heading = element(html, r"<h2>شغله الشهر ده</h2><p[^>]*data-work-period>.*?</p>")  # the range has its own line: at heading size it wrapped between digits
         isolate = element(heading, r"<bdi[^>]*data-work-range>.*?</bdi>")
         self.assertIn('dir="ltr"', isolate)
         self.assertEqual(text_of(isolate), "2026-11-01 – 2026-11-14")
-        self.assertEqual(len(re.findall(r"<bdi", heading)), 1)  # one isolate, not a bdi for each date with the dash and brackets left to drift between them
+        self.assertEqual(len(re.findall(r"<bdi", heading)), 1)  # one isolate, not a bdi for each date with the dash left to drift between them
 
 
 # ---- a language centre: names and levels agree ----------------------------------------------------------------------------------------------
