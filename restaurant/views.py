@@ -405,7 +405,7 @@ CHARGE_WORDS = {
            "intro": "الخدمة بتتحسب على الأكل بعد خصومات الكومبو، والحد الأدنى للفرد على طلبات الصالة بس. سيب الخانة فاضية لو مش مستخدمها.",
            "rules": "خصم الحساب بيتخصم بعد الضريبة ومش بيقلّل الخدمة، ورسوم التوصيل مش بتدخل في الخدمة. لو الطاولة دفعت على أجزاء، كل جزء عليه خدمة أكله بس، وفرق الحد الأدنى بيتحسب مرة واحدة على حساب الطاولة نفسه على أكل الطاولة كله.",
            "save": "احفظ الخدمة والحد الأدنى", "saved": "اتحفظت الخدمة والحد الأدنى.", "off": "مش مستخدمة",
-           "codes": "الإيصال الإلكتروني: الصنف {codes} محتاج كود EGS أو GS1 من شاشة الأصناف. لحد ما يتسجل، إيصال الحساب اللي فيه خدمة أو فرق حد أدنى بيتحجز «ما اتصدرش»، وبعد التسجيل تصدره تاني.",
+           "codes": "الإيصال الإلكتروني: {codes} من شاشة الأصناف. لحد ما يتسجل، إيصال الحساب اللي فيه خدمة أو فرق حد أدنى بيتحجز «ما اتصدرش»، وبعد التسجيل تصدره تاني.",
            "check": "اطبع الشيك", "check_title": "الشيك", "check_note": "ده مش فاتورة: الحساب بيتقفل عند الكاشير، وأي خصم بيتخصم وقت الدفع.",
            "subtotal": "قبل الضريبة", "vat": "الضريبة", "total": "الإجمالي", "print": "اطبع", "guests": "أفراد",
            "part_note": "الحد الأدنى بيتحسب على حساب الطاولة نفسه، مش على الجزء.",
@@ -415,7 +415,7 @@ CHARGE_WORDS = {
            "intro": "The service charge is worked out on the food after combo discounts; the minimum per guest applies to dine-in bills only. Leave a box empty to switch it off.",
            "rules": "The bill discount comes after VAT and does not reduce the service charge, and the delivery fee is never in it. When a table pays in parts, each part pays service on its own food, and the minimum's top-up is settled once, on the table's own bill, against all the table's food.",
            "save": "Save the service charge and minimum", "saved": "Service charge and minimum saved.", "off": "Not used",
-           "codes": "E-receipt: item {codes} needs an EGS or GS1 code from the items screen. Until it has one, the receipt of a bill with a service charge or a top-up is held as “not issued”; issue it again once the code is in.",
+           "codes": "E-receipt: {codes} from the items screen. Until it has one, the receipt of a bill with a service charge or a top-up is held as “not issued”; issue it again once the code is in.",
            "check": "Print the check", "check_title": "Check", "check_note": "This is not an invoice: the bill is closed at the till, and any discount is taken when paying.",
            "subtotal": "Before VAT", "vat": "VAT", "total": "Total", "print": "Print", "guests": "guests",
            "part_note": "The minimum is settled on the table's own bill, never on a part.",
@@ -516,7 +516,13 @@ def _charges_form(lang, posted=None):
     kinds = [{"value": kind, "label": words[f"kind_{kind}"], "checked": kind in values["kinds"]} for kind in OrderKind.values]
     uncoded = charges.uncoded_items() if config.on else []
     return {"charges_form": values, "charge_kinds": kinds, "chw": words,
-            "charge_codes": words["codes"].format(codes=" و ".join(uncoded) if lang == "ar" else " and ".join(uncoded)) if uncoded else ""}
+            "charge_codes": words["codes"].format(codes=_uncoded_text(uncoded, lang)) if uncoded else ""}
+
+
+def _uncoded_text(codes, lang):
+    if lang == "en":
+        return f"item {codes[0]} needs an EGS or GS1 code" if len(codes) == 1 else f"items {' and '.join(codes)} need an EGS or GS1 code"
+    return f"الصنف {codes[0]} محتاج كود EGS أو GS1" if len(codes) == 1 else f"الصنفين {' و'.join(codes)} محتاجين كود EGS أو GS1"
 
 
 def _open_order(raw):

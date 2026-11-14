@@ -27,7 +27,7 @@
 <div class="op-form-grid">
 <div class="op-field"><label for="ch-percent">{{ chw.percent }}</label><input id="ch-percent" name="percent" value="{{ charges_form.percent }}" inputmode="decimal" dir="ltr" placeholder="12" autocomplete="off"></div>
 <div class="op-field"><label for="ch-minimum">{{ chw.minimum }}</label><input id="ch-minimum" name="minimum" value="{{ charges_form.minimum }}" inputmode="decimal" dir="ltr" autocomplete="off"></div>
-<fieldset class="op-field"><legend>{{ chw.kinds }}</legend>{% for kind in charge_kinds %}<label><input type="checkbox" name="kinds" value="{{ kind.value }}"{% if kind.checked %} checked{% endif %} data-charge-kind="{{ kind.value }}"> {{ kind.label }}</label> {% endfor %}</fieldset>
+<fieldset class="op-field"><legend>{{ chw.kinds }}</legend>{% for kind in charge_kinds %}<label style="min-height:44px;display:flex;align-items:center;gap:8px"><input type="checkbox" name="kinds" value="{{ kind.value }}"{% if kind.checked %} checked{% endif %} data-charge-kind="{{ kind.value }}"> {{ kind.label }}</label> {% endfor %}</fieldset>
 </div>
 <p class="op-muted">{{ chw.rules }}</p>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ chw.save }}</button></div></form>
