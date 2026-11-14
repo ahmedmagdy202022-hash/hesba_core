@@ -10,6 +10,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 
@@ -77,7 +78,9 @@ def _kitchen(words, today):
     tables = entity_scope.scope(DiningTable.objects, "entity").filter(active=True).count()
     busy = open_orders.exclude(table=None).values("table").distinct().count()
     paid = entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE).filter(status=OrderStatus.PAID, closed_at__date=today, invoice__status="posted")
-    paid_count = paid.count()
+    # R2a (HG-111): a bill paid in parts is one order (its open parts are money still to collect, counted in the open value)
+    open_orders = open_orders.filter(split_from=None)
+    paid_count = paid.annotate(bill=Coalesce("split_from", "id")).values("bill").distinct().count()
     paid_total = paid.aggregate(t=Sum("invoice__total_amount"))["t"] or ZERO
     return [
         _tile("open_orders", words["open_orders"], open_orders.count(), tone="lead"),
