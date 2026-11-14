@@ -1,4 +1,5 @@
-/* RESTO-001: filter the menu by category and search, and confirm voids/cancels. R1a: the dish's choice sheet and the size sheet. */
+/* RESTO-001: filter the menu by category and search, and confirm voids/cancels. R1a: the dish's choice sheet and the size sheet.
+   R2b: the bill's «ادفع بأكتر من طريقة» box. */
 (function () {
   'use strict';
   var menu = document.querySelector('[data-menu]');
@@ -89,6 +90,53 @@
     sheet.addEventListener('click', function (event) {  /* a tap on the dimmed backdrop closes the sheet */
       if (event.target === sheet) { sheet.close(); }
     });
+  });
+  /* R2b (HG-110): «ادفع بأكتر من طريقة». While it is ticked the box shows what is still unassigned («الباقي» = the bill with
+     VAT, less the discount, less the amounts typed) and the pay button waits until that is exactly 0.00. A convenience only:
+     the server checks every amount, every cashbox and the exact total again. Money is counted in piastres. */
+  Array.prototype.forEach.call(document.querySelectorAll('[data-split]'), function (box) {
+    var form = box.closest('form');
+    var toggle = box.querySelector('[data-split-toggle]');
+    var left = box.querySelector('[data-split-left]');
+    var leftLine = box.querySelector('[data-split-left-line]');
+    var due = box.querySelector('[data-split-due]');
+    var amounts = Array.prototype.slice.call(box.querySelectorAll('[data-tender-amount]'));
+    var discount = form ? form.querySelector('[name="discount"]') : null;
+    var pay = form ? form.querySelector('[data-pay]') : null;
+    if (!form || !toggle || !left) { return; }
+    var piastres = function (text) {
+      var value = parseFloat(String(text || '').replace(/,/g, '').trim());
+      return isFinite(value) ? Math.round(value * 100) : 0;
+    };
+    var shown = function (cents) {
+      var sign = cents < 0 ? '-' : '';
+      cents = Math.abs(cents);
+      return sign + Math.floor(cents / 100) + '.' + ('0' + (cents % 100)).slice(-2);
+    };
+    var remaining = function () {
+      var rest = piastres(box.getAttribute('data-bill')) - piastres(discount && discount.value);
+      if (due) { due.textContent = shown(rest); }
+      amounts.forEach(function (input) { rest -= piastres(input.value); });
+      return rest;
+    };
+    var update = function () {
+      var on = toggle.checked;
+      var rest = remaining();
+      form.classList.toggle('is-split', on);
+      left.textContent = shown(rest);
+      if (leftLine) { leftLine.classList.toggle('is-zero', rest === 0); }
+      if (pay) { pay.disabled = on && rest !== 0; }
+    };
+    toggle.addEventListener('change', function () {
+      update();
+      if (toggle.checked && amounts[0]) { amounts[0].focus(); }
+    });
+    amounts.forEach(function (input) { input.addEventListener('input', update); });
+    if (discount) { discount.addEventListener('input', update); }
+    form.addEventListener('submit', function (event) {
+      if (toggle.checked && remaining() !== 0) { event.preventDefault(); update(); }
+    });
+    update();
   });
   Array.prototype.forEach.call(document.querySelectorAll('form[data-confirm]'), function (form) {
     form.addEventListener('submit', function (event) {

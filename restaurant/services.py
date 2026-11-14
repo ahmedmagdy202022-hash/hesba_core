@@ -49,6 +49,9 @@ MESSAGES = {
         "fee_stocked": "الصنف {code} متسجل صنف مخزني؛ رسوم التوصيل لازم تكون خدمة. عدّله من الأصناف وشيل «يتتبع في المخزن».",
         "other_branch": "الطاولة دي تبع فرع تاني.", "branch": "اختار الفرع.", "not_this_branch": "الفرع ده مش الفرع اللي شغال فيه دلوقتي.",
         "cashbox_branch": "الخزنة دي تبع فرع تاني؛ اختار خزنة من خزن فرع الطلب.",
+        "split_rows": "الدفع بأكتر من طريقة محتاج مبلغين على الأقل، كل مبلغ في خزنة.",
+        "split_cashbox": "اختار لكل مبلغ خزنة من خزن فرع الطلب.",
+        "split_total": "مجموع طرق الدفع لازم يساوي الحساب بالظبط: {total}.",
     },
     "en": {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
@@ -61,6 +64,9 @@ MESSAGES = {
         "fee_stocked": "Item {code} is a stocked item; the delivery fee must be a service. Edit it under Items and untick stock tracking.",
         "other_branch": "This table belongs to another branch.", "branch": "Choose the branch.", "not_this_branch": "This is not the branch you are working in.",
         "cashbox_branch": "This cashbox belongs to another branch; choose one of the order's branch's cashboxes.",
+        "split_rows": "Paying several ways needs at least two amounts, each into a cashbox.",
+        "split_cashbox": "Choose one of the order's branch's cashboxes for each amount.",
+        "split_total": "The ways of paying must add up to the bill exactly: {total}.",
     },
 }
 
@@ -436,13 +442,53 @@ def _bill_notes(order, lang):
     return f"Restaurant {order.number} ({where})" if lang == "en" else f"طلب مطعم {order.number} ({where})"  # TRACK-ACTS W11
 
 
-def _settle_and_post(order, rows, *, customer, location, cashbox, discount, tendered, user, lang):
-    """Paying, steps 3 and 4 (settle, post): the cashier's own ``checkout``, unchanged. It drafts, takes the payment and posts in one go."""
+def _settle_and_post(order, rows, *, customer, location, cashbox, discount, tendered, user, lang, tenders=None):
+    """Paying, steps 3 and 4 (settle, post): the cashier's own ``checkout``, unchanged. It drafts, takes the payment and posts in one go.
+
+    R2b (HG-110): ``tenders`` (only when the bill is paid several ways) goes to ``checkout`` as it is."""
 
     from sales.pos import checkout
 
+    if tenders is None:
+        return checkout(lines=rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
+                        notes=_bill_notes(order, lang))
     return checkout(lines=rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered, user=user,
-                    notes=_bill_notes(order, lang))
+                    notes=_bill_notes(order, lang), tenders=tenders, lang=lang)
+
+
+def _split_cashboxes(order, tenders, words):
+    """R2b (HG-110): a bill paid several ways has two amounts or more, each into one of the order's branch's cashboxes
+    (R12). Returns the first tender's cashbox, which is the invoice's own."""
+
+    if len(tenders) < 2:
+        raise ValidationError(words["split_rows"])
+    for box, _amount in tenders:
+        if box is None:
+            raise ValidationError(words["split_cashbox"])
+        if not branches.owns_cashbox(order, box):
+            raise ValidationError(words["cashbox_branch"])
+    return tenders[0][0]
+
+
+def bill_total(order, lines):
+    """R2b (HG-110): what the bill asks before its discount, VAT included, worked out as ``checkout`` does, for the bill
+    box's running «الباقي». Writes nothing (the delivery fee's VAT is at its item's rate, or the default rate before that
+    item exists). The server checks the real total again when the bill is paid."""
+
+    from taxes.services import compute_lines, default_rate, rate_for, vat_enabled
+
+    rows = [{"item": line.item, "quantity": line.quantity, "unit_sale_price": line.unit_price, "line_discount_amount": Decimal("0")}
+            for line in lines if not line.voided]
+    total = sum((money_round(row["quantity"] * row["unit_sale_price"]) for row in rows), Decimal("0"))
+    fee = order.delivery_fee if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0 else Decimal("0")
+    total += fee
+    if vat_enabled():
+        total += sum((tax for *_, tax in compute_lines(rows)), Decimal("0"))
+        if fee:
+            fee_item = Item.objects.filter(item_code=FEE_ITEM_CODE).first()
+            rate = rate_for(fee_item) if fee_item is not None else default_rate()
+            total += money_round(fee * (rate.rate if rate is not None else Decimal("0")) / Decimal("100"))
+    return money_round(total)
 
 
 def _close(order, invoice, customer, user):
@@ -457,20 +503,27 @@ def _close(order, invoice, customer, user):
 
 
 @transaction.atomic
-def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar"):
-    """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change)."""
+def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar", tenders=None):
+    """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change).
+
+    R2b (HG-110): ``tenders`` [(cashbox, amount), ...] pays the bill several ways (``cashbox`` and ``tendered`` are then
+    unused): every cashbox the order's branch's, and the amounts adding up to the invoice's total exactly, or nothing is kept."""
 
     from sales.pos import walk_in_customer
 
     from . import kitchen
 
     words = MESSAGES[lang]
+    if tenders is not None:
+        cashbox = _split_cashboxes(order, tenders, words)
     order, lines, location = _payable(order, cashbox, words)
     kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
     rows = bill_rows(order, lines, lang)
     invoice, change = _settle_and_post(order, rows, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
-                                       user=user, lang=lang)
+                                       user=user, lang=lang, tenders=tenders)
+    if tenders is not None and money_round(sum((amount for _box, amount in tenders), Decimal("0"))) != invoice.total_amount:
+        raise ValidationError(words["split_total"].format(total=f"{invoice.total_amount:,.2f}"))  # the whole payment is undone
     _close(order, invoice, customer, user)
     return invoice, change
 
