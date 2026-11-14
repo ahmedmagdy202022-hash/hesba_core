@@ -88,6 +88,7 @@
     number.setAttribute('dir', 'ltr');
     meta.appendChild(number);
     meta.appendChild(el('span', '', (words.ticket || '') + ' ' + card.sequence));
+    if (card.brand) { var brand = el('span', 'kds-card__brand', card.brand); brand.setAttribute('data-card-brand', ''); meta.appendChild(brand); }
     if (card.station) { meta.appendChild(el('span', '', card.station)); }
     if (card.waiter) { meta.appendChild(el('span', '', card.waiter)); }
     var sent = el('span', '', card.sent);
@@ -110,7 +111,7 @@
   function sign(tickets) {
     // Everything a card prints except its age: a table move, a changed note or quantity redraws the card like a new line does.
     return JSON.stringify(tickets.map(function (card) {
-      return [card.id, card.where, card.station, card.waiter, card.notes, card.done, card.cancelled,
+      return [card.id, card.where, card.brand || '', card.station, card.waiter, card.notes, card.done, card.cancelled,
               card.lines.map(function (line) { return [line.id, line.name, line.quantity, line.note, line.ready, line.void, line.reason, line.seen, line.extras || [], line.combo || '']; })];
     }));
   }

@@ -229,6 +229,11 @@ def _invoice_doc(invoice, kind, lang, party_kind, price_field):
     if invoice.tax_amount:
         totals.append((words["tax"], invoice.tax_amount))
     party = invoice.customer if party_kind == "customer" else invoice.supplier
+    brand = None
+    if kind == "sales_invoice":  # R11 (HG-117): a restaurant bill sold under a brand names it; the issuer and the tax registration stay the company's
+        from restaurant.brands import print_block
+
+        brand = print_block(invoice, lang)
     applied = Decimal("0.00")
     if party_kind == "customer" and invoice.status == "posted":
         from settlements.services import applied_to
@@ -256,6 +261,7 @@ def _invoice_doc(invoice, kind, lang, party_kind, price_field):
         "salesperson": getattr(invoice, "salesperson", None),  # PERF-001
         "notes": invoice.notes,
         "words_amount": invoice.total_amount,
+        **({"brand": brand} if brand else {}),
     }
 
 

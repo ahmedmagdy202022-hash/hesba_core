@@ -18,7 +18,7 @@ from master_data.models import Customer
 from permissions.decorators import require_any_permission, require_permission
 from permissions.services import user_has_permission
 
-from . import branches, callcentre, services
+from . import branches, brands, callcentre, services
 from .models import DeliveryZone
 from .views import TABLES, TAKE, TAKE_ORDERS, VIEW, _base, _lang, _order_url
 
@@ -36,7 +36,7 @@ CALL_WORDS = {
         "last_orders": "آخر الطلبات", "no_orders": "مفيش طلبات مدفوعة قبل كده.", "repeat": "كرر", "repeat_to": "على عنوان", "dishes": "أصناف",
         "repeat_hint": "الأصناف بتتحط بأسعار النهارده ولسه ما بتروحش المطبخ.", "need_address": "ضيف عنوان الأول عشان تكرر الطلب.",
         "typed_title": "دليفري برقم وعنوان", "open_delivery": "افتح الدليفري", "not_found": "مفيش عميل بالرقم ده.",
-        "zones_link": "مناطق التوصيل", "call_link": "دليفري جديد",
+        "zones_link": "مناطق التوصيل", "call_link": "دليفري جديد", "brand": "البراند",
     },
     "en": {
         "title": "New delivery", "intro": "Type the caller's number to see their addresses and last orders.", "back": "Tables", "phone": "Mobile number", "find": "Look up",
@@ -51,7 +51,7 @@ CALL_WORDS = {
         "last_orders": "Last orders", "no_orders": "No paid orders before.", "repeat": "Repeat", "repeat_to": "To address", "dishes": "items",
         "repeat_hint": "Items go in at today's prices and are not sent to the kitchen yet.", "need_address": "Add an address first to repeat an order.",
         "typed_title": "Delivery by number and address", "open_delivery": "Open the delivery", "not_found": "No customer has this number.",
-        "zones_link": "Delivery zones", "call_link": "New delivery",
+        "zones_link": "Delivery zones", "call_link": "New delivery", "brand": "Brand",
     },
 }
 ZONE_WORDS = {
@@ -107,7 +107,8 @@ def _act(request, lang, entity, phone):
             return redirect(_call_url(lang, callcentre.clean_phone(request.POST.get("phone"), lang), entity))
         if action == "open_typed":  # no card: the number and the address as typed
             order = callcentre.open_delivery(request.user, text=request.POST.get("address", ""), phone=callcentre.clean_phone(request.POST.get("phone"), lang),
-                                             fee=request.POST.get("delivery_fee"), entity=entity if grouped else None, lang=lang)
+                                             fee=request.POST.get("delivery_fee"), entity=entity if grouped else None,
+                                             brand=request.POST.get("brand"), lang=lang)
             messages.success(request, words["opened"].format(number=order.number))
             return redirect(_order_url(order, lang))
         if customer is None:
@@ -124,7 +125,7 @@ def _act(request, lang, entity, phone):
             messages.success(request, words["address_off"])
         elif action == "open":
             order = callcentre.open_delivery(request.user, customer=customer, address=request.POST.get("address"), fee=request.POST.get("delivery_fee"),
-                                             entity=entity if grouped else None, lang=lang)
+                                             entity=entity if grouped else None, brand=request.POST.get("brand"), lang=lang)
             messages.success(request, words["opened_fee"].format(number=order.number, fee=f"{order.delivery_fee:,.2f}") if order.delivery_fee else words["opened"].format(number=order.number))
             return redirect(_order_url(order, lang))
         elif action == "repeat":
@@ -132,7 +133,8 @@ def _act(request, lang, entity, phone):
             if source is None:
                 raise ValidationError(words["repeat_gone"])
             order, count, skipped = callcentre.repeat_as_delivery(request.user, source, customer=customer, address=request.POST.get("address"),
-                                                                  fee=request.POST.get("delivery_fee"), entity=entity if grouped else None, lang=lang)
+                                                                  fee=request.POST.get("delivery_fee"), entity=entity if grouped else None,
+                                                                  brand=request.POST.get("brand"), lang=lang)
             if count:
                 messages.success(request, words["repeat_done"].format(count=count, number=source.number))
             else:
@@ -147,6 +149,16 @@ def _act(request, lang, entity, phone):
     return redirect(back)
 
 
+def _with_brand(rows, options):
+    """R11: «كرر» offers the brand the past order was sold under when it is still one of the branch's active brands, else the branch's default."""
+
+    pks = {one["pk"] for one in options}
+    default = next((one["pk"] for one in options if one["default"]), None)
+    for row in rows:
+        row["brand"] = row["order"].brand_id if row["order"].brand_id in pks else default
+    return rows
+
+
 @require_any_permission(TAKE, TAKE_ORDERS)
 def call(request):
     lang = _lang(request)
@@ -157,9 +169,11 @@ def call(request):
     phone = (source.get("phone") or "").strip()[:50]
     if request.method == "POST":
         return _act(request, lang, entity, phone)
-    context = {"cw": cw, "phone": phone, "grouped": grouped, "entity": entity, "branch_choices": branches.choices(request.user, lang) if grouped else [],
+    can_open = not grouped or entity is not None
+    options = [{"pk": one.pk, "label": one.label(lang), "default": one.is_default} for one in brands.offered(_target(entity))] if can_open else []  # R11 (HG-117)
+    context = {"cw": cw, "phone": phone, "brand_options": options, "grouped": grouped, "entity": entity, "branch_choices": branches.choices(request.user, lang) if grouped else [],
                "can_add_customer": user_has_permission(request.user, callcentre.MANAGE_PARTIES), "searched": bool(phone), "error": "",
-               "can_open": not grouped or entity is not None, "page_title": cw["title"]}
+               "can_open": can_open, "page_title": cw["title"]}
     customer = None
     if phone:
         try:
@@ -180,7 +194,7 @@ def call(request):
         balance = callcentre.customer_balance(customer, request.user)
         card = (customer.address or "").replace("\r", " ").replace("\n", ", ").strip()[:255]
         context.update(customer=customer, rows=rows, balance=balance, balance_abs=abs(balance) if balance is not None else None,
-                       orders=callcentre.last_orders(customer), zone_choices=[{"pk": zone.pk, "label": f"{zone.label(lang)} · {zone.fee:.2f}" + (f" · {zone.entity.display(lang)}" if grouped and entity is None else "")}
+                       orders=_with_brand(callcentre.last_orders(customer), options), zone_choices=[{"pk": zone.pk, "label": f"{zone.label(lang)} · {zone.fee:.2f}" + (f" · {zone.entity.display(lang)}" if grouped and entity is None else "")}
                                                                              for zone in callcentre.offered_zones(entity if grouped else None)],
                        card_address=card if not saved else "")
     return render(request, "restaurant/call.html", _base(request, **context))

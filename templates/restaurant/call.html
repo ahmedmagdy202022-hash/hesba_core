@@ -30,6 +30,7 @@
 {% if row.zone %}<p class="rc-zone" data-address-zone><span>{{ cw.zone }}: {{ row.zone_label }}</span>{% if row.zone_ok %} · <span>{{ cw.fee }} <bdi dir="ltr">{{ row.fee }}</bdi></span>{% if row.zone.minutes %} · <span>{{ cw.usual }} <bdi dir="ltr">{{ row.zone.minutes }}</bdi> {{ cw.min }}</span>{% endif %}{% endif %}</p>{% endif %}
 {% if can_open %}<form method="post" class="rc-open" data-open-delivery>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="open"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="address" value="{{ row.address.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
 <label class="rc-fee"><span>{{ cw.fee }}</span><input name="delivery_fee" inputmode="decimal" dir="ltr" value="{{ row.fee }}" autocomplete="off" data-delivery-fee></label>
+{% if brand_options %}<label class="rc-fee"><span>{{ cw.brand }}</span><select name="brand" data-call-brand>{% for one in brand_options %}<option value="{{ one.pk }}"{% if one.default %} selected{% endif %}>{{ one.label }}</option>{% endfor %}</select></label>{% endif %}
 <button class="op-primary" type="submit">{{ cw.start }}</button></form>{% endif %}
 <div class="rc-tools">
 {% if not row.address.is_default %}<form method="post" data-make-default-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="default"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="address" value="{{ row.address.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}<button class="op-secondary" type="submit">{{ cw.make_default }}</button></form>{% endif %}
@@ -59,6 +60,7 @@
 <p class="rc-text">{{ row.summary }}</p>
 {% if rows and can_open %}<form method="post" class="rc-open" data-repeat-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="repeat"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="order" value="{{ row.order.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
 <label class="rc-fee"><span>{{ cw.repeat_to }}</span><select name="address">{% for one in rows %}<option value="{{ one.address.pk }}">{{ one.address.label|default:one.text|truncatechars:30 }}</option>{% endfor %}</select></label>
+{% if brand_options %}<label class="rc-fee"><span>{{ cw.brand }}</span><select name="brand" data-call-brand>{% for one in brand_options %}<option value="{{ one.pk }}"{% if one.pk == row.brand %} selected{% endif %}>{{ one.label }}</option>{% endfor %}</select></label>{% endif %}
 <button class="op-primary" type="submit">{{ cw.repeat }}</button></form>{% endif %}
 </article>
 {% empty %}<p class="op-muted">{{ cw.no_orders }}</p>{% endfor %}
@@ -82,6 +84,7 @@
 <div class="op-field"><label for="td-phone">{{ cw.phone }}</label><input id="td-phone" name="phone" type="tel" inputmode="tel" dir="ltr" required value="{{ typed|default:phone }}" autocomplete="off"></div>
 <div class="op-field"><label for="td-address">{{ cw.address }}</label><input id="td-address" name="address" required maxlength="255" autocomplete="off"></div>
 <div class="op-field"><label for="td-fee">{{ cw.fee }}</label><input id="td-fee" name="delivery_fee" inputmode="decimal" dir="ltr" value="0" autocomplete="off" data-delivery-fee></div>
+{% if brand_options %}<div class="op-field"><label for="td-brand">{{ cw.brand }}</label><select id="td-brand" name="brand" data-call-brand>{% for one in brand_options %}<option value="{{ one.pk }}"{% if one.default %} selected{% endif %}>{{ one.label }}</option>{% endfor %}</select></div>{% endif %}
 </div>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ cw.open_delivery }}</button></div></form>{% else %}<p class="op-message" data-pick-branch>{{ cw.pick_branch }}</p>{% endif %}
 {% endif %}
