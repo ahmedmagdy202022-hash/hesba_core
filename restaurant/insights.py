@@ -12,6 +12,10 @@ being worked in (HG-034):
 - R1b (HG-112): a combo's components count as dishes at their menu price too, and what the combos took off them is the
   period's «خصم الكومبو» (``totals["combo_discount"]``), so the dishes less that discount come to the lines' net money;
 - order totals are the invoice's net sales (before tax, after posted returns);
+- R3 (HG-113): the service charge and the minimum's top-up are invoice lines, never order lines, so they are never dishes;
+  the period's «الخدمة» and «فرق الحد الأدنى» (``totals["service"]``, ``totals["min_topup"]``) are the posted invoices' lines
+  of ``SERVICE-CHARGE`` and ``MIN-CHARGE``, before returns, so dishes − combo discount + service + top-up come to the
+  orders' net sales (with no delivery fee and no return in the period);
 - R2a (HG-111): a bill paid in parts is one order. A part (``Order.split_from``) adds its sales, but it is counted in its
   parent's order, table, waiter, kind, guests and stay: the order is counted once, at the first of its invoices in the
   period (the parent's when it is there), with the parent's table and guests, and its stay runs from the parent's opening.
@@ -33,6 +37,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 from entities import scope as entity_scope
 
+from .charges import CHARGE_CODES, MIN_ITEM_CODE, SERVICE_ITEM_CODE
 from .models import DishIngredient, Order, OrderKind, OrderStatus
 
 ZERO = Decimal("0")
@@ -160,6 +165,8 @@ def period_report(first, last):
         lines = [line for line in order.lines.all() if not line.voided]
         by_pk = {line.pk: line for line in lines}
         for line in lines:
+            if line.item.item_code in CHARGE_CODES:  # R3: never a dish (the order screens refuse them; an old line is kept out too)
+                continue
             # R1a (HG-109): an add-on is not a dish; its money counts in its dish's row, so the table's money is as before
             dish = by_pk.get(line.parent_id, line)
             row = dishes.setdefault(dish.item_id, {"item": dish.item, "quantity": ZERO, "sales": ZERO})
@@ -191,6 +198,10 @@ def period_report(first, last):
         row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else ZERO
     busy = [row for row in hours.values() if row["orders"] or row["sales"]]
     count = len(standing)
+    from sales.models import SalesLine
+
+    charged = dict(SalesLine.objects.filter(invoice_id__in=[order.invoice_id for order in orders], item__item_code__in=CHARGE_CODES)
+                   .values("item__item_code").annotate(total=Sum("line_total_amount")).values_list("item__item_code", "total"))
     return {
         "hours": busy,
         "peak": max(busy, key=lambda row: row["orders"]) if busy else None,
@@ -199,7 +210,8 @@ def period_report(first, last):
         "waiters": sorted(waiters.values(), key=lambda row: -row["sales"]),
         "kinds": sorted(kinds.values(), key=lambda row: -row["orders"]),
         "totals": {"orders": count, "sales": money_round(total), "average": money_round(total / count) if count else ZERO,
-                   "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None, "combo_discount": money_round(combo_discount)},
+                   "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None, "combo_discount": money_round(combo_discount),
+                   "service": money_round(charged.get(SERVICE_ITEM_CODE) or ZERO), "min_topup": money_round(charged.get(MIN_ITEM_CODE) or ZERO)},
     }
 
 
