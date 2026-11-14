@@ -86,6 +86,11 @@ WORDS = {
         "err_item": "صنف مش موجود أو موقوف.",
         "err_walk_in_credit": "البيع الآجل محتاج عميل باسمه؛ اختار العميل أو خد المبلغ كامل.",
         "err_gift_amount": "المبلغ اللي هيتدفع بكارت الهدية مش صحيح أو أكبر من المطلوب.",
+        "err_tender_amount": "كل طريقة دفع لازم يكون مبلغها أكبر من صفر.",
+        "err_tender_cashbox": "خزنة من طرق الدفع مش متاحة للبيع؛ يا موقوفة يا مخصّصة لشاشة تانية.",
+        "err_tender_repeated": "نفس الخزنة متكررة في طرق الدفع؛ حط مبلغها كله في سطر واحد.",
+        "err_tenders_over": "مجموع طرق الدفع أكبر من المطلوب.",
+        "err_tender_card": "الدفع بأكتر من طريقة بيحدد خزنة كل جزء، فمينفعش معاه زرار الفيزا.",
         "err_discount": "الخصم أكبر من المجموع.",
         "err_setup": "لازم يكون فيه مخزن بيع وخزنة نشطين قبل البيع.",
         "scan_serial": "الصنف ده بيتباع بالسيريال؛ امسح السيريال / IMEI بتاع القطعة: ",
@@ -136,6 +141,11 @@ WORDS = {
         "err_item": "An item is missing or inactive.",
         "err_walk_in_credit": "A credit sale needs a named customer; pick the customer or take the full amount.",
         "err_gift_amount": "The amount to pay by gift card is not valid or is more than the total.",
+        "err_tender_amount": "Each way of paying needs an amount above zero.",
+        "err_tender_cashbox": "One of the payment cashboxes cannot take a sale: it is inactive or kept for another screen.",
+        "err_tender_repeated": "The same cashbox appears twice; put its whole amount on one row.",
+        "err_tenders_over": "The ways of paying add up to more than the total.",
+        "err_tender_card": "Paying several ways names each part's cashbox, so it cannot be combined with the card button.",
         "err_discount": "The discount is larger than the subtotal.",
         "err_setup": "A selling location and an active cashbox are needed before selling.",
         "scan_serial": "This item is sold by serial; scan the unit's serial / IMEI: ",
@@ -221,7 +231,7 @@ def _next_number(today):
 
 
 def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None,
-             allow_short=False, short_source="pos", gift=None, lang="ar"):
+             allow_short=False, short_source="pos", gift=None, lang="ar", tenders=None):
     """Create and post the sale. Returns (invoice, change).
 
     POS-003: an offline sale passes the day it was rung up as ``sale_date``;
@@ -230,6 +240,9 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
     stock; it counts only while the owner allows selling without stock.
     S6 (HG-071): ``gift`` is (card, amount): that part is left as ``remaining_due`` and redeemed from the card in the
     same transaction (``giftcards.services.redeem``), so the walk-in still owes nothing once the checkout is done.
+    R2b (HG-110): ``tenders`` is [(cashbox, amount), ...]: with two or more, the first is ``paid_now`` into its cashbox (in
+    place of ``cashbox`` and ``tendered``) and each further one a payment into its own cashbox, settled on the invoice in
+    the same transaction (``sales.tenders``). None or one tender is the plain call.
     """
 
     # UNITS-001: a line entered in a bigger unit carries a few piastres of discount.
@@ -245,9 +258,16 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
     if gift is not None and not Decimal("0") < gift_part <= total:
         raise ValidationError("err_gift_amount")
     cash_due = total - gift_part  # S6 (HG-071): what is left for the drawer or the card machine after the gift card
+    others, others_total = [], Decimal("0.00")  # R2b (HG-110): the tenders after the first; none on the plain one-cashbox call
+    if tenders is not None:
+        from .tenders import split
+
+        cashbox, tendered, others = split(tenders, cash_due, card)
+        others_total = sum((amount for _box, amount in others), Decimal("0.00"))
+        cash_due -= others_total  # what is left for the first tender
     tendered = cash_due if card else money_round(tendered or 0)  # AN8: a card pays the total exactly, no change
     paid_now = min(tendered, cash_due)
-    if paid_now + gift_part < total and customer.customer_code == WALK_IN_CODE:  # HG-071: loosened by the card part only
+    if paid_now + gift_part + others_total < total and customer.customer_code == WALK_IN_CODE:  # HG-071: loosened by the card part; R2b: and the other tenders
         raise ValidationError("err_walk_in_credit")
     change = money_round(tendered - cash_due) if tendered > cash_due else Decimal("0.00")
     today = sale_date or timezone.localdate()
@@ -270,6 +290,10 @@ def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sa
                     user,
                 )
                 attach_sale_serials(invoice, lines)  # SERIAL-001
+                if others:  # R2b (HG-110): before posting, so what follows the posting (the e-receipt) sees every tender
+                    from .tenders import pay_others
+
+                    pay_others(invoice, others, today, user, lang)
                 if promotion is not None:  # T5: (promotion, discount, coupon) the till filled into the lines
                     from promotions.services import record
 

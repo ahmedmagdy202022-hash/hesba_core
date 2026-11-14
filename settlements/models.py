@@ -1,7 +1,8 @@
 """HG-069: the one shared table that says which posted customer payment settles which posted invoice.
 
 An invoice's own figures are frozen at posting (``SalesInvoice.clean()`` keeps ``remaining_due == total − paid_now``).
-A deposit taken at booking (S5), a paid online link (S4, HG-070) or a gift-card redemption (S6, HG-071) is a
+A deposit taken at booking (S5), a paid online link (S4, HG-070), a gift-card redemption (S6, HG-071) or a bill's further
+tender (R2b, HG-110) is a
 ``CustomerPayment`` on account that the customer's ledger already nets; this row is what lets the invoice page and
 the "due" totals show that the invoice is paid, without rewriting the posted document.
 
@@ -16,6 +17,8 @@ class SettlementSource(models.TextChoices):
     DEPOSIT = "deposit", "Deposit"
     PAYMENT_LINK = "payment_link", "Payment link"
     GIFT_CARD = "gift_card", "Gift card"
+    #: R2b (HG-110): a further tender of a bill paid several ways (cash and a card), recorded by ``checkout`` itself.
+    SPLIT = "split", "Split payment"
 
 
 class InvoiceSettlement(models.Model):
