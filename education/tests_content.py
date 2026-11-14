@@ -696,7 +696,7 @@ class StylesheetTests(SimpleTestCase):
         css = pathlib.Path(settings.BASE_DIR, "static", "hesba", "css", "education_portal.css").read_text(encoding="utf-8")
         self.assertEqual(re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(", css), [])
         template = pathlib.Path(settings.BASE_DIR, "templates", "education", "portal.html").read_text(encoding="utf-8")
-        self.assertIn("education_portal.css' %}?v=e9-1", template)
+        self.assertIn("education_portal.css' %}?v=e8-1", template)
         self.assertIn(".gp-chip--online", css)
         self.assertIn(".gp-content .gp-open", css)
 

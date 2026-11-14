@@ -1,5 +1,6 @@
 {% extends "operations/base.html" %}
-{% load hesba_format %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_makeup.css' %}?v=e8-2">{% endblock %}
 {% block operation_content %}
 <section class="op-title-row"><div><a class="op-back" href="{% url 'education:students' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back_students }}</a><h1>{{ student.name }}</h1>
 <p><bdi>{{ student.code }}</bdi>{% if student.stage %} · {{ student.stage }}{% endif %}{% if student.school %} · {{ student.school }}{% endif %}{% if student.phone %} · <bdi>{{ student.phone }}</bdi>{% endif %}{% if not student.active %} · <span class="op-status op-status-draft">{{ words.status_stopped }}</span>{% endif %}</p></div>
@@ -14,6 +15,7 @@
 {% if summary.absences %}<section class="op-detail-meta" data-absences><h2>{{ words.recent_absences }}</h2>{% for a in summary.absences %}<p><bdi>{{ a.session.date|date:"Y-m-d" }}</bdi> · {{ a.session.group.course.name }} — {{ a.session.group.name }}{% if a.note %} · {{ a.note }}{% endif %}</p>{% endfor %}</section>{% endif %}
 {% if marks_card %}{% include "education/_marks_card.html" %}{% endif %}
 {% if portal_card %}{% include "education/_portal_card.html" %}{% endif %}
+{% if makeup_card %}{% include "education/_makeup_card.html" %}{% endif %}
 {% if uses_levels %}<section class="op-detail-meta" data-placement><h2>{{ lw.placement }}</h2><p class="op-muted">{{ lw.placement_intro }}</p>
 {% for s in suggestions %}<h3>{% with n=s.test.level %}{{ s.test.course.name }} — {{ lw.level }} {{ n }}{% endwith %}</h3>
 {% if s.groups %}<ul data-suggested-groups>{% for g in s.groups %}<li><a href="{% url 'education:group' g.pk %}?lang={{ lang }}">{{ g.name }}</a>{% if g.teacher %} · {{ g.teacher.name }}{% endif %} · {% if g.free is not None %}{{ g.free }} {{ lw.open }}{% else %}{{ lw.open }}{% endif %}</li>{% endfor %}</ul>

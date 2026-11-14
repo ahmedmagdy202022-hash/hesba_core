@@ -12,7 +12,7 @@ from django.utils import timezone
 from master_data.models import Customer
 from permissions.services import user_has_permission
 
-from . import content, exams, levels, nursery, scan, attendance as register
+from . import content, exams, levels, makeup, nursery, scan, attendance as register
 from . import services
 from .models import Attendance, ClassSession, Course, Enrollment, EnrollmentStatus, FeeBasis, PickupPerson, Presence, SessionStatus, Student, StudyGroup, Weekday
 
@@ -234,6 +234,7 @@ def student_detail(request, pk):
                                                            pickup_people=list(student.pickup_people.all()) if nursery.is_nursery() else [],
                                                            day_history=nursery.history(student, 10) if nursery.is_nursery() else [],
                                                            **views_exams.student_card(request, student, lang),
+                                                           **views_makeup.student_card(request, student, lang),
                                                            **views_portal.student_card(request, student, lang),
                                                            **_placement_context(student, lang)))
 
@@ -426,6 +427,7 @@ def today(request):
         present=Count("marks", filter=Q(marks__presence=Presence.PRESENT)), late=Count("marks", filter=Q(marks__presence=Presence.LATE)),
         absent=Count("marks", filter=Q(marks__presence=Presence.ABSENT)), excused=Count("marks", filter=Q(marks__presence=Presence.EXCUSED)))}
     scanned = scan.touched(taken[pk].pk for pk in taken)
+    guests = makeup.guests_of(groups_today, day)  # E8: the makeup guests of each class, one read; they are not on the roster and not in any count below
     rows = []
     for group in groups_today:
         seats = len(register.roster_on(group, day))
@@ -433,8 +435,10 @@ def today(request):
         marked = sum((session.present, session.late, session.absent, session.excused)) if session else 0
         rows.append({"group": group, "schedule": services.schedule_text(group, lang), "session": session, "seats": seats,
                      "not_scanned": max(seats - marked, 0) if session and session.status == SessionStatus.HELD and session.pk in scanned else 0,
-                     "can_take": register.can_take(request.user, group), "can_exams": exams.can_see(request.user, group), "can_content": content.can_edit(request.user, group)})
-    return render(request, "education/today.html", _base(request, lang, "today", rows=rows, day=day, today=timezone.localdate(),
+                     "can_take": register.can_take(request.user, group), "can_exams": exams.can_see(request.user, group), "can_content": content.can_edit(request.user, group),
+                     "guests": views_makeup.label_guests(guests.get(group.pk, []), lang) if register.can_take(request.user, group) else [],
+                     "guests_open": not (session and session.status == SessionStatus.CANCELLED)})
+    return render(request, "education/today.html", _base(request, lang, "today", mw=views_makeup.WORDS[lang], rows=rows, day=day, today=timezone.localdate(),
                                                          weekday=services.DAY_LABELS[lang][register.weekday(day)]))
 
 
@@ -484,7 +488,9 @@ def take_attendance(request, pk):
         row.note = mark.note if mark else ""
         row.notify = register.parent_message(mark, lang) if mark and request.GET.get("saved") else ""
     choices = [(Presence.PRESENT, words["present"]), (Presence.LATE, words["late"]), (Presence.ABSENT, words["absent"]), (Presence.EXCUSED, words["excused"])]
+    guests = views_makeup.label_guests(makeup.guests_of([group], day).get(group.pk, []), lang)  # E8: outside the register's own form and rows, never saved with it
     return render(request, "education/attendance.html", _base(request, lang, "today", group=group, day=day, session=session, roster=roster, choices=choices,
+                                                              mw=views_makeup.WORDS[lang], guests=guests, guests_open=not (session and session.status == SessionStatus.CANCELLED), makeup_entry=group.active,
                                                               schedule=services.schedule_text(group, lang), error=error, today=timezone.localdate(),
                                                               saved=bool(request.GET.get("saved")), notify=[row for row in roster if row.notify],
                                                               version=register.sheet_version(session, marks.values()),  # of the marks shown, not a second read
@@ -765,4 +771,5 @@ LEVEL_WORDS = {
 
 from . import views_exams  # noqa: E402  (E2: its pages build on the helpers above, so it is imported last)
 from . import views_content  # noqa: E402  (E9: the same)
+from . import views_makeup  # noqa: E402  (E8: the same)
 from . import views_portal  # noqa: E402  (E3: the student file's portal card, same reason)
