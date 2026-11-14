@@ -564,6 +564,28 @@ class OpenValueAndSwitchTests(ComboSetup):
         self.combo.refresh_from_db()
         self.assertEqual(self.combo.price, D("155.00"))  # cheapest now: 120.00 + (50.00 − 10.00) + 25.00 = 185.00
 
+    def test_two_choices_of_a_slot_can_swap_their_items(self):
+        # review finding: saving the first of two swapped choices met the one-item-per-slot rule before the second moved
+        self.client.force_login(self.owner)
+        url = reverse("restaurant:combos")
+        slots = list(self.combo.slots.order_by("sort", "pk"))
+        post = {"pk": self.combo.pk, "name_ar": "وجبة برجر", "price": "150.00", "active": "on"}
+        for s, slot in enumerate(slots):
+            post[f"slot-{s}-pk"], post[f"slot-{s}-name_ar"] = slot.pk, slot.name_ar
+            choices = list(slot.choices.order_by("sort", "pk"))
+            items = [choice.item_id for choice in choices]
+            if slot == self.side:
+                self.assertEqual(len(items), 2)
+                items.reverse()  # the two side choices swap their items, each keeping its row's upcharge
+            for c, choice in enumerate(choices):
+                post.update({f"slot-{s}-choice-{c}-pk": choice.pk, f"slot-{s}-choice-{c}-item": items[c],
+                             f"slot-{s}-choice-{c}-upcharge": f"{choice.upcharge:.2f}", f"slot-{s}-choice-{c}-active": "on"})
+        before = [(choice.item_id, choice.upcharge) for choice in self.side.choices.order_by("sort", "pk")]
+        self.assertEqual(self.client.post(url, post).status_code, 302)
+        after = [(choice.item_id, choice.upcharge) for choice in self.side.choices.order_by("sort", "pk")]
+        self.assertEqual(after, [(before[1][0], before[0][1]), (before[0][0], before[1][1])])
+        self.assertEqual(self.side.choices.count(), 2)
+
 
 class ScreenTests(ComboSetup):
     def test_the_set_up_page_lists_combos_with_their_saving_and_creates_one(self):
