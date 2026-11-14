@@ -24,7 +24,6 @@ from django.test import Client, TransactionTestCase, override_settings
 from django.urls import reverse
 
 from audit.models import AuditLog
-from entities.current import SESSION_KEY
 from entities.models import EntityMembership
 from hesba_testing.factories import make_item
 from permissions.models import RoleCode
@@ -551,6 +550,34 @@ class StaleRequestTests(QrSetup):
         self.assertEqual(old.status, RequestStatus.DECLINED)
         self.assertIsNone(old.handled_by_id)  # swept by the system, not by a person
 
+    def test_a_request_made_before_the_bill_was_paid_is_declined_when_the_next_party_sits(self):
+        order = self.burgers()
+        made = self.request({f"q-{self.tea.pk}": 1})
+        with mock.patch("django.utils.timezone.now", return_value=LATER):
+            services.pay(order, self.owner, cashbox=self.cashbox, tendered=D("1000"))  # the party pays and leaves
+            self.assertEqual(Order.objects.get(pk=order.pk).status, OrderStatus.PAID)
+            next_party = services.open_order(self.owner, table=self.a_t1)
+            with self.assertRaisesMessage(ValidationError, "اتبعت قبل ما حساب الطاولة يتقفل"):
+                qr.accept(made, self.waiter)
+        made.refresh_from_db()
+        self.assertEqual((made.status, made.order_id), (RequestStatus.DECLINED, None))
+        self.assertEqual(next_party.lines.count(), 0)
+
+    def test_a_request_at_a_table_that_was_merged_away_is_stale(self):
+        first = services.open_order(self.owner, table=self.a_t1)
+        services.add_item(first, self.tea, self.owner, 1)
+        other_table = services.save_table({"name": "T2", "seats": 4}, self.owner, entity=self.main)
+        second = services.open_order(self.owner, table=other_table)
+        services.add_item(second, self.koshary, self.owner, 1)
+        made = self.request({f"q-{self.koshary.pk}": 1})  # at T1
+        with mock.patch("django.utils.timezone.now", return_value=LATER):
+            services.merge_orders(second, first, self.owner)  # T1's bill is folded into T2's: T1's order is closed
+            self.assertTrue(qr.is_stale(made))
+            with self.assertRaises(ValidationError):
+                qr.accept(made, self.waiter)
+        made.refresh_from_db()
+        self.assertEqual(made.status, RequestStatus.DECLINED)
+
     def test_a_part_of_a_bill_paid_at_the_table_does_not_stale_a_request(self):
         order = self.burgers()
         made = self.request({f"q-{self.tea.pk}": 1})
@@ -572,11 +599,12 @@ class NothingMovesTests(QrSetup):
         qr.decline(TableRequest.objects.get(kind="call_waiter"), self.waiter)
         changed = moved(before, _counts())
         self.assertLessEqual(changed, {"restaurant.TableRequest", "restaurant.Order", "restaurant.OrderLine", "audit.AuditLog", "sessions.Session"})
-        for label in ("sales.SalesInvoice", "sales.SalesInvoiceLine", "inventory.StockMovement", "cashboxes.CashboxMovement", "ledger.JournalLine",
+        for label in ("sales.SalesInvoice", "sales.SalesLine", "inventory.StockMovement", "cashboxes.CashboxMovement", "ledger.JournalLine",
                       "ledger.JournalEntry", "loyalty.PointsEntry", "giftcards.GiftCardEntry", "sales.CustomerPayment", "settlements.InvoiceSettlement",
                       "promotions.InvoicePromotion", "manufacturing.ProductionRun"):
-            self.assertEqual(after_asking.get(label), before.get(label), label)
-            self.assertEqual(_counts().get(label), before.get(label), label)
+            self.assertIn(label, before, label)  # a label that does not exist would pass vacuously
+            self.assertEqual(after_asking[label], before[label], label)
+            self.assertEqual(_counts()[label], before[label], label)
 
 
 class StaffScreenTests(QrSetup):

@@ -26,9 +26,9 @@ from entities.services import is_multi_entity
 from permissions.decorators import require_any_permission, require_permission
 from printing.company import company_details
 
-from . import branches, qr, services
-from .models import DiningTable, RequestKind, RequestStatus, TableRequest
-from .views import FLOOR, TABLES, _base, _lang, _order_url, _takes_orders
+from . import branches, qr
+from .models import DiningTable, RequestKind, TableRequest
+from .views import FLOOR, TABLES, _lang, _order_url, _takes_orders
 
 RATE_WINDOW = 60
 PAGE_LIMIT = 120  # page views per address per minute
