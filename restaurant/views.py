@@ -230,6 +230,13 @@ def board(request):
             row["ready"] = _ready_count(row["order"])
             row["ready_label"] = words["ready_n"].format(n=row["ready"])
     ready = {order.pk: _ready_count(order) for order in others}
+    from . import qr
+    from .views_qr import requests_context
+
+    waiting = qr.waiting()  # R5a (HG-115): what the guests asked from the tables' QR pages (stale ones are swept first)
+    asked = qr.counts(waiting)
+    for row in tables:
+        row["requests"] = asked.get(row["table"].pk, 0)
     grouped = branches.group_mode()
     groups = [{**choice, "tables": [row for row in tables if row["table"].entity_id == choice["pk"]]} for choice in branches.choices(request.user, lang)] if grouped else []
     return render(request, "restaurant/board.html", _base(
@@ -238,6 +245,7 @@ def board(request):
                                          "branch": order.entity.display(lang) if grouped else ""} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
         branch_groups=groups, branch_choices=branches.choices(request.user, lang) if grouped else [],
+        **requests_context(waiting, lang, _takes_orders(request.user)),
     ))
 
 
@@ -384,6 +392,10 @@ def order_detail(request, pk):
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     families = combos.blocks(modifiers.grouped(lines))  # R1b: each combo taken is one block of its components
     offer_box = _offer_box(request, order, lines, lang) if order.status == OrderStatus.OPEN else None  # R6 (HG-114)
+    from . import qr
+    from .views_qr import requests_context
+
+    asked = qr.waiting(order.table) if order.status == OrderStatus.OPEN and order.table_id else []  # R5a (HG-115)
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang, offer_box), offer_box=offer_box, raw_ids=raw_ids,
         categories=categories, kind_label=_kind_label(order, lang),
@@ -400,6 +412,7 @@ def order_detail(request, pk):
         branch_label=order.entity.display(lang) if is_multi_entity() else "",
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
+        **requests_context(asked, lang, _takes_orders(request.user)), requests_order=order.pk,
     ))
 
 
@@ -792,7 +805,13 @@ def tables(request):
     chosen = str(form.get("entity") or "")
     return render(request, "restaurant/tables.html", _base(request, rows=branches.tables(DiningTable.objects.select_related("entity")), form=form, editing=editing,
                                                          error=error, branch_choices=branches.choices(request.user, lang) if grouped else [], chosen_branch=chosen,
-                                                         charges_error=charges_error, **_charges_form(lang, posted)))
+                                                         charges_error=charges_error, qw=_qr_words(lang), **_charges_form(lang, posted)))
+
+
+def _qr_words(lang):
+    from .views_qr import QR_WORDS
+
+    return QR_WORDS[lang]
 
 
 REPORT_VIEW, COST_VIEW = "reports.view_all_sales_report", "inventory.view_cost"

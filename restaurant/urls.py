@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_combos, views_kds, views_modifiers
+from . import views, views_combos, views_kds, views_modifiers, views_qr
 
 
 app_name = "restaurant"
@@ -22,4 +22,7 @@ urlpatterns = [
     path("stations/", views_kds.station_setup, name="stations"),
     path("modifiers/", views_modifiers.setup, name="modifiers"),  # R1a (HG-109)
     path("combos/", views_combos.setup, name="combos"),  # R1b (HG-112)
+    path("qr/", views_qr.qr_cards, name="qr_cards"),  # R5a (HG-115): one printed card per table
+    path("qr/<int:pk>/rotate/", views_qr.qr_rotate, name="qr_rotate"),
+    path("requests/<int:pk>/", views_qr.request_act, name="request_act"),
 ]
