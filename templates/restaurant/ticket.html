@@ -33,7 +33,7 @@ body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-b
 {% for card in cards %}<article class="kt" data-kitchen-ticket="{{ order.number }}-{{ card.ticket.sequence }}">
   <h1>{{ words.kitchen }} · {{ words.ticket }} {{ card.ticket.sequence }}</h1>
   {% if card.station %}<p class="kt-station" data-ticket-station>{{ card.station }}</p>{% endif %}
-  <p class="kt-where">{% if order.table %}{{ words.table }} {{ order.table.name }}{% else %}{{ kind_label }}{% endif %}</p>
+  <p class="kt-where">{% if order.home_table %}{{ words.table }} {{ order.home_table.name }}{% else %}{{ kind_label }}{% endif %}</p>
   <p class="kt-meta"><span dir="ltr">{{ order.number }}</span><span dir="ltr">{{ card.sent_at|date:"H:i" }}</span></p>
   <p class="kt-meta"><span>{{ card.ticket.sent_by|person }}</span><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}{% if order.guests > 1 %} · {{ order.guests }} {{ words.guests }}{% endif %}</span></p>
   <ul>{% for dish in card.dishes %}{% with line=dish.line %}<li data-ticket-line="{{ line.item.item_code }}"{% if line.voided %} style="text-decoration:line-through"{% endif %}><b>{{ line.quantity|qty }} ×</b> {{ line.item.item_name }}{% if line.voided %} ({{ words.voided }}){% endif %}{% if line.options %}<small class="kt-sub" data-ticket-options>{{ line.options }}</small>{% endif %}{% for addon in dish.addons %}<small class="kt-sub" data-ticket-addon="{{ addon.line.item.item_code }}">{{ addon.label }}</small>{% endfor %}{% if line.note %}<small>{{ line.note }}</small>{% endif %}{% if line.void_reason %}<small>{{ line.void_reason }}</small>{% endif %}</li>{% endwith %}{% endfor %}</ul>

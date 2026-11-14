@@ -70,7 +70,7 @@ def _feed(station, lang):
     words = WORDS[lang]
     cards = [stations.ticket_card(ticket, now, _kind_label(ticket.order, lang), words["table"], lang) for ticket in stations.shown_tickets(station, now)]
     back = stations.last_done(station, now)
-    recall = {"id": back.pk, "where": f"{words['table']} {back.order.table.name}" if back.order.table_id else _kind_label(back.order, lang)} if back else None
+    recall = {"id": back.pk, "where": f"{words['table']} {back.order.home_table.name}" if back and back.order.home_table else _kind_label(back.order, lang)} if back else None
     # ``clock`` is the business's own time of day: the screen shows it beside tickets stamped the same way, whatever the tablet's clock says
     return {"now": now.isoformat(), "clock": timezone.localtime(now).strftime("%H:%M"), "tickets": cards, "recall": recall}
 
