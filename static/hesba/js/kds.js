@@ -53,6 +53,8 @@
     var button = el('button', 'kds-line');
     button.type = 'button';
     button.setAttribute('data-line', line.id);
+    /* R1b: a combo's component says which combo it came in, over its name */
+    if (line.combo) { button.appendChild(el('span', 'kds-line__combo', line.combo)); }
     var name = el('span', 'kds-line__name');
     name.appendChild(el('span', 'kds-line__qty', line.quantity + ' ×'));
     name.appendChild(document.createTextNode(' ' + line.name));
@@ -109,7 +111,7 @@
     // Everything a card prints except its age: a table move, a changed note or quantity redraws the card like a new line does.
     return JSON.stringify(tickets.map(function (card) {
       return [card.id, card.where, card.station, card.waiter, card.notes, card.done, card.cancelled,
-              card.lines.map(function (line) { return [line.id, line.name, line.quantity, line.note, line.ready, line.void, line.reason, line.seen, line.extras || []]; })];
+              card.lines.map(function (line) { return [line.id, line.name, line.quantity, line.note, line.ready, line.void, line.reason, line.seen, line.extras || [], line.combo || '']; })];
     }));
   }
 

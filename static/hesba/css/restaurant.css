@@ -138,3 +138,11 @@ html.rs-sheet-open{overflow:hidden}
 .rs-stepper input{width:52px;min-height:44px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);text-align:center;font:inherit;background:var(--hs-surface)}
 .rs-part-row.is-chosen{background:var(--hs-teal-wash)}
 .rs-part-figure{margin:0 0 8px}
+/* R1b (HG-112): combos. A combo's tile, its sheet (a chosen dish's own add-ons nested under its choice, shown once it is
+   chosen), the combo as one block on the bill with its saving, and the set-up's slots. Tokens only. */
+.rs-dish--combo{border-color:var(--hs-teal)}
+.rs-combo-extras{margin:0 0 10px;padding:0;padding-inline-start:18px;border:0;min-width:0}
+.rs-combo-extras:disabled{display:none}
+.rs-combo .rs-line__addon{font-weight:var(--hs-weight-semibold)}
+.rs-combo__saving{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold)}
+.rs-slot{padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-ground)}

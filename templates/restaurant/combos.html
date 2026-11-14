@@ -1,0 +1,44 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b">{% endblock %}
+{# R1b (HG-112): «الكومبو». Each combo and each slot is one stacked block (no table), so nothing outgrows a 390 px screen. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ cw.back }}</a><h1>{{ cw.title }}</h1><p>{{ cw.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'restaurant:modifiers' %}?lang={{ lang }}">{{ words.modifiers_title }}</a></div></section>
+<section class="rs-panel" aria-labelledby="combo-list-title">
+<h2 id="combo-list-title">{{ cw.title }}</h2>
+<ul class="rs-lines" data-combos>
+{% for row in rows %}<li class="rs-line" data-combo="{{ row.combo.item.item_name }}">
+<span class="rs-line__name">{{ row.label }} · {{ row.combo.price|money }}{% if not row.combo.active %} <span class="rs-tag">{{ cw.off }}</span>{% endif %}</span>
+<span class="rs-line__amount"><a class="op-secondary rs-edit" href="?lang={{ lang }}&amp;edit={{ row.combo.pk }}">{{ cw.edit }}</a></span>
+{% for slot in row.slots %}<span class="rs-line__note"><b>{{ slot.label }}:</b> {% for choice in slot.choices %}<span class="rs-chip{% if not choice.on %} rs-chip--off{% endif %}">{{ choice.name }} <small><bdi dir="ltr">{{ choice.price|money }}</bdi>{% if choice.upcharge %} · <bdi dir="ltr">+{{ choice.upcharge|money }}</bdi>{% endif %}</small></span>{% endfor %}</span>{% endfor %}
+<span class="rs-line__note" data-combo-saving="{{ row.saving|stringformat:'.2f' }}">{{ cw.saving }} {{ row.saving|money }} {{ cw.at_cheapest }}</span>
+</li>
+{% empty %}<li class="op-muted">{{ cw.none }}</li>{% endfor %}
+</ul>
+</section>
+<form class="op-form rs-panel" method="post" data-combo-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ cw.edit }} · {{ editing.item.item_name }}{% else %}{{ cw.new }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-combo-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="cb-name-ar">{{ cw.name_ar }}</label><input id="cb-name-ar" name="name_ar" value="{{ form.name_ar|default:'' }}" required maxlength="80"></div>
+<div class="op-field"><label for="cb-name-en">{{ cw.name_en }}</label><input id="cb-name-en" name="name_en" value="{{ form.name_en|default:'' }}" maxlength="80" dir="ltr"></div>
+<div class="op-field"><label for="cb-price">{{ cw.price }}</label><input id="cb-price" name="price" value="{{ form.price|default:'' }}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="cb-sort">{{ cw.sort }}</label><input id="cb-sort" name="sort" value="{{ form.sort|default:'0' }}" inputmode="numeric"></div>
+</div>
+<div class="rs-checks"><label class="rs-check-chip"><input type="checkbox" name="active"{% if form.active %} checked{% endif %}><span>{{ cw.active }}</span></label></div>
+<p class="op-muted">{{ cw.slots_hint }}</p>
+{% for slot in slot_rows %}{% with s=forloop.counter0 %}<fieldset class="rs-option-rows rs-slot" data-slot-row><legend>{{ cw.slot }} {{ forloop.counter }}</legend>
+{% if slot.pk %}<input type="hidden" name="slot-{{ s }}-pk" value="{{ slot.pk }}">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="slot-{{ s }}-ar">{{ cw.slot }}</label><input id="slot-{{ s }}-ar" name="slot-{{ s }}-name_ar" value="{{ slot.name_ar }}" maxlength="80"></div>
+<div class="op-field"><label for="slot-{{ s }}-en">{{ cw.slot_en }}</label><input id="slot-{{ s }}-en" name="slot-{{ s }}-name_en" value="{{ slot.name_en }}" maxlength="80" dir="ltr"></div>
+</div>
+{% for choice in slot.choices %}{% with c=forloop.counter0 %}<div class="rs-option-row" data-choice-row>{% if choice.pk %}<input type="hidden" name="slot-{{ s }}-choice-{{ c }}-pk" value="{{ choice.pk }}">{% endif %}
+<div class="op-field"><label for="slot-{{ s }}-c{{ c }}-item">{{ cw.choice }} {{ forloop.counter }}</label><select id="slot-{{ s }}-c{{ c }}-item" name="slot-{{ s }}-choice-{{ c }}-item"><option value="">{{ cw.none_item }}</option>{% for item in items %}<option value="{{ item.pk }}"{% if choice.item == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.item_name }} — {{ item.default_sale_price|money }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="slot-{{ s }}-c{{ c }}-up">{{ cw.upcharge }}</label><input id="slot-{{ s }}-c{{ c }}-up" name="slot-{{ s }}-choice-{{ c }}-upcharge" value="{{ choice.upcharge }}" inputmode="decimal" dir="ltr" placeholder="0.00"></div>
+{% if choice.pk %}<label class="rs-check-chip"><input type="checkbox" name="slot-{{ s }}-choice-{{ c }}-active"{% if choice.active %} checked{% endif %}><span>{{ cw.available }}</span></label>{% endif %}
+</div>{% endwith %}{% endfor %}
+</fieldset>{% endwith %}{% endfor %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ cw.new }}</a>{% endif %}</div>
+</form>
+{% endblock %}

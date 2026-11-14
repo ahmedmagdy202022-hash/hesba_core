@@ -49,7 +49,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
-        "modifiers_title": "الإضافات والاختيارات",
+        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
         "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
@@ -82,7 +82,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
-        "modifiers_title": "Add-ons and choices",
+        "modifiers_title": "Add-ons and choices", "combos_title": "Combos",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
         "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
@@ -286,6 +286,13 @@ def order_detail(request, pk):
 
                 services.add_item(order, _pick(Item, request.POST.get("item"), active=True), request.user, request.POST.get("quantity") or 1,
                                   request.POST.get("note", ""), lang, options=posted_options(request.POST))  # R1a: the sheet's choices
+            elif action == "combo":  # R1b (HG-112): the combo sheet's one choice per slot, and each component's own add-ons
+                from .models import Combo
+                from .views_combos import posted_choices, posted_component_options
+
+                picks = posted_choices(request.POST)
+                services.add_combo(order, _pick(Combo, request.POST.get("combo")), request.user, picks, request.POST.get("quantity") or 1,
+                                   request.POST.get("note", ""), lang, options=posted_component_options(request.POST, picks))
             elif action == "qty" and line:
                 services.change_line(line, request.user, quantity=request.POST.get("quantity"), note=request.POST.get("note"), lang=lang)
             elif action == "void" and line:
@@ -349,24 +356,31 @@ def order_detail(request, pk):
                 return redirect(f"{reverse('restaurant:board')}?lang={lang}")
         except ValidationError as exc:
             messages.error(request, _error(exc, lang))
-        return redirect(_order_url(order, lang) + ("#menu" if action == "add" else ""))
-    from . import modifiers
+        return redirect(_order_url(order, lang) + ("#menu" if action in ("add", "combo") else ""))
+    from . import combos, modifiers
+    from .views_combos import COMBO_WORDS, combo_sheets
     from .views_modifiers import MODIFIER_WORDS, menu_entries, sheets
 
     items, categories = _menu()
     raw_ids = _raw_ingredient_ids()
-    lines = list(order.lines.select_related("item", "ticket"))
-    choice_sheets = sheets(items, lang) if order.status == OrderStatus.OPEN and _takes_orders(request.user) else []  # R1a
+    lines = list(order.lines.select_related("item", "ticket", "combo__item"))
+    taking = order.status == OrderStatus.OPEN and _takes_orders(request.user)
+    choice_sheets = sheets(items, lang) if taking else []  # R1a
+    combo_choice_sheets = combo_sheets(items, lang) if taking else []  # R1b
+    on_sheet = {sheet["combo"].item_id: sheet["combo"].pk for sheet in combo_choice_sheets}
+    for item in items:  # R1b: a combo's tile opens its sheet (the same objects the menu's tiles show)
+        item.combo_sheet = on_sheet.get(item.pk)
     cashboxes = branches.cashboxes(order)  # R12: the order's branch's, whatever entity the biller works in
     shift = open_shift_for(request.user)
     shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None
     default_cashbox = shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first()
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
-    families = [{"line": line, "addons": addons} for line, addons in modifiers.grouped(lines)]
+    families = combos.blocks(modifiers.grouped(lines))  # R1b: each combo taken is one block of its components
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, total=order.total, items=items, raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
         families=families, sheets=choice_sheets, **_split_merge_context(order, families, request.user, lang),
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
+        combo_sheets=combo_choice_sheets, cw=COMBO_WORDS[lang],
         **dict(zip(("menu", "size_sheets"), menu_entries(items, {sheet["item"].pk for sheet in choice_sheets}, lang))),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
@@ -396,11 +410,17 @@ def _split_merge_context(order, families, user, lang):
     rows = []
     if may and order.kind != OrderKind.DELIVERY:
         for family in families:
+            if "combo" in family:  # R1b: a combo is one row, split whole, at what it charges
+                if not family["voided"]:
+                    members = family["members"]
+                    rows.append({"line": family["head"], "addons": [], "each": family["amount"], "whole": True, "name": family["combo"].label(lang),
+                                 "detail": " + ".join(member["line"].item.item_name for member in members)})
+                continue
             line = family["line"]
             if line.voided:
                 continue
             each = line.unit_price + sum((addon.unit_price for addon in family["addons"]), Decimal("0"))
-            rows.append({"line": line, "addons": family["addons"], "each": each, "whole": line.quantity % 1 == 0})
+            rows.append({"line": line, "addons": family["addons"], "each": each, "whole": line.quantity % 1 == 0, "name": line.item.item_name, "detail": ""})
     splittable = len(rows) > 1 or any(row["line"].quantity >= 2 for row in rows)
     merge_choices = []
     if may and order.kind == OrderKind.DINE_IN:
@@ -435,10 +455,19 @@ def ticket(request, pk):
                         .filter(sequence__gt=first.sequence, sequence__lte=int(upto)))
     from .modifiers import addon_label, grouped
 
-    # R1a (HG-109): each dish with its free choices and its add-ons printed under it; an add-on is never a dish of its own
-    cards = [{"ticket": one, "dishes": [{"line": line, "addons": [{"line": addon, "label": addon_label(addon)} for addon in addons]}
-                                        for line, addons in grouped(one.lines.select_related("item"))],
-              "sent_at": timezone.localtime(one.sent_at), "station": one.station.label(lang) if one.station_id else ""} for one in tickets]
+    def dishes(ticket):
+        # R1a (HG-109): each dish with its free choices and its add-ons printed under it; an add-on is never a dish of its own.
+        # R1b (HG-112): a combo's name is printed once over its components on this ticket.
+        rows, seen = [], set()
+        for line, addons in grouped(ticket.lines.select_related("item", "combo__item")):
+            head = line.combo.label(lang) if line.bundle and line.bundle not in seen else ""
+            if line.bundle:
+                seen.add(line.bundle)
+            rows.append({"line": line, "addons": [{"line": addon, "label": addon_label(addon)} for addon in addons], "combo": head})
+        return rows
+
+    cards = [{"ticket": one, "dishes": dishes(one), "sent_at": timezone.localtime(one.sent_at), "station": one.station.label(lang) if one.station_id else ""}
+             for one in tickets]
     return render(request, "restaurant/ticket.html", _base(
         request, ticket=first, order=first.order, cards=cards, kind_label=_kind_label(first.order, lang), company=company_details(),
     ))
@@ -498,7 +527,8 @@ INSIGHT_WORDS = {
            "tables": "الطاولات", "table": "الطاولة", "per_day": "طلب في اليوم", "stay": "متوسط القعدة (دقيقة)", "waiters": "الويترز", "waiter": "الويتر",
            "no_waiter": "من غير ويتر", "kinds": "نوع الطلب", "kind": "النوع", "waste": "الهالك والفاقد", "waste_intro": "اللي اتشال من المخزن بتسوية في الفترة دي، بسببها.",
            "item": "الصنف", "date": "التاريخ", "reason": "السبب", "value": "القيمة", "no_waste": "مفيش هالك متسجّل في الفترة دي.", "nothing": "مفيش طلبات مدفوعة في الفترة دي.",
-           "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي"},
+           "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي",
+           "combo_discount": "خصم الكومبو", "combo_discount_note": "الأطباق فوق بسعر المنيو؛ ده اللي الكومبو وفّره على العملاء منها، فالأطباق ناقص الرقم ده بتساوي صافي سطورها."},
     "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing. A dish marked “Taken from stock” is made from its ingredients before it sells; selling any other dish takes nothing out of stock.",
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
            "no_recipe": "No ingredients yet", "edit": "Ingredients", "ingredient": "Ingredient", "quantity": "Quantity per plate", "save": "Save", "saved": "Ingredients saved.",
@@ -510,7 +540,8 @@ INSIGHT_WORDS = {
            "tables": "Tables", "table": "Table", "per_day": "orders a day", "stay": "Average stay (min)", "waiters": "Waiters", "waiter": "Waiter",
            "no_waiter": "No waiter", "kinds": "Order type", "kind": "Type", "waste": "Waste and losses", "waste_intro": "What was taken out of stock by adjustment in this period, with its reason.",
            "item": "Item", "date": "Date", "reason": "Reason", "value": "Value", "no_waste": "No waste recorded in this period.", "nothing": "No paid orders in this period.",
-           "bad_period": "The period was not valid; showing this month.", "delivery_fee": "Delivery fee", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total"},
+           "bad_period": "The period was not valid; showing this month.", "delivery_fee": "Delivery fee", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total",
+           "combo_discount": "Combo discount", "combo_discount_note": "The dishes above are at menu price; this is what combos saved customers on them, so the dishes less this figure come to their lines' net value."},
 }
 
 
