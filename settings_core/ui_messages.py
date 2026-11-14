@@ -30,6 +30,11 @@ EXACT = {
         "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",
     "This is a gift-card payment on a walk-in sale; cancel the whole invoice instead, and the card gets its money back.":
         "دي دفعة بكارت هدية على بيع لعميل نقدي؛ ألغِ الفاتورة كلها بدل كده، والكارت هيرجع له رصيده.",
+    # R2b (HG-110): a walk-in invoice paid several ways is cancelled whole, never returned or partly undone.
+    "This walk-in invoice was paid several ways; a return would leave the part paid into another cashbox as a credit nobody can use. Cancel the whole invoice instead.":
+        "فاتورة العميل النقدي دي اتدفعت بأكتر من طريقة؛ المرتجع هيسيب الجزء اللي اتدفع في خزنة تانية رصيد محدش يقدر يستخدمه. ألغِ الفاتورة كلها بدل كده.",
+    "This payment is part of a walk-in invoice paid several ways; cancel the whole invoice instead, and every part goes back.":
+        "الدفعة دي جزء من فاتورة عميل نقدي اتدفعت بأكتر من طريقة؛ ألغِ الفاتورة كلها بدل كده، وكل جزء هيرجع لخزنته.",
     # HG-071 (S6): a held box (cheques, couriers, gift cards) is not changed from an import file.
     "This cashbox is moved only by its own screen (cheques, couriers or gift cards); it cannot be changed from an import file.":
         "الخزنة دي بتتحرك من شاشتها بس (شيكات أو شحن أو كروت هدايا)؛ مينفعش تتغير من ملف استيراد.",

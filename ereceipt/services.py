@@ -77,8 +77,11 @@ def _is_till_sale(invoice):
 def _payment_method(invoice):
     from sales.pos_buttons import card_cashbox
 
+    from sales.tenders import largest_cashbox_id
+
     card = card_cashbox()
-    return "V" if card is not None and invoice.cashbox_id == card.pk else "C"
+    # R2b (HG-110): a bill paid several ways takes the largest tender's method; one paid one way, its own cashbox's.
+    return "V" if card is not None and largest_cashbox_id(invoice) == card.pk else "C"
 
 
 def build(invoice, till, previous_uuid="", lang="ar"):
