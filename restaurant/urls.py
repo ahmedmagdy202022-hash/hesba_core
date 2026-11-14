@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_kds, views_modifiers
+from . import views, views_combos, views_kds, views_modifiers
 
 
 app_name = "restaurant"
@@ -20,4 +20,5 @@ urlpatterns = [
     path("kitchen/act/", views_kds.kds_act, name="kds_act"),
     path("stations/", views_kds.station_setup, name="stations"),
     path("modifiers/", views_modifiers.setup, name="modifiers"),  # R1a (HG-109)
+    path("combos/", views_combos.setup, name="combos"),  # R1b (HG-112)
 ]

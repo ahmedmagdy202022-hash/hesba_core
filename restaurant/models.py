@@ -184,13 +184,36 @@ class OrderLine(models.Model):
     #: R1a: what was chosen, as printed: on a dish, its free choices («ميديم · من غير بصل»); on an add-on, its option's name
     #: («جبنة زيادة»), which the bill row and the kitchen ticket print. Empty on a plain line.
     options = models.CharField(max_length=255, blank=True, default="")
+    #: R1b (HG-112): what one unit of this line is sold below its menu price: a combo component's share of the combo's saving
+    #: (``restaurant.combos.spread``). The invoice row's ``line_discount_amount`` is this times the quantity. 0.00 on every other line.
+    discount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    #: R1b: the combo this line is a component of, and which combo taken on the order (``bundle``, numbered from 1 per order):
+    #: the components of one combo taken share it and move together. Each combo taken is its own bundle of quantity-1 lines.
+    #: Empty on every other line, and on an add-on (it follows its component through ``parent``).
+    combo = models.ForeignKey("Combo", on_delete=models.PROTECT, null=True, blank=True, related_name="lines")
+    bundle = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["pk"]
+        constraints = [models.CheckConstraint(condition=Q(discount__gte=0), name="restaurant_line_discount_not_negative")]
+
+    @property
+    def gross(self):
+        """The line at its menu price."""
+
+        return money_round(self.quantity * self.unit_price)
+
+    @property
+    def line_discount(self):
+        """R1b: what the line is sold below its menu price (its invoice row's ``line_discount_amount``)."""
+
+        return money_round(self.quantity * self.discount) if self.discount else Decimal("0.00")
 
     @property
     def amount(self):
-        return money_round(self.quantity * self.unit_price)
+        """What the line charges before VAT: its menu price less its discount (a plain line has none)."""
+
+        return self.gross - self.line_discount
 
 
 class DishIngredient(models.Model):
@@ -270,3 +293,67 @@ class MenuItemModifierGroup(models.Model):
     class Meta:
         ordering = ["item", "sort", "pk"]
         constraints = [models.UniqueConstraint(fields=["item", "group"], name="restaurant_one_link_per_dish_group")]
+
+
+class Combo(models.Model):
+    """Restaurants R1b (HG-112): a meal deal («وجبة برجر»): one choice from each slot for one price.
+
+    It is sold through its own menu item (a non-stock service item whose sale price is the combo's price), but that item
+    never goes on a bill: taking a combo puts its chosen components on the order, each at its own menu price, with the
+    saving spread over them as line discounts (``restaurant.combos``). Company-wide, like the menu."""
+
+    item = models.OneToOneField("master_data.Item", on_delete=models.PROTECT, related_name="combo")
+    name_en = models.CharField(max_length=80, blank=True)
+    sort = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["sort", "pk"]
+
+    def __str__(self):
+        return self.item.item_name
+
+    def label(self, lang="ar"):
+        return self.name_en if lang == "en" and self.name_en else self.item.item_name
+
+    @property
+    def price(self):
+        return money_round(self.item.default_sale_price)
+
+
+class ComboSlot(models.Model):
+    """One place in a combo that takes exactly one choice: «الساندويتش», «البطاطس», «المشروب»."""
+
+    combo = models.ForeignKey(Combo, on_delete=models.CASCADE, related_name="slots")
+    name_ar = models.CharField(max_length=80)
+    name_en = models.CharField(max_length=80, blank=True)
+    sort = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["combo", "sort", "pk"]
+
+    def __str__(self):
+        return self.name_ar
+
+    def label(self, lang="ar"):
+        return self.name_en if lang == "en" and self.name_en else self.name_ar
+
+
+class ComboChoice(models.Model):
+    """An item a slot offers, and what choosing it adds to the combo's price («بطاطس كبيرة» +10.00)."""
+
+    slot = models.ForeignKey(ComboSlot, on_delete=models.CASCADE, related_name="choices")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="combo_choices")
+    upcharge = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    sort = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["slot", "sort", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["slot", "item"], name="restaurant_one_choice_per_slot_item"),
+            models.CheckConstraint(condition=Q(upcharge__gte=0), name="restaurant_combo_upcharge_not_negative"),
+        ]
+
+    def __str__(self):
+        return f"{self.slot_id}:{self.item_id}"

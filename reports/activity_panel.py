@@ -74,7 +74,8 @@ def _kitchen(words, today):
     # Restaurants R12 (HG-108): tables and orders carry their branch, so the floor's counts are the entity being worked in.
     open_orders = entity_scope.scope(Order.objects, "entity").filter(status=OrderStatus.OPEN)
     value = entity_scope.scope(OrderLine.objects, "order__entity").filter(order__status=OrderStatus.OPEN, voided=False).aggregate(
-        v=Sum(ExpressionWrapper(F("quantity") * F("unit_price"), output_field=DecimalField(max_digits=18, decimal_places=4))))["v"] or ZERO
+        # R1b (HG-112): a combo's components at what they charge (menu price less their discount; 0.00 on every other line)
+        v=Sum(ExpressionWrapper(F("quantity") * (F("unit_price") - F("discount")), output_field=DecimalField(max_digits=18, decimal_places=4))))["v"] or ZERO
     tables = entity_scope.scope(DiningTable.objects, "entity").filter(active=True).count()
     busy = open_orders.exclude(table=None).values("table").distinct().count()
     paid = entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE).filter(status=OrderStatus.PAID, closed_at__date=today, invoice__status="posted")
