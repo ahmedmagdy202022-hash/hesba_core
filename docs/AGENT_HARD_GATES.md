@@ -3841,9 +3841,10 @@ HG-100 is reserved by another open task and is not in this tree: the gap is on p
   5. **Kitchen screen ready tap:** tapping a dish marks its add-ons ready with it; there is no separate ready mark for an add-on.
   6. **Promotions** do not apply to the table bill (unchanged), so a «free cheese» offer is not possible yet.
   7. **A group turned off** stops being asked at once, also for a dish already on an open order (lines already taken keep their text and their add-on lines).
+  8. **The seeded manager can set up groups but cannot attach them:** the role holds `manage_items` but not `inventory.view_cost` (checked on the restaurant demo: owner both, manager and stock keeper `manage_items` only), and the dish's page opens with `view_cost` (unchanged). The owner attaches groups, or gives the manager the cost view, or asks for an attach box on the set-up page (owner question 2).
 - **Default decisions for the owner (built in brackets; change on request):**
   1. Groups per branch or for the whole company? (The whole company, like the menu: items, recipes and sizes carry no entity.)
-  2. Who sets up groups and attaches them to dishes? (Whoever edits a dish's page: `master_data.manage_items`.)
+  2. Who sets up groups and attaches them to dishes? (Set-up page: `master_data.manage_items`. Attaching: the dish's page, which opens with `inventory.view_cost` and saves with `manage_items`, so today the owner; see risk 8. If the manager should attach too, the fix is an attach box on the set-up page, not built.)
   3. A priced add-on's quantity? (The dish's quantity, always: 2 burgers with cheese = 2 cheese.)
   4. Its price? (The add-on item's sale price at the moment it is added; a later price change does not touch lines already taken.)
   5. Do free choices print on the customer's receipt? (No: the kitchen ticket, the kitchen screen and the order page only; see risk 1.)
