@@ -488,13 +488,14 @@ class ApprovalTests(CancelSetup):
         self.assertEqual(ApprovalRequest.objects.count(), 1)
 
         # the approvals screen links to the dish's page (the run's page is closed here) and it opens
-        self.assertEqual(ACTIONS[self.ACTION].url(self.run_.pk), self.page_url)
+        self.assertEqual(ACTIONS[self.ACTION].url(self.run_.pk), reverse("restaurant:dish_preparation", args=[self.dish.pk, self.run_.pk]))
         self.client.force_login(self.manager)
         inbox = self.client.get("/approvals/")
         self.assertContains(inbox, f'data-approval="{request.pk}"')
-        self.assertContains(inbox, f'href="{self.page_url}?lang=ar"')
+        asked_page = reverse("restaurant:dish_preparation", args=[self.dish.pk, self.run_.pk])
+        self.assertContains(inbox, f'href="{asked_page}?lang=ar"')
         self.client.force_login(self.owner)
-        self.assertEqual(self.client.get(self.page_url).status_code, 200)
+        self.assertEqual(self.client.get(asked_page).status_code, 200)
 
         done = approvals.approve(request.pk, self.manager)
         self.assertEqual((done.status, done.decided_by, done.note), ("done", self.manager, ""))
@@ -557,13 +558,49 @@ class StockScreenTests(CancelSetup):
                     page = self.from_the_stock_screen(operation, lang)
                     self.assertEqual(self.errors(page), [text.format(number=run.number, dish=self.dish.item_name)])
                     links = OWNER_LINK.findall(page.content.decode())
-                    self.assertEqual(links, [(f"{self.page_url}?lang={lang}", link)] * 3)
+                    self.assertEqual(links, [(f"{reverse('restaurant:dish_preparation', args=[self.dish.pk, run.pk])}?lang={lang}", link)] * 3)
                     self.assertEqual(self.everything(), before)
         listed = self.client.get(reverse("inventory:operations"))
         self.assertEqual([row.owner.kind for row in listed.context["page"].object_list], ["dish", "dish", "dish"])
         self.assertContains(listed, f"تابعة لتحضير «{self.dish.item_name}»")
         self.assertNotContains(listed, "/reverse/")                      # no reversal form left for them
-        self.assertEqual(self.client.get(f"{self.page_url}?lang=ar").status_code, 200)   # and the link opens
+        self.assertEqual(self.client.get(f"{reverse('restaurant:dish_preparation', args=[self.dish.pk, run.pk])}?lang=ar").status_code, 200)   # and the link opens
+
+    def test_an_older_preparation_is_still_reached_from_the_stock_screen(self):
+        # Eleven preparations with nothing sold, the newest ten cancelled: the first one can still be cancelled, but it is
+        # past the page's last ten. The stock screen refuses its operations, so its link must open that very preparation.
+        runs = [kitchen.prepare(self.dish, "0.1", self.owner) for _ in range(11)]
+        for run in reversed(runs[1:]):
+            self.cancel(run)
+        first = runs[0]
+        self.assertEqual(kitchen.why_not(first), "")
+        self.client.force_login(self.owner)
+        plain = self.client.get(self.page_url)
+        self.assertNotIn(first.pk, [row["run"].pk for row in plain.context["preparations"]])
+        before = self.everything()
+        from manufacturing import guards
+
+        screen = self.from_the_stock_screen(first.output_operation)
+        self.assertEqual(self.errors(screen), [DISH_AR.format(number=first.number, dish=self.dish.item_name)])
+        self.assertEqual(self.everything(), before)
+        link = guards.guarded([first.output_operation_id])[first.output_operation_id].url   # what the row's link opens
+        self.assertEqual(link, reverse("restaurant:dish_preparation", args=[self.dish.pk, first.pk]))
+        page = self.client.get(f"{link}?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        rows = page.context["preparations"]
+        self.assertEqual((rows[0]["run"].pk, len(rows)), (first.pk, 11))   # the one asked for, then the last ten
+        block = re.search(rf'<li class="rs-line"[^>]*data-preparation="{first.pk}".*?</li>', page.content.decode(), re.S).group(0)
+        self.assertIn("data-cancel-preparation", block)
+        self.cancel(first, reason="اتحضّر زيادة")
+        first.refresh_from_db()
+        self.assertEqual(first.status, RunStatus.CANCELLED)
+        self.assertEqual(self.position(self.dish), (D("0.000"), D("0.00"), D("0")))
+
+    def test_the_link_of_a_preparation_of_another_dish_or_another_entity_is_not_found(self):
+        run = kitchen.prepare(self.dish, "1", self.owner)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(reverse("restaurant:dish_preparation", args=[self.dish.pk, run.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("restaurant:dish_preparation", args=[self.dish.pk, run.pk + 1000])).status_code, 404)
 
     def test_the_wrong_average_of_hg_102_is_no_longer_possible(self):
         first, _ = self.two_preparations()
