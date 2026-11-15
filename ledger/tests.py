@@ -56,7 +56,8 @@ class EnsureChartTests(TestCase):
         # An upgrade adds the project accounts after the user made their own 1111 and 2106.
         prepared_client("contracting", "general", "customers,suppliers,items_services,sales_operations,cashboxes,reports,projects")
         services.ensure_chart()
-        Account.objects.filter(control__in=("retention_receivable", "retention_payable")).delete()
+        # C11 (HG-128): 1112 became the default subcontractor advances account; the upgrade adds it after the user's own 1112 too.
+        Account.objects.filter(control__in=("retention_receivable", "retention_payable", "subcontractor_advances")).delete()
         receivables, payables = Account.objects.get(code="11"), Account.objects.get(code="21")
         mine = Account.objects.create(code="1111", name_ar="سلف العاملين", account_type="asset", parent=receivables)
         Account.objects.create(code="2106", name_ar="تأمينات للغير", account_type="liability", parent=payables)
@@ -66,6 +67,7 @@ class EnsureChartTests(TestCase):
         held = services.account_for("retention_receivable")
         self.assertEqual((held.code, held.parent.code, held.account_type), ("1113", "11", "asset"))
         self.assertEqual(services.account_for("retention_payable").code, "2111")  # 2107-2109 are the payroll debts (T12), 2110 unspent gift cards (S6)
+        self.assertEqual(services.account_for("subcontractor_advances").code, "1114")  # 1112 is the user's, 1113 went to retention receivable
         mine.refresh_from_db()
         self.assertEqual((mine.name_ar, mine.control), ("سلف العاملين", ""))  # the user's own account is untouched
 

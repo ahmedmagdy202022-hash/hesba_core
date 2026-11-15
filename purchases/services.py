@@ -788,4 +788,7 @@ def cancel_supplier_payment(payment_id, user=None, reason=""):
             "status": payment.status,
         },
     )
+    from projects.guards import after_supplier_payment_change
+
+    after_supplier_payment_change(payment)  # HG-128: a subcontractor's advance a bill recovered stays
     return payment

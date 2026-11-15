@@ -117,9 +117,10 @@ def reconciliation():
     revenue = -(control_balance("sales") + control_balance("sales_returns"))
     # HG-038: a customer's balance may sit partly in retention receivable and
     # customer advances, a supplier's in retention payable; together they are
-    # the party ledgers.
+    # the party ledgers. C11 (HG-128): and a subcontractor's partly in the
+    # advances paid to them (a debit, so it lowers what the ledger says is owed).
     receivable = sum((control_balance(c) for c in ("receivable", "retention_receivable", "customer_advances")), ZERO)
-    payable = sum((control_balance(c) for c in ("payable", "retention_payable")), ZERO)
+    payable = sum((control_balance(c) for c in ("payable", "retention_payable", "subcontractor_advances")), ZERO)
     checks = [
         ("receivable", money_round(receivable), party_total(Customer)),
         ("payable", money_round(-payable), party_total(Supplier)),

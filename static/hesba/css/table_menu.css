@@ -61,3 +61,12 @@
 
 .tm-bar{position:sticky;inset-block-end:0;padding:var(--hs-space-3) 0 calc(var(--hs-space-3) + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--hs-ground) 70%,transparent)}
 .tm-bar .tm-btn{min-block-size:var(--hs-control-height-lg);box-shadow:var(--hs-shadow-md)}
+/* R5b (HG-121): the table's bill and «ادفع» */
+.tm-pay{display:grid;gap:var(--hs-space-3);padding:var(--hs-space-4);border:1.5px solid var(--hs-teal);border-radius:var(--hs-radius-xl);background:var(--hs-surface)}
+.tm-pay h2{font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.tm-pay__rows{display:grid;gap:var(--hs-space-2);margin:0;padding:0;list-style:none}
+.tm-pay__rows li{display:flex;justify-content:space-between;gap:var(--hs-space-3);color:var(--hs-ink)}
+.tm-pay__total{display:flex;justify-content:space-between;gap:var(--hs-space-3);margin:0;padding-block-start:var(--hs-space-3);border-block-start:1px solid var(--hs-line);color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.tm-pay__total small{font-weight:normal;color:var(--hs-muted)}
+.tm-pay form{margin:0}
+.tm-pay__note{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm)}

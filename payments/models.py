@@ -7,6 +7,11 @@
   failed, the last payload that set it, and the ``CustomerPayment`` it made. Money is recorded on exactly one
   transition, new or pending → confirmed, under a row lock; each callback received is also an audit row (the log).
 
+HG-121 (Restaurants R5b): a link is made either for a posted invoice (S4, as above) or for a restaurant table's open
+**order** (pay from the table): exactly one of ``invoice`` and ``order`` is set (a database check). An order link carries
+``order_digest``, the order's money as it was when the link was made; the order is locked for payment while the link is
+live, and the verified callback posts the bill only when the order is still exactly that (``restaurant.pay_at_table``).
+
 No key or secret is ever stored here: they live in the server's environment (``settings.PAYMOB_*``).
 """
 
@@ -21,10 +26,17 @@ class LinkStatus(models.TextChoices):
     MISMATCH = "mismatch", "Paid, different amount"
     FAILED = "failed", "Failed"
     EXPIRED = "expired", "Expired"
+    #: HG-121: an order link the gateway confirmed but nothing was posted for (another amount, the order changed, or it could
+    #: not be posted): the money is at the gateway and a person settles the table by hand. It no longer locks the order.
+    REVIEW = "review", "Paid, needs review"
 
 
 class PaymentLink(models.Model):
-    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, related_name="payment_links")
+    invoice = models.ForeignKey("sales.SalesInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="payment_links")
+    #: HG-121: a restaurant table's open order (pay from the table). Exactly one of ``invoice`` and ``order`` is set.
+    order = models.ForeignKey("restaurant.Order", on_delete=models.PROTECT, null=True, blank=True, related_name="payment_links")
+    #: HG-121: for an order link, the order's money when the link was made (``restaurant.pay_at_table.digest``); empty otherwise.
+    order_digest = models.CharField(max_length=64, blank=True, default="")
     customer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="payment_links")
     #: The «بوابة الدفع» bank account of the invoice's entity, fixed when the link is made (HG-034).
     cashbox = models.ForeignKey("cashboxes.Cashbox", on_delete=models.PROTECT, related_name="payment_links")
@@ -48,6 +60,9 @@ class PaymentLink(models.Model):
         ordering = ["-pk"]
         constraints = [
             models.UniqueConstraint(fields=["invoice"], condition=models.Q(status="new"), name="payment_link_one_live_per_invoice"),
+            models.UniqueConstraint(fields=["order"], condition=models.Q(status="new"), name="payment_link_one_live_per_order"),
+            models.CheckConstraint(check=(models.Q(invoice__isnull=False, order__isnull=True) | models.Q(invoice__isnull=True, order__isnull=False)),
+                                   name="payment_link_invoice_or_order"),
             models.CheckConstraint(check=models.Q(amount__gt=0), name="payment_link_amount_positive"),
         ]
 

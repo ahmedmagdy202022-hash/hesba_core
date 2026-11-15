@@ -211,12 +211,16 @@ class Projector:
         own: they move retention back to what the party may now be paid or owe.
         """
 
-        from projects.models import Certificate, ProjectPayment, ProjectPaymentKind, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractRelease
+        from projects.models import (Certificate, ProjectPayment, ProjectPaymentKind, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractPayment,
+                                     SubcontractRelease)
 
         self._advances = set(ProjectPayment.objects.filter(kind=ProjectPaymentKind.ADVANCE).values_list("payment_id", flat=True))
         self._certificates = {invoice: (retention, recovery) for invoice, retention, recovery
                               in Certificate.objects.values_list("invoice_id", "retention_amount", "recovery_amount")}
         self._sub_bills = dict(SubcontractBill.objects.values_list("invoice_id", "retention_amount"))
+        # C11 (HG-128): the advance each subcontractor bill recovers, and the supplier payments that are advances.
+        self._sub_recoveries = dict(SubcontractBill.objects.exclude(recovery_amount=0).values_list("invoice_id", "recovery_amount"))
+        self._sub_advances = set(SubcontractPayment.objects.filter(kind="advance").values_list("payment_id", flat=True))
         self._project_purchases = set(ProjectPurchase.objects.values_list("invoice_id", flat=True))
         if self.acc.has("retention_receivable"):
             for release in RetentionRelease.objects.select_related("project"):
@@ -391,6 +395,16 @@ class Projector:
             if line["account"] == self.acc["receivable"]:
                 line["account"] = self.acc["customer_advances"]
 
+    def _place_supplier_payment(self, g):
+        """C11 (HG-128): a subcontractor's advance is an asset until their bills recover it. Its cancellation rows sit
+        in the same group (same payment, same date), so a cancelled advance nets to nothing."""
+
+        if g.source_id not in self._sub_advances or not self.acc.has("subcontractor_advances"):
+            return
+        for line in g.lines:
+            if line["account"] == self.acc["payable"]:
+                line["account"] = self.acc["subcontractor_advances"]
+
     def _place_sales_return(self, g):
         from sales.models import SalesReturn
         from taxes.models import SalesReturnLineTax
@@ -434,6 +448,13 @@ class Projector:
             sign = 1 if g.money < 0 else -1
             g.add(self.acc["payable"], sign * retention, g.entity_id, supplier_id=self._party(g, "supplier_id") or inv.supplier_id)
             g.add(self.acc["retention_payable"], -sign * retention, g.entity_id)
+        recovery = self._sub_recoveries.get(g.source_id)
+        if recovery and g.money and self.acc.has("subcontractor_advances"):
+            # C11 (HG-128): the advance this bill recovers pays part of it, so it leaves the advances account. The
+            # cancellation entry carries the opposite sign, so a cancelled bill gives the advance back.
+            sign = 1 if g.money < 0 else -1
+            g.add(self.acc["payable"], sign * recovery, g.entity_id, supplier_id=self._party(g, "supplier_id") or inv.supplier_id)
+            g.add(self.acc["subcontractor_advances"], -sign * recovery, g.entity_id)
 
     def _service_cost(self, purchase_id):
         """HG-038: services bought for a project are a project cost."""
@@ -460,6 +481,16 @@ class Projector:
             sign = 1 if g.money > 0 else -1
             g.add(self.acc["payable"], -sign * share, g.entity_id, supplier_id=self._party(g, "supplier_id") or ret.source_invoice.supplier_id)
             g.add(self.acc["retention_payable"], sign * share, g.entity_id)
+        recovery = self._sub_recoveries.get(ret.source_invoice_id)
+        if recovery and g.money and self.acc.has("subcontractor_advances"):
+            # C11 (HG-128): the returned share of the recovery (projects.costs.return_share) is advance again; the
+            # return's cancellation entry reverses it.
+            from projects.costs import return_share
+
+            share = return_share(recovery, ret.source_invoice, ret)
+            sign = 1 if g.money > 0 else -1
+            g.add(self.acc["payable"], -sign * share, g.entity_id, supplier_id=self._party(g, "supplier_id") or ret.source_invoice.supplier_id)
+            g.add(self.acc["subcontractor_advances"], sign * share, g.entity_id)
 
     def _place_opening_balance_adjustment(self, g):
         g.add(self.acc["opening_equity"], -g.balance(), g.entity_id)
@@ -644,9 +675,10 @@ def fingerprint():
 def _contracts_fingerprint():
     """HG-038: advances, certificates, subcontractor bills, project purchases and releases."""
 
-    from projects.models import Certificate, ProjectPayment, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractRelease
+    from projects.models import Certificate, ProjectPayment, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractPayment, SubcontractRelease
 
     parts = [";".join(f"{p}{k}" for p, k in ProjectPayment.objects.order_by("pk").values_list("payment_id", "kind")),
+             ";".join(f"{p}{k}" for p, k in SubcontractPayment.objects.order_by("pk").values_list("payment_id", "kind")),  # C11 (HG-128)
              str(RetentionRelease.objects.filter(reversed_on__isnull=False).count() + SubcontractRelease.objects.filter(reversed_on__isnull=False).count())]
     for model in (Certificate, SubcontractBill, ProjectPurchase, RetentionRelease, SubcontractRelease):
         agg = model.objects.aggregate(n=Max("pk"))
