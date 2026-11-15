@@ -15,6 +15,8 @@ urlpatterns = [
     path("equipment/", views_equipment.register, name="equipment_register"),
     path("equipment/<int:eid>/", views_equipment.machine_edit, name="equipment_edit"),
     path("<int:pk>/", views.project_detail, name="detail"),
+    # Contracting C12 (HG-127): the printed issue and return vouchers
+    path("<int:pk>/materials/<str:kind>/<int:number>/print/", views.voucher_print, name="voucher_print"),
     # CONTRACT-002
     path("<int:pk>/boq/", contract_views.boq, name="boq"),
     path("<int:pk>/certificates/", contract_views.certificates, name="certificates"),
