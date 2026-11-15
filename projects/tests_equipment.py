@@ -207,6 +207,17 @@ class HiredEquipmentTests(EquipmentSetup):
         with self.assertRaisesMessage(ValidationError, "اترحّلت"):
             equipment.withdraw_hire(self.project, second, self.owner)
 
+    def test_a_draft_with_vat_is_withdrawn_too_and_its_hours_come_back(self):
+        from settings_core.capabilities import _write
+
+        _write("vat", True)
+        self.log_loader_30_hours()
+        (invoice,) = equipment.bill_hire(self.project, self.owner, self.supplier)
+        self.assertEqual(invoice.total_amount, D("15390.00"))
+        equipment.withdraw_hire(self.project, invoice, self.owner)
+        self.assertFalse(PurchaseInvoice.objects.exists())
+        self.assertEqual(equipment.hire_groups(self.project)[0]["amount"], D("13500.00"))
+
     def test_one_line_per_machine_and_a_changed_rate_is_its_own_line(self):
         crane = equipment.save_equipment(self.owner, {"name": "ونش 20 طن", "kind": "hired", "hour_rate": "800", "supplier": self.supplier})
         self.log(self.loader, "10", 3)
