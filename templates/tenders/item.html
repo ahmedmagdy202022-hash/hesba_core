@@ -1,0 +1,41 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/tenders.css' %}?v=c8-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C8 (HG-126): one item of the tender and its unit price analysis (cost lines per unit of the item). #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'tenders:detail' t.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ t.name }}</a>
+<h1>{{ item_title }}</h1><p>{{ line.description }}</p></div></section>
+<section class="op-summary-grid op-summary-grid--compact td-figures" data-item-figures>
+<article><small>{{ words.qty }}</small><strong><bdi>{{ line.quantity|qty }}</bdi> <bdi>{{ line.unit }}</bdi></strong></article>
+<article><small>{{ words.rate }}</small><strong><bdi data-figure="rate">{{ row.rate|money }}</bdi></strong></article>
+<article><small>{{ words.amount }}</small><strong><bdi data-figure="total">{{ row.total|money }}</bdi></strong></article>
+{% if can_costs %}<article><small>{{ words.direct }}</small><strong><bdi data-figure="direct">{{ row.direct|money }}</bdi></strong></article>
+<article><small>{{ words.after_overhead }} (<bdi dir="ltr">{{ t.overhead_percent|floatformat:"-2u" }}%</bdi>)</small><strong><bdi data-figure="overhead">{{ row.with_overhead|money }}</bdi></strong></article>{% endif %}
+</section>
+
+{% if can_costs %}<h2 class="td-h2">{{ words.costs }}</h2>
+<div class="op-table-wrap"><table class="op-table td-table" data-costs><thead><tr><th>{{ words.heading }}</th><th>{{ words.cost_note }}</th><th>{{ words.unit_cost }}</th>{% if is_open %}<th></th>{% endif %}</tr></thead><tbody>
+{% for c in cost_rows %}<tr data-cost="{{ c.c.pk }}"><td data-cell="{{ words.heading }}">{{ c.heading }}</td><td data-cell="{{ words.cost_note }}">{{ c.c.description|default:"—" }}</td><td data-cell="{{ words.unit_cost }}"><bdi>{{ c.c.unit_cost|money }}</bdi></td>
+{% if is_open %}<td data-cell=""><details class="op-row-edit"><summary>{{ words.change }}</summary><form method="post" class="op-form" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="save_cost"><input type="hidden" name="cost" value="{{ c.c.pk }}">
+<div class="op-form-grid"><div class="op-field"><label for="tc-h-{{ c.c.pk }}">{{ words.heading }}</label><select id="tc-h-{{ c.c.pk }}" name="heading">{% for value, label in headings %}<option value="{{ value }}"{% if c.c.heading == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="tc-d-{{ c.c.pk }}">{{ words.cost_note }}</label><input id="tc-d-{{ c.c.pk }}" name="description" value="{{ c.c.description }}" maxlength="255"></div>
+<div class="op-field"><label for="tc-u-{{ c.c.pk }}">{{ words.unit_cost }}</label><input id="tc-u-{{ c.c.pk }}" name="unit_cost" value="{{ c.c.unit_cost|stringformat:'s' }}" inputmode="decimal" dir="ltr" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="delete_cost"><input type="hidden" name="cost" value="{{ c.c.pk }}"><button class="op-secondary" type="submit" data-delete-cost="{{ c.c.pk }}">{{ words.delete }}</button></form></details></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_costs }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if is_open %}<form class="op-form td-form" method="post" data-add-cost novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_cost"><h2>{{ words.add_cost }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="tc-heading">{{ words.heading }}</label><select id="tc-heading" name="heading">{% for value, label in headings %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="tc-desc">{{ words.cost_note }}</label><input id="tc-desc" name="description" maxlength="255"></div>
+<div class="op-field"><label for="tc-cost">{{ words.unit_cost }}</label><input id="tc-cost" name="unit_cost" inputmode="decimal" dir="ltr" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add_cost }}</button></div></form>{% endif %}
+{% else %}<p class="op-muted" data-costs-hidden>{{ words.costs_hidden }}</p>{% endif %}
+
+{% if is_open %}<form class="op-form td-form" method="post" data-edit-item novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="save_item"><h2>{{ words.edit_item }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="ti-code">{{ words.code }}</label><input id="ti-code" name="code" value="{{ line.code }}" maxlength="20" dir="ltr"></div>
+<div class="op-field"><label for="ti-desc">{{ words.description }}</label><input id="ti-desc" name="description" value="{{ line.description }}" maxlength="255" required></div>
+<div class="op-field"><label for="ti-unit">{{ words.unit }}</label><input id="ti-unit" name="unit" value="{{ line.unit }}" maxlength="30"></div>
+<div class="op-field"><label for="ti-qty">{{ words.qty }}</label><input id="ti-qty" name="quantity" value="{{ line.quantity|stringformat:'s' }}" inputmode="decimal" dir="ltr" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+<form class="td-delete" method="post" data-delete-item>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="delete_item"><button class="op-danger" type="submit">{{ words.delete_item }}</button></form>{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/tenders.css' %}?v=c8-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C8 (HG-126): the tenders of the entity being worked in. A tender moves no money. #}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><a class="op-primary" href="{% url 'tenders:new' %}?lang={{ lang }}" data-new-tender>{{ words.new }}</a></section>
+<form class="op-filters td-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
+<select name="status" aria-label="{{ words.status }}"><option value="">{{ words.all }}</option>{% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<button type="submit">{{ words.show }}</button></form>
+<div class="op-table-wrap"><table class="op-table td-table" data-tenders><thead><tr><th>{{ words.name }}</th><th>{{ words.party }}</th><th>{{ words.due_on }}</th><th>{{ words.items_n }}</th><th>{{ words.total }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in rows %}{% with t=row.t %}<tr data-tender="{{ t.pk }}" data-status="{{ t.status }}">
+<td data-cell="{{ words.name }}"><a href="{% url 'tenders:detail' t.pk %}?lang={{ lang }}">{{ t.name }}</a></td>
+<td data-cell="{{ words.party }}">{{ row.party }}</td>
+<td data-cell="{{ words.due_on }}">{% if t.due_on %}{{ t.due_on|day_text:lang }}{% else %}—{% endif %}</td>
+<td data-cell="{{ words.items_n }}">{{ row.items }}</td>
+<td data-cell="{{ words.total }}"><bdi data-tender-total="{{ t.pk }}">{{ row.total|money }}</bdi></td>
+<td data-cell="{{ words.status }}"><span class="op-status op-status-{{ row.status.tone }}">{{ row.status.label }}</span></td>
+</tr>{% endwith %}
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,49 @@
+/* Contracting C8 (HG-126): the tender study. Tokens only (static/hesba/css/tokens.css). */
+.td-filters{grid-template-columns:minmax(0,240px) auto}
+.td-h2{margin:var(--hs-space-6) 0 var(--hs-space-3);color:var(--hs-navy);font-size:var(--hs-text-lg)}
+.td-note{margin:var(--hs-space-3) 0;padding:var(--hs-space-3) var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-ground);color:var(--hs-ink)}
+.td-note--won{border-color:var(--hs-teal);background:var(--hs-teal-wash);color:var(--hs-navy)}
+.td-note a,.td-item__link{color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold);text-decoration:none}
+.td-warn{color:var(--hs-warning)}
+.td-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:var(--hs-space-4)}
+.td-item{display:flex;flex-direction:column;gap:var(--hs-space-3);padding:var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);min-inline-size:0}
+.td-item.is-unpriced{border-color:var(--hs-warning-line)}
+.td-item__head{display:flex;align-items:baseline;gap:var(--hs-space-2);flex-wrap:wrap}
+.td-item__head h3{flex:1 1 12em;margin:0;color:var(--hs-navy);font-size:var(--hs-text-md);overflow-wrap:anywhere}
+.td-item__no{display:inline-flex;align-items:center;justify-content:center;min-inline-size:2em;padding:2px var(--hs-space-2);border-radius:var(--hs-radius-pill);background:var(--hs-ground);color:var(--hs-muted);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold)}
+.td-chip{padding:2px var(--hs-space-2);border-radius:var(--hs-radius-pill);background:var(--hs-warning-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-bold);white-space:nowrap}
+.td-item__figures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--hs-space-2);margin:0}
+.td-item__figures div{display:flex;flex-direction:column;gap:2px;min-inline-size:0}
+.td-item__figures dt{color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.td-item__figures dd{margin:0;color:var(--hs-ink);overflow-wrap:anywhere}
+.td-item__figures strong{color:var(--hs-navy)}
+.td-costs{list-style:none;margin:0;padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-md);background:var(--hs-ground);display:grid;gap:var(--hs-space-1)}
+.td-costs li{display:flex;justify-content:space-between;align-items:baseline;gap:var(--hs-space-3);font-size:var(--hs-text-sm)}
+.td-costs li span{color:var(--hs-ink);overflow-wrap:anywhere}
+.td-costs__sum{padding-block-start:var(--hs-space-1);border-block-start:1px solid var(--hs-line);font-weight:var(--hs-weight-semibold)}
+.td-costs__none{color:var(--hs-muted)}
+.td-empty{grid-column:1/-1;margin:0;border:1px dashed var(--hs-line);border-radius:var(--hs-card-radius)}
+.td-form{margin-top:var(--hs-space-4)}
+.td-wide{grid-column:1/-1}
+.td-card{margin:var(--hs-space-4) 0;padding:var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.td-card h2{margin:0 0 var(--hs-space-3);color:var(--hs-navy);font-size:var(--hs-text-lg)}
+.td-card ul{list-style:none;margin:0;padding:0;display:grid}
+.td-card li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:baseline;gap:var(--hs-space-3);padding:var(--hs-space-2) 0;border-bottom:1px solid var(--hs-line)}
+.td-card li:last-child{border-bottom:0}
+.td-card__share{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.td-card__total{font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.td-prints{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin:var(--hs-space-4) 0}
+.td-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-4)}
+.td-actions .op-form h3{margin:0 0 var(--hs-space-2);color:var(--hs-navy)}
+.td-actions .op-form-actions{margin-top:var(--hs-space-3)}
+.td-win{border-color:var(--hs-teal)}
+.td-delete{margin-top:var(--hs-space-4)}
+.td-p-internal{margin:0 0 var(--hs-space-2);color:var(--hs-danger);font-weight:var(--hs-weight-bold)}
+.td-p-analysis .td-p-item td{background:var(--hs-ground);font-weight:var(--hs-weight-bold);color:var(--hs-navy)}
+.td-p-analysis .td-p-sum td{color:var(--hs-muted)}
+.td-p-analysis .td-p-rate td{color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+@media (max-width:700px){
+  .td-filters,.td-actions{grid-template-columns:1fr}
+  .td-items{grid-template-columns:1fr}
+  .td-prints .op-secondary{inline-size:100%;text-align:center}
+}
