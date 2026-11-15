@@ -62,6 +62,10 @@
     if (shown.price) blocks.push({ text: label.price, size: px(spec.price_pt), weight: '700', lines: 1, color: '#092851', ltr: true });
     var after = [];
     if (shown.code) after.push({ text: label.code, size: px(spec.small_pt), weight: '400', lines: 1, color: '#475467' });
+    // Manufacturing F3 (HG-131): a production lot's number, expiry and day made, when the label carries them.
+    ['batch', 'expiry', 'made_on'].forEach(function (key) {
+      if (shown[key] && label[key]) after.push({ text: label[key], size: px(spec.small_pt), weight: '400', lines: 1, color: '#475467' });
+    });
 
     var measure = function (block) {
       var fit = fitText(ctx, block.text, innerW, block.size, block.weight, block.lines);

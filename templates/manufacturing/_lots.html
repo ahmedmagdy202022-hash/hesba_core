@@ -1,0 +1,13 @@
+{% load hesba_format %}
+{% if lot or lot_uses %}
+{% if lot %}<h2>{{ words.product_lot }}</h2>
+{% if early_warning %}<div class="op-message" role="status" data-lot-warning>{{ early_warning }}</div>{% endif %}
+<section class="op-summary-grid" data-product-lot><article><small>{{ words.lot }}</small><strong dir="ltr" data-lot-no>{{ lot.batch_no }}</strong></article><article><small>{{ words.expiry }}</small><strong data-lot-expiry>{% if lot.expiry_date %}<bdi>{{ lot.expiry_date|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</strong></article><article><small>{{ words.lot_qty }}</small><strong>{{ lot.quantity|qty }}</strong></article></section>
+{% if run.status == 'cancelled' %}<p class="op-muted" data-lot-cancelled>{{ words.lot_cancelled }}</p>{% endif %}
+<div class="op-form-actions">{% if can_trace %}<a class="op-secondary" href="{% url 'manufacturing:trace' %}?lot={{ lot.pk }}&amp;lang={{ lang }}" data-lot-trace>{{ words.trace }}</a>{% endif %}{% if labels_url %}<a class="op-secondary" href="{{ labels_url }}" data-lot-labels>{{ words.print_labels }}</a>{% endif %}</div>
+{% if labels_note %}<p class="op-muted">{{ labels_note }}</p>{% endif %}{% endif %}
+{% if lot_uses %}<h2>{{ words.ingredient_lots }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-lot-uses><thead><tr><th>{{ words.component }}</th><th>{{ words.lot }}</th><th>{{ words.expiry }}</th><th>{{ words.qty }}</th></tr></thead><tbody>
+{% for use in lot_uses %}<tr data-lot-use="{{ use.item.item_code }}"><td>{{ use.item.item_name }}</td><td>{% if use.batch %}<bdi>{{ use.batch.batch_no|default:"—" }}</bdi>{% else %}{{ words.no_lot }}{% endif %}</td><td>{% if use.batch and use.batch.expiry_date %}<bdi>{{ use.batch.expiry_date|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td><td>{{ use.quantity|qty }}</td></tr>{% endfor %}
+</tbody></table></div><p class="op-muted">{{ words.lot_note }}</p>{% endif %}
+{% endif %}

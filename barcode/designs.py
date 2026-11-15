@@ -32,8 +32,11 @@ NUMBERS = {
     "small_pt": (4, 12, 7, 1),
     "barcode_pct": (25, 80, 50, 0),
 }
-FLAGS = ("show_name", "show_price", "show_code", "show_shop", "barcode_text")
-DEFAULT_FLAGS = {"show_name": True, "show_price": True, "show_code": False, "show_shop": False, "barcode_text": True}
+# Manufacturing F3 (HG-131): show_batch, show_expiry and show_made_on print a production lot's number, expiry date and day made
+# (the lot label the run page prints). Designs saved before them have no such keys and read as off.
+FLAGS = ("show_name", "show_price", "show_code", "show_shop", "barcode_text", "show_batch", "show_expiry", "show_made_on")
+DEFAULT_FLAGS = {"show_name": True, "show_price": True, "show_code": False, "show_shop": False, "barcode_text": True,
+                 "show_batch": False, "show_expiry": False, "show_made_on": False}
 
 ERRORS = {
     "name": {"ar": "اكتب اسم للتصميم.", "en": "Give the design a name."},

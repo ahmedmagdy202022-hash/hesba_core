@@ -57,6 +57,7 @@ MESSAGES = {
         "on_floor": "في أمر إنتاج شغال في المصنع بالوصفة دي وخاماته اتصرفت؛ خلّصه أو ألغيه الأول قبل ما تعدّل الوصفة.",
         "no_good": "مفيش ولا وحدة سليمة تدخل المخزن؛ لو الكمية كلها باظت ألغِ الأمر أو سجّل الهالك كتسوية.",
         "cycle": "مينفعش تضيف «{component}» لوصفة «{product}»: «{component}» نفسه بيتصنع من «{product}» (مباشرة أو من خلال صنف تاني)، فالوصفتين هيبقوا في دايرة مقفولة.",
+        "shelf": "مدة الصلاحية لازم تكون عدد أيام صحيح أكبر من صفر، أو سيبها فاضية.",
     },
     "en": {
         "product": "Choose the product.", "product_stock": "The product must be a stock-tracked item.", "output": "The output per batch must be above zero.",
@@ -69,6 +70,7 @@ MESSAGES = {
         "on_floor": "An order on the floor was issued from this recipe; finish or cancel it before changing the recipe.",
         "no_good": "No good units are left to put into stock; if the whole lot was lost, cancel the order or record the loss as an adjustment.",
         "cycle": "“{component}” cannot go into the recipe of “{product}”: “{component}” is itself made from “{product}” (directly or through another item), so the two recipes would go in a closed circle.",
+        "shelf": "The shelf life must be a whole number of days above zero, or leave it empty.",
     },
 }
 
@@ -91,6 +93,21 @@ def _next(model, field, prefix, width):
     while model.objects.filter(**{field: f"{prefix}{number:0{width}d}"}).exists():
         number += 1
     return f"{prefix}{number:0{width}d}"
+
+
+def _shelf_life(raw, words):
+    """Manufacturing F3 (HG-131): the recipe's shelf life in days, None when blank."""
+
+    raw = str(raw if raw is not None else "").strip()
+    if not raw:
+        return None
+    try:
+        days = int(raw)
+    except ValueError:
+        raise ValidationError(words["shelf"])
+    if days < 1 or days > 36500:
+        raise ValidationError(words["shelf"])
+    return days
 
 
 def _makes(component_pk, target_pk, skip):
@@ -152,6 +169,8 @@ def save_recipe(data, lines, user, recipe=None, lang="ar"):
         for component, _quantity in clean:
             if _makes(component.pk, product.pk, recipe):
                 raise ValidationError(words["cycle"].format(component=component.item_name, product=product.item_name))
+    # Only a caller that says so (the recipe form) changes the shelf life; the MRP, make-to-order and demo callers leave it.
+    shelf_life = _shelf_life(data["shelf_life_days"], words) if "shelf_life_days" in data else None
     created = recipe is None
     recipe = recipe or Recipe(code=_next(Recipe, "code", "BOM-", 4), created_by=user)
     recipe.product = product
@@ -159,6 +178,8 @@ def save_recipe(data, lines, user, recipe=None, lang="ar"):
     recipe.output_quantity = output
     recipe.active = data.get("active", True) not in (False, "", "0", None)
     recipe.notes = (data.get("notes") or "").strip()[:255]
+    if "shelf_life_days" in data:
+        recipe.shelf_life_days = shelf_life
     recipe.save()
     recipe.lines.all().delete()
     RecipeLine.objects.bulk_create([RecipeLine(recipe=recipe, component=component, quantity=quantity) for component, quantity in clean])

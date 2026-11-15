@@ -11,11 +11,14 @@ from django.urls import reverse
 from approvals.gate import held
 from master_data.models import Item, Location
 from permissions.decorators import require_permission
+from barcode import designs as label_designs
+from batches.services import batches_enabled
+from settings_core.capabilities import capability_enabled
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 from settings_core.templatetags.hesba_format import qty as fmt_qty
 
-from . import services
+from . import lots, services
 from .models import ProductionRun, Recipe
 from entities import scope as entity_scope
 
@@ -36,6 +39,12 @@ WORDS = {
         "cancel_note": "الإلغاء بيرجّع المنتج من المخزن الأول (لو اتباع مينفعش)، وبعدين بيرجّع كل الخامات.", "consumed": "الخامات اللي اتصرفت", "made": "المنتج اللي دخل",
         "cost_needed": "تسجيل التشغيلة محتاج صلاحية رؤية التكلفة، عشان المنتج يدخل بتكلفته.", "view_only": "التعديل لصاحب الصلاحية بس.",
         "stock_only": "المنتج والمكوّنات لازم يكونوا أصناف متتبعة في المخزون.",
+        "shelf_life": "مدة صلاحية المنتج بالأيام (اختياري)", "shelf_hint": "بتتحسب من يوم التشغيلة وبتطلع على تشغيلة المنتج.",
+        "lot_no": "رقم تشغيلة المنتج (اختياري)", "lot_expiry": "تاريخ صلاحية المنتج (اختياري)", "lot_hint": "لو سيبتهم فاضيين: رقم التشغيلة هو رقم الإنتاج، والصلاحية من مدة صلاحية الوصفة.",
+        "product_lot": "تشغيلة المنتج", "lot": "رقم التشغيلة", "expiry": "تاريخ الصلاحية", "lot_qty": "الكمية", "ingredient_lots": "تشغيلات الخامات اللي اتصرفت",
+        "no_lot": "من غير تشغيلة", "lot_note": "التشغيلات بتتسجّل وقت الصرف على أساس الأقرب انتهاءً الأول (نفس حساب شاشة التشغيلات).",
+        "early_warning": "تنبيه: خامة صلاحيتها بتخلص قبل صلاحية المنتج: {names}. صلاحية المنتج متتغيرتش.", "trace": "تتبّع التشغيلة", "print_labels": "اطبع ملصقات التشغيلة",
+        "labels_cartons": "{count} ملصق (كرتونة)", "labels_units": "{count} ملصق (وحدة)", "from_batches": "من شاشة التشغيلات", "lot_date": "تاريخ صلاحية المنتج مش صحيح.", "lot_cancelled": "التشغيلة دي ملغية ومش بتتعدّ في المخزون.",
     },
     "en": {
         "page_title": "Manufacturing", "title": "Manufacturing", "intro": "Write each product's recipe (its components per batch), then record a run: materials leave stock and the product enters at their cost.",
@@ -49,6 +58,12 @@ WORDS = {
         "cancel_note": "Cancelling takes the product back out first (not possible once sold), then returns every material.", "consumed": "Materials used", "made": "Product made",
         "cost_needed": "Recording a run needs permission to see costs, so the product enters at its cost.", "view_only": "Only users with the permission can change this.",
         "stock_only": "The product and components must be stock-tracked items.",
+        "shelf_life": "Product shelf life in days (optional)", "shelf_hint": "Counted from the run date; it sets the product lot's expiry.",
+        "lot_no": "Product lot number (optional)", "lot_expiry": "Product expiry date (optional)", "lot_hint": "Left empty, the lot number is the run number and the expiry comes from the recipe's shelf life.",
+        "product_lot": "Product lot", "lot": "Lot", "expiry": "Expiry date", "lot_qty": "Quantity", "ingredient_lots": "Lots of the materials used",
+        "no_lot": "No lot", "lot_note": "Lots are recorded at the moment of issue, earliest expiry first (the same count as the batches screen).",
+        "early_warning": "Note: a material expires before the product does: {names}. The product's expiry is unchanged.", "trace": "Trace this lot", "print_labels": "Print lot labels",
+        "labels_cartons": "{count} labels (cartons)", "labels_units": "{count} labels (units)", "from_batches": "Batches screen", "lot_date": "The product's expiry date is not valid.", "lot_cancelled": "This lot is cancelled and no longer counts in stock.",
     },
 }
 
@@ -66,7 +81,7 @@ def _base(request, **extra):
     lang = _lang(request)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["page_title"],
                "can_recipes": user_has_permission(request.user, RECIPES), "can_produce": user_has_permission(request.user, PRODUCE),
-               "can_cost": user_has_permission(request.user, COST)}
+               "can_cost": user_has_permission(request.user, COST), "lots_on": batches_enabled()}
     context.update(extra)
     return context
 
@@ -78,6 +93,8 @@ def _stock_items():
 def _recipe_post(request):
     data = {"product": _pick(Item, request.POST.get("product"), active=True), "name": request.POST.get("name", ""),
             "output_quantity": request.POST.get("output_quantity", "1"), "active": request.POST.get("active") == "on", "notes": request.POST.get("notes", "")}
+    if "shelf_life_days" in request.POST:  # Manufacturing F3: only the form that shows the field changes it
+        data["shelf_life_days"] = request.POST.get("shelf_life_days", "")
     lines = [(_pick(Item, request.POST.get(f"component_{i}"), active=True), request.POST.get(f"qty_{i}", "")) for i in range(LINE_ROWS)]
     return data, lines
 
@@ -240,8 +257,13 @@ def recipe_detail(request, pk):
                     run_date = date.fromisoformat(request.POST.get("run_date", "")) if request.POST.get("run_date") else None
                 except ValueError:
                     run_date = None
-                run = services.produce(recipe, request.user, batches=request.POST.get("batches"), location=location, run_date=run_date,
-                                       notes=request.POST.get("notes", ""), lang=lang)
+                try:
+                    lot_expiry = date.fromisoformat(request.POST.get("lot_expiry", "")) if request.POST.get("lot_expiry") else None
+                except ValueError:
+                    raise ValidationError(words["lot_date"])
+                # Manufacturing F3 (HG-131): the same run, plus the ingredient lots it used and the product's own lot.
+                run = lots.produce(recipe, request.user, batches=request.POST.get("batches"), location=location, run_date=run_date,
+                                   notes=request.POST.get("notes", ""), lang=lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry)
                 messages.success(request, words["produced"].format(number=run.number, output=fmt_qty(run.output_quantity), product=recipe.product.item_name))
                 return redirect(f"{reverse('manufacturing:run', args=[run.pk])}?lang={lang}")
             if not user_has_permission(request.user, RECIPES):
@@ -255,7 +277,8 @@ def recipe_detail(request, pk):
 
             error = translate(" ".join(exc.messages), lang)
     lines = list(recipe.lines.select_related("component"))
-    form = {"product": str(recipe.product_id), "name": recipe.name, "output_quantity": _plain(recipe.output_quantity), "active": recipe.active, "notes": recipe.notes}
+    form = {"product": str(recipe.product_id), "name": recipe.name, "output_quantity": _plain(recipe.output_quantity), "active": recipe.active, "notes": recipe.notes,
+            "shelf_life_days": recipe.shelf_life_days or ""}
     return render(request, "manufacturing/recipe.html", _base(
         request, recipe=recipe, lines=lines, plan=services.plan(recipe, batches, location), batches=_plain(batches), location=location,
         locations=locations, items=_stock_items(), form=form, rows=_rows([(str(line.component_id), _plain(line.quantity)) for line in lines]), error=error,
@@ -286,7 +309,23 @@ def run_detail(request, pk):
         else:
             messages.success(request, words["cancelled"])
             return back
+    lot, lot_uses, early = lots.run_lots(run)
+    labels_url = ""
+    if lot is not None and run.status == "posted" and capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"):
+        count, cartons = lots.label_count(run)
+        labels_url = (f"{reverse('barcode:labels_print')}?lang={lang}&copies_{run.recipe.product_id}={count}&run={run.pk}"
+                      f"&show_batch=1&show_expiry=1&show_made_on=1")
+        design = next((d for d in label_designs.all_designs() if d.get("show_batch") or d.get("show_expiry")), None)
+        if design:
+            labels_url += f"&template=d{design['id']}"
+        labels_note = words["labels_cartons" if cartons else "labels_units"].format(count=count)
+    else:
+        labels_note = ""
+    early_names = "، ".join(sorted({f"{use.item.item_name} ({lots.lot_name(use.batch)})" for use in early}))
     return render(request, "manufacturing/run.html", _base(
         request, run=run, status_label=choice_label(run, "status", lang), error=error,
         consumed=[c.operation for c in run.consumptions.select_related("operation", "operation__item")],
+        lot=lot, lot_uses=lot_uses, early_warning=words["early_warning"].format(names=early_names) if early else "",
+        labels_url=labels_url, labels_note=labels_note,
+        can_trace=user_has_permission(request.user, VIEW),
     ))
