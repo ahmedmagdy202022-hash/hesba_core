@@ -346,7 +346,7 @@ def bounce(cheque, reason, user, lang="ar", on=None):
 
         _state(cheque, (ChequeStatus.IN_HAND, ChequeStatus.DEPOSITED), words, lang)
         _after(cheque, on, words)
-        if hasattr(cheque.customer_payment, "project_payment"):
+        if getattr(getattr(cheque.customer_payment, "project_payment", None), "kind", None) == "advance":  # C9 (HG-122): a collection link bounces
             raise ValidationError(words["project"])
         if cheque.status == ChequeStatus.DEPOSITED:
             # The bank takes the money back first, so the bank is not overstated and the box never goes below zero.
