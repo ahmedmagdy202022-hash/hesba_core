@@ -466,10 +466,15 @@ def move_table(order, table, user, lang="ar"):
         return order
     if Order.objects.filter(table=table, status=OrderStatus.OPEN).exists():
         raise ValidationError(words["busy"].format(table=table.name))
-    before = order.table.name if order.table else ""
+    previous = order.table
+    before = previous.name if previous else ""
     order.table = table
     order.save(update_fields=["table"])
     _audit(order, user, "move_order", {"table": table.name}, {"table": before})
+    if previous is not None:  # R5a (HG-115): what the party asked for from the old table's QR page goes with them
+        from . import qr
+
+        qr.follow_move(previous, table, user)
     return order
 
 

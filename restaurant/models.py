@@ -1,3 +1,4 @@
+import secrets
 from decimal import Decimal
 
 from django.conf import settings
@@ -11,6 +12,12 @@ def _main_entity():
     from entities.services import main_entity
 
     return main_entity()
+
+
+def new_qr_key():
+    """R5a (HG-115): an unguessable key for a table's printed QR (128 bits, URL-safe). A module-level function: a migration names it."""
+
+    return secrets.token_urlsafe(16)
 
 
 class DiningTable(models.Model):
@@ -27,6 +34,9 @@ class DiningTable(models.Model):
     sort_order = models.PositiveIntegerField(default=0)
     active = models.BooleanField(default=True)
     entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="dining_tables")
+    #: R5a (HG-115): what the table's printed QR carries (``/t/<qr_key>/``): random and unique, the only thing that opens the table's
+    #: public menu. «غيّر الكود» makes a new one, which kills the printed card at once. Never shown on any public page.
+    qr_key = models.CharField(max_length=40, unique=True, default=new_qr_key, editable=False)
 
     class Meta:
         ordering = ["sort_order", "name"]
@@ -357,3 +367,47 @@ class ComboChoice(models.Model):
 
     def __str__(self):
         return f"{self.slot_id}:{self.item_id}"
+
+
+class RequestKind(models.TextChoices):
+    ORDER = "order", "Order"
+    CALL = "call_waiter", "Call the waiter"
+    BILL = "bill", "Bring the bill"
+
+
+class RequestStatus(models.TextChoices):
+    NEW = "new", "New"
+    ACCEPTED = "accepted", "Accepted"
+    DECLINED = "declined", "Declined"
+
+
+class TableRequest(models.Model):
+    """Restaurants R5a (HG-115): what a guest asked for from the table's QR page: an order, the waiter, or the bill.
+
+    Public input never writes an order line: a request only waits here (``restaurant.qr``) until a member of staff accepts it.
+    ``items`` is the normalised cart, [{"item": pk, "quantity": n, "options": [option pks], "note": ""}]: no price and no name,
+    so what an accepted request adds is priced at the menu at that moment. ``entity`` is the table's, so a branch's screens
+    see only that branch's requests (R12)."""
+
+    table = models.ForeignKey(DiningTable, on_delete=models.CASCADE, related_name="requests")
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="table_requests")
+    kind = models.CharField(max_length=20, choices=RequestKind.choices, default=RequestKind.ORDER)
+    items = models.JSONField(default=list, blank=True)
+    note = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=20, choices=RequestStatus.choices, default=RequestStatus.NEW)
+    handled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="handled_table_requests")
+    handled_at = models.DateTimeField(null=True, blank=True)
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, null=True, blank=True, related_name="table_requests")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+        indexes = [models.Index(fields=["table", "status"], name="restaurant_req_table_status")]
+
+    def __str__(self):
+        return f"{self.table_id}:{self.kind}:{self.status}"
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            self.entity_id = self.table.entity_id
+        super().save(*args, **kwargs)
