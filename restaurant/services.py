@@ -254,6 +254,16 @@ def _locked_open(order, words):
     return order
 
 
+def _not_locked_for_payment(order, lang, allow=None):
+    """R5b (HG-121): a bill-changing step on an order whose pay link is live (the guest is paying from the table) is refused.
+    Called after ``_locked_open``, under the order's row lock, which the gateway's callback takes too."""
+
+    from . import pay_at_table
+
+    pay_at_table.refuse_if_locked(order, lang, allow=allow)
+    return order
+
+
 @transaction.atomic
 def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
     """Add a dish. R1a (HG-109): ``options`` are the option pks chosen on the sheet, checked by ``modifiers.choose`` before
@@ -265,7 +275,7 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
     from .models import Combo
 
     words = MESSAGES[lang]
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang)
     if item is None or not item.active:
         raise ValidationError(words["item"])
     from . import charges
@@ -336,7 +346,7 @@ def add_agreed_line(order, item, user, quantity, unit_price, note="", lang="ar")
     from .models import Combo
 
     words = MESSAGES[lang]
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang)
     if item is None or not item.active or item.item_code in OFF_MENU_CODES:
         raise ValidationError(words["item"])
     charges.refuse_charge_item(item, lang)
@@ -362,7 +372,7 @@ def add_combo(order, combo, user, choices, quantity=1, note="", lang="ar", optio
     from .models import ComboSlot
 
     words = MESSAGES[lang]
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang)
     if combo is None:
         raise ValidationError(combos.words(lang)["off"])
     count = combos.whole_count(quantity, lang)
@@ -414,7 +424,7 @@ def change_line(line, user, quantity=None, note=None, lang="ar"):
     """Change an unsent line; quantity 0 removes it. R1a: a dish's add-ons take its new quantity (and go with it)."""
 
     words = MESSAGES[lang]
-    _locked_open(line.order, words)
+    _not_locked_for_payment(_locked_open(line.order, words), lang)
     line = _dish_line(OrderLine.objects.get(pk=line.pk), lang)
     if line.ticket_id or line.voided:
         raise ValidationError(words["sent"])
@@ -457,7 +467,7 @@ def void_line(line, user, lang="ar", *, reason=""):
     """Remove a line: an unsent one just goes; a sent one needs the selling right and a reason, is kept, marked void, and audited."""
 
     words = MESSAGES[lang]
-    order = _locked_open(line.order, words)
+    order = _not_locked_for_payment(_locked_open(line.order, words), lang)
     line = _dish_line(OrderLine.objects.select_related("item", "ticket", "combo__item").get(pk=line.pk), lang)
     members = _bundle_head(line, lang)  # R1b: a combo goes whole, from its head
     if not line.ticket_id:
@@ -518,7 +528,7 @@ def send_to_kitchen(order, user, lang="ar"):
 @transaction.atomic
 def move_table(order, table, user, lang="ar"):
     words = MESSAGES[lang]
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang)
     if order.split_from_id:  # R2a: a part has no table of its own while open; it follows its parent's
         raise ValidationError(words["part_move"])
     if order.kind != OrderKind.DINE_IN:
@@ -544,7 +554,7 @@ def move_table(order, table, user, lang="ar"):
 @transaction.atomic
 def cancel_order(order, user, reason="", lang="ar"):
     words = MESSAGES[lang]
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang)
     if order.split_from_id:  # R2a: a part's lines go back to the bill, never away with it
         raise ValidationError(words["part_cancel"])
     _no_open_part(order, words)
@@ -596,13 +606,13 @@ def _fee_item(words):
     return item
 
 
-def _payable(order, cashbox, words):
+def _payable(order, cashbox, words, lang="ar", pay_link=None):
     """Paying, step 1 (validate): the order is still open (and now locked), has live lines, and there is a store and a cashbox.
 
     R12 (HG-108): the store is the order's own entity's default selling store, and the cashbox must be one of that entity's,
     whatever entity the biller works in."""
 
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang, allow=pay_link)  # R5b: only the live link's own callback pays
     _no_open_part(order, words)  # R2a: the rest of a split bill is paid after its open parts (or once they are put back)
     lines = [line for line in order.lines.select_related("item").filter(voided=False)]
     if not lines:
@@ -726,7 +736,7 @@ def _close(order, invoice, customer, user):
 
 @transaction.atomic
 def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), customer=None, lang="ar", tenders=None, coupon="", points="",
-        gift=None, promotion_seen=None, points_seen=None):
+        gift=None, promotion_seen=None, points_seen=None, pay_link=None):
     """Post the order as one sales invoice through the cashier's checkout. Returns (invoice, change).
 
     R2b (HG-110): ``tenders`` [(cashbox, amount), ...] pays the bill several ways (``cashbox`` and ``tendered`` are then
@@ -736,7 +746,10 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     rows; ``points`` (as typed) are the customer's, checked by ``loyalty.redeem`` and added to ``discount``; ``gift`` is
     (card, amount) from the bill's «كارت هدية», redeemed by ``checkout`` in the same transaction (with ``tenders``, the
     tenders and the card together equal the total). ``promotion_seen`` / ``points_seen``: what the bill box showed; a
-    payment for other figures is refused. Anything refused keeps nothing."""
+    payment for other figures is refused. Anything refused keeps nothing.
+
+    R5b (HG-121): refused while a pay link on the order is live (the guest is paying from the table), with or without a
+    discount; ``pay_link`` is that live link, passed only by its own verified callback (``pay_at_table.post_link``)."""
 
     from sales.pos import walk_in_customer
 
@@ -745,7 +758,7 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     words = MESSAGES[lang]
     if tenders is not None:
         cashbox = _split_cashboxes(order, tenders, words)
-    order, lines, location = _payable(order, cashbox, words)
+    order, lines, location = _payable(order, cashbox, words, lang, pay_link)
     kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
     _same_prices(order, customer, words)  # R14 (HG-120): the lines were priced from the order's customer's list
@@ -964,7 +977,7 @@ def split_order(order, parts, user, lang="ar"):
     Every quantity is checked under the order's lock before anything is written; a refusal changes nothing."""
 
     words = MESSAGES[lang]
-    order = _locked_open(order, words)
+    order = _not_locked_for_payment(_locked_open(order, words), lang)
     if order.split_from_id:
         raise ValidationError(words["part_of_part"])
     if order.kind == OrderKind.DELIVERY:
@@ -1039,6 +1052,7 @@ def put_back(part, user, lang="ar"):
     order, part = _lock_pair(Order(pk=current.split_from_id), current)
     if part.status != OrderStatus.OPEN or order.status != OrderStatus.OPEN:
         raise ValidationError(words["closed"])
+    _not_locked_for_payment(order, lang)  # R5b: the lines would change the bill the guest is paying
     tickets = _move_tickets(part, order)
     returned = []
     # R1b: a combo comes back whole, as the bundle it was; a number the bill has given to another combo since takes the next free one
@@ -1107,6 +1121,8 @@ def merge_orders(order, other, user, lang="ar"):
         raise ValidationError(words["merge_kind"])
     if order.entity_id != other.entity_id:  # R12: an order stays in its branch
         raise ValidationError(words["other_branch"])
+    _not_locked_for_payment(order, lang)  # R5b (HG-121): neither bill may change while its guest is paying from the table
+    _not_locked_for_payment(other, lang)
     before = {"guests": order.guests, "total": str(order.total)}
     lines = [_line_audit(line, line.quantity) for line in other.lines.select_related("item").filter(parent__isnull=True).order_by("pk")]
     tickets = _move_tickets(other, order)

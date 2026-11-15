@@ -11,6 +11,13 @@ Money moves only through services that exist, called and not changed:
   ``bank_fee`` (booked in 5212) for the gateway's fee, when Paymob pays out.
 
 The customer's browser is never trusted: the pay page and the return page read status only.
+
+HG-121 (Restaurants R5b, pay from the table): a link can also be made for a restaurant table's open **order**
+(``create_order_link``). Its verified, confirmed callback does not record a customer payment: it posts the table's bill
+through ``restaurant.pay_at_table.post_link`` (the order's own ``restaurant.services.pay``, unchanged money path) into the
+«بوابة الدفع» account, once, and only while the link is live and the order is exactly as it was when the link was made.
+Anything else (another amount, another currency, the order changed, a link no longer live, a posting refused) posts nothing,
+flags the transaction and, for a live link, marks it ``review`` so the order is free for staff again.
 """
 
 import secrets
@@ -48,6 +55,15 @@ def link_hours():
     return max(1, int(getattr(settings, "PAYMENT_LINK_HOURS", 72) or 72))
 
 
+def table_link_minutes():
+    """HG-121: how long a table's pay link lives (and locks its order): ``TABLE_PAY_LINK_MINUTES``, 30 by default."""
+
+    try:
+        return max(5, min(int(getattr(settings, "TABLE_PAY_LINK_MINUTES", 30) or 30), 24 * 60))
+    except (TypeError, ValueError):
+        return 30
+
+
 MESSAGES = {
     "ar": {
         "off": "رابط الدفع مقفول؛ شغّله من الإعدادات ← الخصائص («رابط الدفع أونلاين»).",
@@ -67,7 +83,8 @@ MESSAGES = {
         "payout_amount": "اكتب صافي التحويل والعمولة كأرقام صحيحة.",
         "payout_ref": "اكتب رقم التحويل اللي في كشف البوابة.", "payout_twice": "التحويل رقم {ref} اتسجّل قبل كده.",
         "payout_reason": "تحويل بوابة الدفع {ref}", "fee_reason": "عمولة بوابة الدفع {ref}",
-        "statuses": {"new": "مستني الدفع", "paid": "اتدفع", "mismatch": "مبلغ مختلف", "failed": "الدفع ما تمّش", "expired": "انتهى"},
+        "statuses": {"new": "مستني الدفع", "paid": "اتدفع", "mismatch": "مبلغ مختلف", "failed": "الدفع ما تمّش", "expired": "انتهى",
+                     "review": "اتدفع، ومحتاج مراجعة"},
     },
     "en": {
         "off": "Payment links are switched off; switch them on from Settings → Features (“Online payment link”).",
@@ -87,7 +104,8 @@ MESSAGES = {
         "payout_amount": "Enter the net payout and the fee as valid numbers.",
         "payout_ref": "Enter the payout reference from the gateway's statement.", "payout_twice": "Payout {ref} was already recorded.",
         "payout_reason": "Payment gateway payout {ref}", "fee_reason": "Payment gateway fee {ref}",
-        "statuses": {"new": "Waiting for payment", "paid": "Paid", "mismatch": "Paid, different amount", "failed": "Payment failed", "expired": "Expired"},
+        "statuses": {"new": "Waiting for payment", "paid": "Paid", "mismatch": "Paid, different amount", "failed": "Payment failed", "expired": "Expired",
+                     "review": "Paid, needs review"},
     },
 }
 
@@ -156,17 +174,29 @@ def gateway_boxes(entity=None):
     return rows.filter(entity=entity) if entity is not None else rows
 
 
-def expire_stale(invoice=None, now=None):
+def expire_stale(invoice=None, now=None, order=None):
     """Expire live links past their time. Each one by a conditional update (``status = new`` in the WHERE), so a link
-    a confirmation marked paid in the meantime is never overwritten; only a link actually expired is audited."""
+    a confirmation marked paid in the meantime is never overwritten; only a link actually expired is audited.
+    HG-121: ``order`` narrows it to a restaurant order's links, as ``invoice`` does to an invoice's."""
 
     now = now or timezone.now()
     lookup = {"status": LinkStatus.NEW, "expires_at__lte": now}
     if invoice is not None:
         lookup["invoice"] = invoice
+    if order is not None:
+        lookup["order"] = order
     for link in list(PaymentLink.objects.filter(**lookup)):
         if PaymentLink.objects.filter(pk=link.pk, status=LinkStatus.NEW).update(status=LinkStatus.EXPIRED, updated_at=now):
             _audit("expire_link", "payments.PaymentLink", link.pk, {"status": LinkStatus.EXPIRED, "why": "time"}, before={"status": LinkStatus.NEW})
+
+
+def expire_for(link):
+    """Expire the stale links of ``link``'s own invoice or order (never every link: ``expire_stale(None)`` would)."""
+
+    if link.order_id:
+        expire_stale(order=link.order_id)
+    else:
+        expire_stale(link.invoice_id)
 
 
 def live_link(invoice):
@@ -174,11 +204,22 @@ def live_link(invoice):
     return PaymentLink.objects.filter(invoice=invoice, status=LinkStatus.NEW).first()
 
 
+def live_order_link(order):
+    """HG-121: the restaurant order's live link (it locks the order for payment), after expiring a stale one; or None."""
+
+    expire_stale(order=order)
+    return PaymentLink.objects.filter(order=order, status=LinkStatus.NEW).first()
+
+
 def is_payable(link, now=None):
     """Whether the pay page may send the customer to the gateway now (status, time, invoice and amount still right)."""
 
     if link.status != LinkStatus.NEW or link.expires_at <= (now or timezone.now()):
         return False
+    if link.order_id:  # HG-121: a table's order is payable while it is open and exactly as it was when the link was made
+        from restaurant import pay_at_table
+
+        return pay_at_table.link_payable(link)
     return link.invoice.status == "posted" and link.amount <= outstanding(link.invoice)
 
 
@@ -198,7 +239,7 @@ def read_token(signed):
         return None
     if not isinstance(token, str):
         return None
-    return PaymentLink.objects.select_related("invoice", "customer").filter(token=token).first()
+    return PaymentLink.objects.select_related("invoice", "order", "customer").filter(token=token).first()
 
 
 def link_url(link, lang="ar"):
@@ -281,6 +322,43 @@ def create_link(invoice, user, amount=None, lang="ar"):
 
 
 @transaction.atomic
+def create_order_link(order, user, amount, customer, digest, lang="ar"):
+    """HG-121: a link for a restaurant table's open order, for ``amount`` (the bill as built now), made as ``user`` (the
+    restaurant's online-payments user). The caller (``restaurant.pay_at_table.start``) has locked the order and checked
+    it; the money goes to the order's branch's «بوابة الدفع» account. Lives ``table_link_minutes()``."""
+
+    words = MESSAGES[lang]
+    if not enabled():
+        raise ValidationError(words["off"])
+    provider = connected()
+    if provider is None:
+        raise ValidationError(words["not_connected"])
+    expire_stale(order=order)
+    if PaymentLink.objects.filter(order=order, status=LinkStatus.NEW).exists():
+        raise ValidationError(words["live"])
+    amount = money_round(Decimal(amount))
+    if amount <= 0:
+        raise ValidationError(words["nothing_due"])
+    box = gateway_box(order.entity, lang)
+    minutes = table_link_minutes()
+    link = PaymentLink.objects.create(
+        order=order, customer=customer, cashbox=box, amount=amount, currency=CURRENCY, provider=provider.code, reference=f"HSB-{secrets.token_hex(10)}",
+        token=secrets.token_urlsafe(32), expires_at=timezone.now() + timedelta(minutes=minutes), created_by=user, order_digest=digest,
+    )
+    try:
+        checkout = provider.create_checkout(amount_cents=to_cents(amount), currency=CURRENCY, merchant_reference=link.reference, customer=customer,
+                                            expires_seconds=minutes * 60)
+    except GatewayError:
+        raise ValidationError(words["gateway"])
+    link.gateway_order_id, link.checkout_url = checkout.order_id, checkout.checkout_url
+    link.save(update_fields=["gateway_order_id", "checkout_url", "updated_at"])
+    _audit("create_order_link", "payments.PaymentLink", link.pk, {"order": order.number, "amount": str(amount), "provider": provider.code,
+                                                                   "gateway_order_id": link.gateway_order_id, "cashbox": box.pk,
+                                                                   "expires_at": link.expires_at.isoformat()}, user=user, event=AuditEventType.CREATE)
+    return link
+
+
+@transaction.atomic
 def cancel_link(link, user, lang="ar"):
     _require(user, RECEIVE)
     link = PaymentLink.objects.select_for_update().get(pk=link.pk)
@@ -355,9 +433,14 @@ def _apply_callback(provider, callback):
     from sales.models import SalesInvoice
 
     link = _find_link(provider, callback)
-    if link is not None:  # one lock order everywhere: the invoice, then its link, then the transaction row
-        SalesInvoice.objects.select_for_update(of=("self",)).get(pk=link.invoice_id)
-        link = PaymentLink.objects.select_for_update(of=("self",)).select_related("invoice", "customer", "cashbox").get(pk=link.pk)
+    if link is not None:  # one lock order everywhere: the invoice (HG-121: or the order), then its link, then the transaction row
+        if link.order_id:
+            from restaurant.models import Order
+
+            Order.objects.select_for_update(of=("self",)).get(pk=link.order_id)
+        else:
+            SalesInvoice.objects.select_for_update(of=("self",)).get(pk=link.invoice_id)
+        link = PaymentLink.objects.select_for_update(of=("self",)).select_related("invoice", "order", "customer", "cashbox").get(pk=link.pk)
     txn, created = _transaction_row(provider, callback, link)
     result = _transition(provider, txn, link, callback, created)
     _audit("callback", "payments.GatewayTransaction", txn.pk, {"transaction_id": callback.transaction_id, "order_id": callback.order_id,
@@ -375,6 +458,13 @@ def _flag(txn, note, **fields):
 
 
 def _transition(provider, txn, link, callback, created):
+    if link is not None and link.order_id and not created and txn.link_id == link.pk and txn.outcome == TransactionOutcome.CONFIRMED:
+        # HG-121: an order link's confirmed transaction is final, whether it posted the bill or was left for a person (no
+        # customer payment marks it, so this stands in for the check below): a repeat never posts again.
+        if callback.outcome == Outcome.FAILED:
+            _flag(txn, "failed, void or refund after confirmation: check by hand, nothing reversed")
+            return "flagged_after_confirmed"
+        return "repeat_confirmed" if callback.outcome == Outcome.CONFIRMED else "late_pending_ignored"
     if txn.customer_payment_id:  # confirmed once: nothing the machine says later reverses it
         if callback.outcome == Outcome.FAILED:
             _flag(txn, "failed, void or refund after confirmation: check by hand, nothing reversed")
@@ -405,6 +495,13 @@ def _transition(provider, txn, link, callback, created):
     if callback.outcome == Outcome.FAILED:
         txn.outcome, txn.payload = TransactionOutcome.FAILED, callback.raw
         txn.save()
+        if link is not None and link.order_id:
+            # HG-121: a declined card on a table's link leaves the link live (the guest may try another card on the same page);
+            # it ends by time or by staff cancelling it. A failure after the table's bill was posted is a person's job.
+            if link.status in (LinkStatus.PAID, LinkStatus.REVIEW):
+                _flag(txn, "a failure on a table link already paid: check by hand, nothing reversed")
+                return "flagged_after_paid"
+            return "failed"
         if link is not None and link.status == LinkStatus.NEW:
             link.status = LinkStatus.FAILED
             link.save(update_fields=["status", "updated_at"])
@@ -420,6 +517,8 @@ def _transition(provider, txn, link, callback, created):
         return "unknown_order"
     if txn.link_id is None:
         txn.link = link
+    if link.order_id:
+        return _confirm_order(txn, link, callback)
     if callback.currency.upper() != link.currency:
         _flag(txn, f"currency {callback.currency} is not taken: nothing recorded")
         return "currency"
@@ -457,6 +556,49 @@ def _post(provider, txn, link, callback):
     if already_paid:
         _flag(txn, "a second confirmed payment on a link already paid: recorded on account")
     return "posted" if settled == amount else f"posted_settled_{settled}"
+
+
+def _review(txn, link, amount, note, result):
+    """HG-121: an order link confirmed but nothing posted: the transaction is flagged and a live link becomes ``review``,
+    which frees the order for staff (the money is at the gateway; the table is settled by hand)."""
+
+    if link.status == LinkStatus.NEW:
+        link.status, link.paid_amount = LinkStatus.REVIEW, amount
+        link.save(update_fields=["status", "paid_amount", "updated_at"])
+    _flag(txn, note)
+    return result
+
+
+def _confirm_order(txn, link, callback):
+    """HG-121: the one transition that posts a table's bill: the link still live, the currency and the amount the link's,
+    and then ``restaurant.pay_at_table.post_link`` (the order unchanged, the bill now the same amount, then the order's own
+    ``pay``), all in a savepoint: anything refused keeps nothing and leaves the order open for staff."""
+
+    from restaurant import pay_at_table
+
+    amount = from_cents(callback.amount_cents)
+    if link.status != LinkStatus.NEW:
+        if link.status in (LinkStatus.PAID, LinkStatus.REVIEW):
+            _flag(txn, f"a second confirmed payment of {amount} on a table link already {link.status}: refund or settle by hand, nothing posted")
+        else:
+            _flag(txn, f"confirmed {amount} after the table's link was {link.status}: nothing posted, settle the table by hand")
+        return "order_link_not_live"
+    if callback.currency.upper() != link.currency:
+        return _review(txn, link, amount, f"currency {callback.currency} is not taken: nothing posted, settle the table by hand", "currency")
+    if int(callback.amount_cents) != to_cents(link.amount):
+        return _review(txn, link, amount, f"confirmed {amount} for a table link of {link.amount}: nothing posted, settle the table by hand", "amount_mismatch")
+    try:
+        with transaction.atomic():
+            invoice = pay_at_table.post_link(link, amount)
+            txn.save()
+            link.status, link.paid_amount = LinkStatus.PAID, amount
+            link.save(update_fields=["status", "paid_amount", "updated_at"])
+    except (ValidationError, PermissionDenied, IntegrityError) as error:
+        message = "; ".join(getattr(error, "messages", None) or [str(error)])
+        return _review(txn, link, amount, f"the table's bill was not posted: {message}"[:300], "order_not_posted")
+    _audit("post_order_link", "payments.PaymentLink", link.pk, {"order": link.order.number, "invoice": invoice.invoice_number, "amount": str(amount),
+                                                                 "transaction_id": callback.transaction_id})
+    return "posted_order"
 
 
 def _settle(link, payment, amount):
