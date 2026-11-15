@@ -20,7 +20,7 @@ from sales.models import CustomerPayment
 from settings_core.display_labels import choice_label, localized_choices
 from settings_core.ui_messages import translate
 
-from . import contract, costs, variations
+from . import contract, costs, subcontracting, variations
 from .models import (
     BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPaymentKind, ProjectPurchase, RetentionRelease, Subcontract, SubcontractBill,
     SubcontractRelease,
@@ -35,7 +35,9 @@ COLLECT, BUY, BUY_VIEW = "sales.receive_customer_payment", "purchases.create_pur
 WORDS = {
     "ar": {
         "tab_overview": "نظرة عامة", "tab_boq": "المقايسة", "tab_certificates": "المستخلصات", "tab_payments": "الدفعات وضمان الأعمال",
-        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير", "tab_schedule": "الجدول الزمني", "tab_purchase_requests": "طلبات الشراء",
+        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير", "tab_schedule": "الجدول الزمني", "tab_purchase_requests": "طلبات الشراء", "tab_equipment": "المعدات",
+        "eq_memo": "تحميل معدات ملك", "eq_profit_before": "الربح قبل التحميل", "eq_profit_after": "الربح بعد التحميل",
+        "eq_memo_note": "تحميل داخلي للعلم بس: مش في الدفاتر ولا في ربح الشركة (إهلاك المعدة محسوب فيهم).", "eq_open": "افتح تاب المعدات",
         "original_short": "الأصلية", "variations_short": "أوامر التغيير", "variation_chip": "أمر تغيير {n}",
         "boq_locked_note": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة، فتعديل الكميات والفئات وإضافة البنود ومسحها بيتم بأمر تغيير.",
         "new_variation": "أمر تغيير جديد", "words_only": "الكمية والفئة ثابتين هنا، وتعديلهم بأمر تغيير.",
@@ -74,13 +76,17 @@ WORDS = {
         "remaining": "الباقي", "bill": "مستخلص لمقاول الباطن", "bill_btn": "اعمل المستخلص", "billed_ok": "اتعملت مسودة {invoice}؛ رحّلها من شاشة المشتريات.",
         "other_purchases": "مشتريات خدمات تانية للمشروع", "purchases_hint": "فواتير خدمات (إيجار معدات، نقل، خدمات موقع). الخامات المخزنية بتتصرف من المخزن.",
         "link_purchase": "اربط فاتورة شراء خدمات", "vendor": "المورد", "heading": "البند", "drafts": "مسودات",
+        "open_subcontract": "البنود والمستخلصات بالكميات والدفعة المقدمة", "by_quantities": "مقاول الباطن ده ليه بنود: المستخلص بيتعمل بالكميات من صفحته.",
+        "sub_recovery_rate": "نسبة استرداد الدفعة المقدمة %",
         "budget_intro": "الموازنة المخططة لكل بند تكلفة قصاد التكلفة الفعلية من الخامات المصروفة والمصروفات والمشتريات المرتبطة.",
         "budget": "الموازنة", "actual": "الفعلي", "variance": "الفرق", "used": "المستخدم", "save_budget": "حفظ الموازنة",
         "view_only": "العرض بس: التعديل لصاحب الصلاحية.",
     },
     "en": {
         "tab_overview": "Overview", "tab_boq": "Bill of quantities", "tab_certificates": "Certificates", "tab_payments": "Payments & retention",
-        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders", "tab_schedule": "Schedule", "tab_purchase_requests": "Purchase requests",
+        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders", "tab_schedule": "Schedule", "tab_purchase_requests": "Purchase requests", "tab_equipment": "Equipment",
+        "eq_memo": "Owned-equipment charge", "eq_profit_before": "Profit before the charge", "eq_profit_after": "Profit after the charge",
+        "eq_memo_note": "An internal charge for information only: not in the books or the company's profit (the machine's depreciation already is).", "eq_open": "Open the equipment tab",
         "original_short": "Original", "variations_short": "Variation orders", "variation_chip": "Variation order {n}",
         "boq_locked_note": "This project has certificates or approved variation orders, so quantities, rates, new items and deletions go through a variation order.",
         "new_variation": "New variation order", "words_only": "The quantity and the rate are fixed here; a variation order changes them.",
@@ -119,6 +125,8 @@ WORDS = {
         "remaining": "Remaining", "bill": "Subcontractor bill", "bill_btn": "Make the bill", "billed_ok": "Draft {invoice} made; post it from the purchases screen.",
         "other_purchases": "Other service purchases for the project", "purchases_hint": "Service invoices (equipment hire, transport, site services). Stock materials are issued from stock.",
         "link_purchase": "Link a service purchase", "vendor": "Supplier", "heading": "Heading", "drafts": "Drafts",
+        "open_subcontract": "Lines, bills by quantities and the advance", "by_quantities": "This subcontract has lines: bills are made by quantities from its page.",
+        "sub_recovery_rate": "Advance recovery %",
         "budget_intro": "The planned cost per heading against the actual cost from materials issued, expenses and linked purchases.",
         "budget": "Budget", "actual": "Actual", "variance": "Variance", "used": "Used", "save_budget": "Save the budget",
         "view_only": "View only: changes need the permission.",
@@ -430,7 +438,8 @@ def subcontracts(request, pk):
             if action == "new":
                 costs.save_subcontract(project, request.user, {"supplier": _pick(Supplier, request.POST.get("supplier"), active=True),
                                                                "scope": request.POST.get("scope"), "value": request.POST.get("value"),
-                                                               "retention_rate": request.POST.get("retention_rate")}, lang=lang)
+                                                               "retention_rate": request.POST.get("retention_rate"),
+                                                               "advance_recovery_rate": request.POST.get("advance_recovery_rate")}, lang=lang)
                 messages.success(request, words["saved"])
             elif action in ("bill", "release"):
                 subcontract = _pick(Subcontract, request.POST.get("subcontract"), project=project)
@@ -479,7 +488,9 @@ def subcontracts(request, pk):
         bills = [{"bill": bill, "net": costs.bill_net_payable(bill), "status_label": choice_label(bill.invoice, "status", lang)}
                  for bill in costs._here(subcontract.bills.select_related("invoice"))]
         subs.append({"subcontract": subcontract, "figures": costs.subcontract_figures(subcontract), "bills": bills,
-                     "releases": subcontract.releases.all() if costs.in_reach(subcontract) else []})
+                     "releases": subcontract.releases.all() if costs.in_reach(subcontract) else [],
+                     # C11 (HG-128): a subcontract with lines is billed by quantities from its own page
+                     "has_lines": subcontract.lines.exists(), "advance_left": subcontracting.visible_advance_left(subcontract)})
     others = [{"link": link, "heading_label": choice_label(link, "heading", lang), "net": costs.net_purchase(link.invoice),
                "status_label": choice_label(link.invoice, "status", lang)}
               for link in costs._here(project.purchases.select_related("invoice", "invoice__supplier").filter(invoice__subcontract_bill__isnull=True))]

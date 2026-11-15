@@ -1,0 +1,27 @@
+/* Contracting C11 (HG-128): one subcontract's page: its lines, the bill form by quantities to date, its bills and its
+   payments. Tokens only: no colour literals. Logical properties, so an Arabic page mirrors and an English one does not.
+   On a phone (390 px) each line of the bill form is one card with its input full width; tables scroll inside their own
+   wrapper, never the page. */
+
+.scq-back{margin:0 0 var(--hs-space-3)}
+.scq-back a{display:inline-flex;align-items:center;gap:var(--hs-space-1);min-height:var(--hs-control-height);color:var(--hs-teal-deep);font-weight:var(--hs-weight-bold);text-decoration:none}
+.scq-intro{margin:var(--hs-space-1) 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.scq-muted{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.scq-terms{margin-top:var(--hs-space-3)}
+.scq-terms summary{cursor:pointer;min-height:var(--hs-control-height);display:flex;align-items:center;color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.scq-flag{display:inline-block;margin-inline-start:var(--hs-space-1);margin-top:var(--hs-space-1);padding:2px var(--hs-space-2);border:1px solid var(--hs-warning-line);border-radius:var(--hs-radius-md);background:var(--hs-warning-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-bold);white-space:normal;overflow-wrap:anywhere}
+.scq-actions{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.op-message-warning{border-color:var(--hs-warning-line);background:var(--hs-warning-wash);color:var(--hs-warning)}
+
+/* ---- the bill form: one card per line ---- */
+.scq-lines{display:grid;gap:var(--hs-space-3);min-width:0;margin:var(--hs-space-3) 0}
+.scq-line{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-2);padding:var(--hs-space-3);min-width:0;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.scq-line p{margin:0;overflow-wrap:anywhere}
+.scq-line__name strong{color:var(--hs-navy)}
+.scq-line__done{color:var(--hs-ink);font-size:var(--hs-text-sm)}
+.scq-line__input{display:grid;gap:var(--hs-space-1);color:var(--hs-navy);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold)}
+.scq-line__input input{width:100%;min-width:0;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
+.scq-line__input input:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+@media (min-width:720px){
+  .scq-line{grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);align-items:center}
+}

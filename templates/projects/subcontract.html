@@ -1,0 +1,84 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_subcontracts.css' %}?v=c11-1">{% endblock %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+<p class="scq-back"><a href="{% url 'projects:subcontracts' project.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ swords.back }}</a></p>
+{% with f=figures s=sfigures %}
+<section class="prj-card" data-subcontract-page="{{ sub.pk }}">
+<h2 class="prj-h">{{ sub.supplier.name }} — {{ sub.scope }}</h2>
+<p class="scq-intro">{{ swords.intro }}</p>
+<section class="op-summary-grid op-summary-grid--compact">
+<article><small>{{ cwords.value }}</small><strong data-sub-value>{{ f.value|money }}</strong>{% if s.lines_total %}<small>{{ swords.lines_total }} <span dir="ltr">{{ s.lines_total|money }}</span></small>{% endif %}</article>
+<article><small>{{ cwords.billed }}</small><strong data-sub-billed>{{ f.billed|money }}</strong><small>{{ cwords.remaining }} <span dir="ltr">{{ f.remaining|money }}</span></small></article>
+<article><small>{{ cwords.retention_held }} ({{ sub.retention_rate|stringformat:'s' }}%)</small><strong data-sub-retention>{{ f.retention_held|money }}</strong></article>
+<article><small>{{ swords.advance_left }} ({{ sub.advance_recovery_rate|stringformat:'s' }}%)</small><strong data-sub-advance-left>{{ s.advance_left|money }}</strong><small>{{ swords.advance }} <span dir="ltr">{{ s.advance|money }}</span> · {{ swords.recovered }} <span dir="ltr">{{ s.recovered|money }}</span></small></article>
+</section>
+{% if can_buy and is_open %}<details class="scq-terms"><summary>{{ swords.terms }}</summary>
+<form class="op-form" method="post" data-sub-terms-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="terms">
+<p class="op-muted">{{ swords.terms_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="st-scope">{{ cwords.scope }}</label><input id="st-scope" name="scope" value="{{ sub.scope }}" maxlength="255" required></div>
+<div class="op-field"><label for="st-value">{{ cwords.value }}</label><input id="st-value" name="value" value="{{ sub.value|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="st-ret">{{ cwords.retention_rate }}</label><input id="st-ret" name="retention_rate" value="{{ sub.retention_rate|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="st-rec">{{ swords.recovery_rate }}</label><input id="st-rec" name="advance_recovery_rate" value="{{ sub.advance_recovery_rate|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.save }}</button></div></form></details>{% endif %}
+</section>
+
+<section class="prj-card" data-sub-lines>
+<h2 class="prj-h">{{ swords.lines }}</h2>
+{% if line_rows %}<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ swords.line_no }}</th><th>{{ cwords.description }}</th><th>{{ cwords.unit }}</th><th>{{ cwords.qty }}</th><th>{{ cwords.rate }}</th><th>{{ cwords.amount }}</th><th>{{ swords.billed_qty }}</th><th>{{ swords.client_item }}</th>{% if can_buy and is_open %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in line_rows %}{% with line=row.line %}<tr data-sub-line="{{ line.line_number }}"><td>{{ line.line_number }}</td><td>{{ line.description }}</td><td><bdi>{{ line.unit }}</bdi></td><td>{{ line.quantity|qty }}</td><td>{{ line.rate|money }}</td><td>{{ row.amount|money }}</td><td>{{ row.billed|qty }} <small class="scq-muted">{{ row.done }}%</small></td><td>{% if line.boq_line %}<bdi>{{ line.boq_line.code|default:line.boq_line.line_number }}</bdi> {{ line.boq_line.description }}<small class="scq-muted"> · {{ swords.owner_certified }} {{ row.certified|qty }}</small>{% if row.ahead %} <span class="scq-flag" data-sub-ahead>{{ swords.ahead }}</span>{% endif %}{% else %}<span class="scq-muted">{{ swords.no_client_item }}</span>{% endif %}</td>{% if can_buy and is_open %}<td>{% if not row.billed %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="delete_line"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit">{{ cwords.delete }}</button></form>{% endif %}</td>{% endif %}</tr>{% endwith %}{% endfor %}
+</tbody></table></div>
+{% else %}<p class="op-empty">{{ swords.lines_none }}</p>{% endif %}
+{% if can_buy and is_open %}<form class="op-form" method="post" data-sub-line-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><h3>{{ swords.add_line }}</h3>
+<div class="op-form-grid"><div class="op-field"><label for="sl-desc">{{ cwords.description }}</label><input id="sl-desc" name="description" value="{% if posted.action == 'add_line' %}{{ posted.description }}{% endif %}" maxlength="255" required></div>
+<div class="op-field"><label for="sl-unit">{{ cwords.unit }}</label><input id="sl-unit" name="unit" value="{% if posted.action == 'add_line' %}{{ posted.unit }}{% endif %}" maxlength="30"></div>
+<div class="op-field"><label for="sl-qty">{{ cwords.qty }}</label><input id="sl-qty" name="quantity" value="{% if posted.action == 'add_line' %}{{ posted.quantity }}{% endif %}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="sl-rate">{{ cwords.rate }}</label><input id="sl-rate" name="rate" value="{% if posted.action == 'add_line' %}{{ posted.rate }}{% endif %}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="sl-boq">{{ swords.client_item }}</label><select id="sl-boq" name="boq_line"><option value="">{{ swords.no_client_item }}</option>{% for boq in boq_lines %}<option value="{{ boq.pk }}"{% if posted.action == 'add_line' and posted.boq_line == boq.pk|stringformat:'s' %} selected{% endif %}>{{ boq.code|default:boq.line_number }} — {{ boq.description }}</option>{% endfor %}</select></div></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ swords.add_line }}</button></div></form>{% endif %}
+</section>
+
+{% if line_rows and can_buy and is_open %}
+<section class="prj-card">
+{% if draft %}<p class="op-message" data-sub-draft-open>{{ swords.draft_open }} <bdi>{{ draft.invoice.invoice_number }}</bdi></p>
+{% else %}
+<form class="op-form scq-bill" method="post" data-sub-quantities-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><h2 class="prj-h">{{ swords.bill_title }}</h2>
+<p class="op-muted">{{ swords.bill_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="sq-date">{{ cwords.date }}</label><input id="sq-date" type="date" name="bill_date" value="{% if posted.action == 'bill' and posted.bill_date %}{{ posted.bill_date }}{% else %}{{ today }}{% endif %}"></div>
+<div class="op-field"><label for="sq-desc">{{ cwords.lump_description }}</label><input id="sq-desc" name="description" value="{% if posted.action == 'bill' %}{{ posted.description }}{% endif %}" maxlength="255"></div></div>
+<div class="scq-lines">{% for row in line_rows %}{% with line=row.line %}<div class="scq-line" data-sub-quantity-line="{{ line.line_number }}">
+<p class="scq-line__name"><strong>{{ line.line_number }}. {{ line.description }}</strong> <small class="scq-muted">{{ cwords.contract_qty }} {{ line.quantity|qty }} <bdi>{{ line.unit }}</bdi> · {{ cwords.rate }} {{ line.rate|money }}</small></p>
+<p class="scq-line__done"><small>{{ cwords.previous }}</small> <span dir="ltr">{{ row.billed|qty }}</span>{% if line.boq_line %} · <small>{{ swords.owner_certified }}</small> <span dir="ltr">{{ row.certified|qty }}</span>{% endif %}</p>
+<label class="scq-line__input"><span>{{ cwords.cumulative }}</span><input name="q_{{ line.pk }}" value="{{ row.value }}" inputmode="decimal" dir="ltr" placeholder="{{ row.billed|qty }}"></label>
+</div>{% endwith %}{% endfor %}</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.bill_btn }}</button></div></form>
+{% endif %}
+</section>
+{% endif %}
+
+<section class="prj-card" data-sub-bills>
+<h2 class="prj-h">{{ swords.bills }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.number }}</th><th>{{ cwords.invoice }}</th><th>{{ cwords.date }}</th><th>{{ cwords.gross }}</th><th>{{ cwords.invoice_total }}</th><th>{{ cwords.retention }}</th><th>{{ cwords.recovery }}</th><th>{{ cwords.net }}</th><th>{{ cwords.status }}</th><th></th></tr></thead><tbody>
+{% for b in bills %}{% with bill=b.bill %}<tr data-sub-bill="{{ bill.invoice.invoice_number }}"><td>{{ bill.number }}</td><td dir="ltr"><a href="{% url 'purchases:detail' bill.invoice.pk %}?lang={{ lang }}">{{ bill.invoice.invoice_number|ltr }}</a></td><td dir="ltr">{{ bill.bill_date|date:"Y-m-d" }}</td><td>{{ bill.gross|money }}</td><td>{{ bill.invoice.total_amount|money }}</td><td>{{ bill.retention_amount|money }}</td><td>{{ bill.recovery_amount|money }}</td><td><strong>{{ b.net|money }}</strong></td><td><span class="op-status op-status-{{ bill.invoice.status }}">{{ b.status_label }}</span>{% for warning in b.warnings %}<span class="scq-flag" data-sub-bill-warning>{{ warning }}</span>{% endfor %}</td><td class="scq-actions"><a class="sr-print-link" href="{% url 'projects:subcontract_bill_print' project.pk sub.pk bill.number %}?lang={{ lang }}" data-sub-bill-print>{{ swords.print }}</a>{% if can_buy and bill.invoice.status == 'draft' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="withdraw"><input type="hidden" name="bill" value="{{ bill.pk }}"><button class="op-secondary" type="submit">{{ cwords.withdraw }}</button></form>{% endif %}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="10" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+
+<section class="prj-card" data-sub-payments>
+<h2 class="prj-h">{{ swords.payments }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ swords.payment_no }}</th><th>{{ cwords.date }}</th><th>{{ cwords.kind }}</th><th>{{ cwords.cashbox }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.status }}</th></tr></thead><tbody>
+{% for row in payments %}{% with payment=row.link.payment %}<tr data-sub-payment="{{ payment.payment_number }}"><td dir="ltr">{{ payment.payment_number|ltr }}</td><td dir="ltr">{{ payment.payment_date|date:"Y-m-d" }}</td><td>{{ row.kind_label }}</td><td>{{ payment.cashbox }}</td><td>{{ payment.amount|money }}</td><td><span class="op-status op-status-{{ payment.status }}">{{ row.status_label }}</span></td></tr>{% endwith %}
+{% empty %}<tr><td colspan="6" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="scq-muted">{{ swords.cancel_hint }}</p>
+{% if can_pay and is_open %}<form class="op-form" method="post" data-sub-pay-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><h3>{{ swords.pay_title }}</h3>
+<p class="op-muted">{{ swords.pay_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="sp-kind">{{ cwords.kind }}</label><select id="sp-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if posted.action == 'pay' and posted.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="sp-box">{{ cwords.cashbox }}</label><select id="sp-box" name="cashbox" required>{% for box in cashboxes %}<option value="{{ box.pk }}"{% if box.is_default %} selected{% endif %}>{{ box }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="sp-amount">{{ cwords.amount }}</label><input id="sp-amount" name="amount" value="{% if posted.action == 'pay' %}{{ posted.amount }}{% endif %}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="sp-date">{{ cwords.date }}</label><input id="sp-date" type="date" name="payment_date" value="{{ today }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ swords.pay_btn }}</button></div></form>{% endif %}
+</section>
+{% endwith %}
+{% endblock %}

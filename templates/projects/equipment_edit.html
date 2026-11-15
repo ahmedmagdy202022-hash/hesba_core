@@ -1,0 +1,13 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_equipment.css' %}?v=c6-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C6 (HG-129): one machine. A new rate applies to the hours logged from then on. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:equipment_register' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ ew.back_register }}</a><h1>{{ machine.name }}</h1></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+{% if can_edit_register %}
+<form class="op-form hs-form" method="post" data-equipment-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+{% include "projects/_equipment_fields.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ ew.save }}</button></div></form>
+{% else %}<p class="op-muted" data-view-only>{{ ew.view_only }}</p>{% endif %}
+{% endblock %}

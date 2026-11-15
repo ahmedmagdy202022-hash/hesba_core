@@ -3,11 +3,12 @@
 {% block sub %}<div class="cl-shopsub">{% if lang == 'en' %}Your payment{% else %}دفعتك{% endif %}</div>{% endblock %}
 {% block content %}<main class="cl-main" data-pay-done data-status="{{ link.status }}">
 {% if link.status == 'paid' or link.status == 'mismatch' %}<div class="cl-msg cl-msg--ok" data-banner="paid">{% if lang == 'en' %}Your payment reached us. Thank you.{% else %}دفعة حضرتك وصلتنا. شكرًا لحضرتك.{% endif %}</div>
+{% elif link.status == 'review' %}<div class="cl-msg cl-msg--ok" data-banner="review">{% if lang == 'en' %}Your payment reached the payment company. Our team will confirm the bill with you at the table.{% else %}دفعة حضرتك وصلت لشركة الدفع، والفريق هيأكد الحساب مع حضرتك على الطاولة.{% endif %}</div>
 {% elif link.status == 'failed' %}<div class="cl-msg cl-msg--danger" role="alert" data-banner="failed">{% if lang == 'en' %}The payment did not go through. Nothing was recorded; ask us for a new link.{% else %}الدفع ما تمّش، ومفيش أي مبلغ اتسجّل. اطلب مننا رابط جديد.{% endif %}</div>
 {% else %}<div class="cl-msg cl-msg--info" data-banner="waiting">{% if lang == 'en' %}We are waiting for the payment company to confirm. This page updates when you open it again.{% else %}في انتظار تأكيد شركة الدفع. افتح الصفحة دي تاني بعد دقايق وهتلاقي الحالة اتحدّثت.{% endif %}</div>{% endif %}
 <section class="cl-card" aria-labelledby="cl-done-t">
   <div class="cl-orderhead">
-    <div><div class="cl-eyebrow" id="cl-done-t">{% if lang == 'en' %}Invoice{% else %}فاتورة رقم{% endif %}</div><div class="cl-number"><bdi>{{ invoice_number }}</bdi></div></div>
+    <div><div class="cl-eyebrow" id="cl-done-t">{% if is_order %}{% if lang == 'en' %}Order{% else %}طلب رقم{% endif %}{% else %}{% if lang == 'en' %}Invoice{% else %}فاتورة رقم{% endif %}{% endif %}</div><div class="cl-number"><bdi>{{ invoice_number }}</bdi></div></div>
     <span class="cl-badge" data-link-status>{{ status_label }}</span>
   </div>
   <dl class="cl-dl"><div><dt>{% if lang == 'en' %}Amount{% else %}المبلغ{% endif %}</dt><dd><bdi>{% if paid_amount %}{{ paid_amount }}{% else %}{{ amount }}{% endif %}</bdi> {{ currency }}</dd></div></dl>

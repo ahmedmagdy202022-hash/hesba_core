@@ -71,7 +71,8 @@ def _page(request, template, link, lang, signed, status=200):
         "link": link, "status_label": services.status_label(link, lang), "amount": f"{Decimal(link.amount):,.2f}",
         "paid_amount": f"{Decimal(link.paid_amount):,.2f}" if link.paid_amount is not None else "",
         "currency": CURRENCY_WORDS.get(company["currency"], {}).get(lang, company["currency"]),
-        "invoice_number": link.invoice.invoice_number, "expires_at": timezone.localtime(link.expires_at).strftime("%Y-%m-%d %H:%M"),
+        # HG-121: an order link (pay from the table) names its order, «طلب رقم R-…», where an invoice link names the invoice
+        "invoice_number": link.invoice.invoice_number if link.invoice_id else link.order.number, "is_order": bool(link.order_id), "expires_at": timezone.localtime(link.expires_at).strftime("%Y-%m-%d %H:%M"),
         "payable": payable, "feature_on": services.enabled(), "expired": link.status == LinkStatus.EXPIRED or link.expires_at <= timezone.now(),
         "pay_url": reverse("pay_go", args=[signed]), "done_url": f"{reverse('pay_done', args=[signed])}?lang={lang}",
         "switch_url": f"{request.path}?lang={other}",
@@ -92,7 +93,7 @@ def pay_page(request, token):
     link = services.read_token(token)
     if link is None:
         return _expired(request)
-    services.expire_stale(link.invoice)
+    services.expire_for(link)
     link.refresh_from_db()
     return _page(request, "payments/pay.html", link, _lang(request), token)
 
@@ -106,7 +107,7 @@ def pay_go(request, token):
     link = services.read_token(token)
     if link is None:
         return _expired(request)
-    services.expire_stale(link.invoice)
+    services.expire_for(link)
     link.refresh_from_db()
     if not (services.enabled() and services.is_payable(link) and link.checkout_url):
         return _private(HttpResponseRedirect(f"{reverse('pay_page', args=[token])}?lang={_lang(request)}", status=303))
@@ -184,8 +185,8 @@ def mock_checkout(request, reference):
     same webhook code (same HMAC check, same posting). 404 whenever a real gateway (or none) is active."""
 
     provider = _mock_provider()
-    link = get_object_or_404(PaymentLink.objects.select_related("invoice"), reference=reference, provider=provider.code)
-    services.expire_stale(link.invoice)
+    link = get_object_or_404(PaymentLink.objects.select_related("invoice", "order"), reference=reference, provider=provider.code)
+    services.expire_for(link)
     link.refresh_from_db()
     if not services.is_payable(link):  # paid, failed, expired, or the invoice changed: nothing to pay here
         raise Http404()
@@ -241,7 +242,8 @@ def cancel(request, pk):
     lang = _lang(request)
     if not user_has_permission(request.user, services.RECEIVE):
         raise PermissionDenied
-    link = get_object_or_404(entity_scope.scope(PaymentLink.objects.all(), "invoice__selling_location__entity"), pk=pk)
+    # HG-121: an invoice link only; a table's link is cancelled from its order's page (``restaurant.pay_at_table.cancel``)
+    link = get_object_or_404(entity_scope.scope(PaymentLink.objects.filter(invoice__isnull=False), "invoice__selling_location__entity"), pk=pk)
     try:
         services.cancel_link(link, request.user, lang)
     except ValidationError as error:
@@ -274,8 +276,9 @@ def gateway(request):
         else:
             messages.success(request, "اتسجّل تحويل البوابة وعمولتها." if lang == "ar" else "The payout and its fee were recorded.")
         return redirect(f"{reverse('payments:gateway')}?lang={lang}")
-    links = entity_scope.scope(PaymentLink.objects.select_related("invoice", "customer"), "invoice__selling_location__entity")[:50]
-    review = entity_scope.scope(GatewayTransaction.objects.filter(needs_review=True).select_related("link__invoice"), "link__invoice__selling_location__entity")[:50]
+    # HG-121: by the link's «بوابة الدفع» account, which is its invoice's (or its order's) entity's, so a table's links are listed too
+    links = entity_scope.scope(PaymentLink.objects.select_related("invoice", "order", "customer"), "cashbox__entity")[:50]
+    review = entity_scope.scope(GatewayTransaction.objects.filter(needs_review=True).select_related("link__invoice", "link__order"), "link__cashbox__entity")[:50]
     banks = entity_scope.cashboxes(Cashbox.objects.filter(active=True)).exclude(pk__in=boxes.values("pk")).order_by("pk")
     return render(request, "payments/gateway.html", {
         "lang": lang, "dir": "ltr" if lang == "en" else "rtl", "boxes": [(box, get_cashbox_balance(box)) for box in boxes],
