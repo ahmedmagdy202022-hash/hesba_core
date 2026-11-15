@@ -512,22 +512,43 @@ class PermissionTests(PlatformSetup):
         self.assertContains(self.order_post(order, "platform_hand_over", self.cashier), 'data-platform-panel="handed"')
 
     def test_collecting_needs_the_receive_payment_right(self):
+        """No seeded role sells without receiving payments, so a role holding the floor and selling only is made here."""
+
+        from hesba_testing.factories import grant, make_role, make_user, make_user_profile
+        from permissions.models import Permission
+
         order = self.platform_order()
         self.pay(order)
         platforms.hand_over(Order.objects.get(pk=order.pk), self.owner)
-        from permissions.services import user_has_permission
-
-        for user in (self.cashier, self.manager):
-            with self.subTest(user=user.username):
-                allowed = user_has_permission(user, "sales.receive_customer_payment")
-                page = self.order_page(order, user)
-                if allowed:
-                    self.assertContains(page, "data-platform-collected")
-                else:
-                    self.assertNotContains(page, "data-platform-collected")
-                    self.assertEqual(self.order_post(order, "platform_collected", user).status_code, 403)
+        till_only = make_role(code="TILL-ONLY")
+        for code in ("sales.view_sales_invoices", "sales.create_sales_invoice", "restaurant.take_orders"):
+            grant(till_only, Permission.objects.get(code=code))
+        seller = make_user(username="till_only")
+        make_user_profile(user=seller, role=till_only)
+        page = self.order_page(order, seller)
+        self.assertContains(page, 'data-platform-panel="handed"')
+        self.assertNotContains(page, "data-platform-collected")
+        self.assertEqual(self.order_post(order, "platform_collected", seller).status_code, 403)
+        self.assertEqual((Shipment.objects.get().status, balance(self.talabat)), (ShipmentStatus.WITH_COURIER, D("125.40")))
+        self.assertContains(self.order_page(order, self.cashier), "data-platform-collected")  # the cashier holds it
         with self.assertRaises(PermissionDenied):
             platforms.collected(Order.objects.get(pk=order.pk), self.keeper)
+
+    def test_another_branchs_platform_is_not_listed_and_a_404_on_the_set_up_page(self):
+        order = self.platform_order()
+        self.pay(order)
+        platforms.hand_over(Order.objects.get(pk=order.pk), self.owner)
+        platforms.collected(Order.objects.get(pk=order.pk), self.owner)
+        self.enter(self.manager_b, entity=self.branch)
+        page = self.client.get(reverse("restaurant:platforms"), {"lang": "ar"})
+        self.assertNotContains(page, f'data-platform-row="{self.talabat.pk}"')
+        self.assertNotContains(page, "125.40")
+        self.assertEqual(self.client.get(reverse("restaurant:platforms"), {"lang": "ar", "edit": self.talabat.pk}).status_code, 404)
+        response = self.client.post(reverse("restaurant:platforms"), {"lang": "ar", "action": "remove", "customer": self.talabat.pk})
+        self.assertEqual(response.status_code, 404)
+        response = self.client.post(reverse("restaurant:platforms"), {"lang": "ar", "customer": self.talabat.pk, "courier": self.courier.pk, "commission": "5"})
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(platforms.for_customer(self.talabat).commission, D("18.00"))
 
     def test_another_branchs_order_is_a_404_and_a_platform_opens_only_in_its_couriers_branch(self):
         order = self.platform_order()

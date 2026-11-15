@@ -7,6 +7,7 @@ collecting and settling go through ``services.pay`` and the T14 ``shipping`` ser
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
@@ -105,7 +106,13 @@ def setup(request):
     pw = PLATFORM_WORDS[lang]
     error = ""
     form = {"customer": request.GET.get("edit", ""), "courier": "", "commission": ""}
-    found = platforms.platforms()
+    # R12: the branch's own platforms only (a platform's box is one entity's, as the shipments screen shows it); another branch's is a 404
+    own = set(shipping.couriers().values_list("pk", flat=True))
+    found, foreign = [], set()
+    for one in platforms.platforms():
+        (found.append(one) if one.courier.pk in own else foreign.add(str(one.customer.pk)))
+    if str(form["customer"]) in foreign:
+        raise Http404("Another branch's platform.")
     editing = next((one for one in found if str(one.customer.pk) == str(form["customer"])), None)
     if editing is not None:
         form = {"customer": str(editing.customer.pk), "courier": str(editing.courier.pk), "commission": f"{editing.commission.normalize():f}"}
@@ -113,6 +120,8 @@ def setup(request):
         if not user_has_permission(request.user, TABLES):
             raise PermissionDenied("Changing the delivery platforms needs master_data.manage_items.")
         form = {key: str(request.POST.get(key) or "").strip() for key in ("customer", "courier", "commission")}
+        if form["customer"] in foreign:
+            raise Http404("Another branch's platform.")
         try:
             customer = _pick(Customer, form["customer"])
             if request.POST.get("action") == "remove":
