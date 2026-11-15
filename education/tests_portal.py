@@ -1057,7 +1057,10 @@ class FeesTests(PortalSetup):
         card = body.split(self.inv450.invoice_number, 1)[1]
         self.assertIn("data-pay-go", card.split("data-invoice", 1)[0])  # on the 450 invoice, not the 600 one
         href = re.search(r'href="([^"]+)" rel="nofollow noreferrer" data-pay-go', body).group(1)
-        self.assertEqual(href, f"{reverse('pay_page', args=[pay.sign_token(link)])}?lang=ar")
+        # the signed address carries the second it was signed in, so compare what it points at, not its text
+        signed = re.fullmatch(r"/pay/([^/]+)/\?lang=ar", href).group(1)
+        self.assertEqual(href, f"{reverse('pay_page', args=[signed])}?lang=ar")
+        self.assertEqual(pay.read_token(signed), link)
         self.assertIn("ادفع", body)
         self.assertEqual(client.get(href).status_code, 200)  # the pay page opens
         self.assertTrue(self.owed(page) == D("1050.00"))

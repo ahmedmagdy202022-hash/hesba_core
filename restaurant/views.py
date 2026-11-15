@@ -19,7 +19,7 @@ from shifts.gate import require_open_shift, shift_missing
 from shifts.services import open_shift_for
 from staff.models import Employee
 
-from . import branches, services
+from . import branches, brands, services
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities.services import is_multi_entity
 
@@ -35,7 +35,7 @@ def _takes_orders(user):
     return user_has_permission(user, TAKE) or user_has_permission(user, TAKE_ORDERS)
 WORDS = {
     "ar": {
-        "page_title": "الطاولات والطلبات", "title": "الطاولات والطلبات", "intro": "دوس على طاولة فاضية تفتح لها طلب، أو على طاولة مشغولة تكمّل طلبها.",
+        "page_title": "الطاولات والطلبات", "title": "الطاولات والطلبات", "intro": "اختار طاولة فاضية تفتح لها طلب، أو طاولة مشغولة تكمّل طلبها.",
         "free": "فاضية", "busy": "مشغولة", "seats": "كراسي", "minutes": "دقيقة", "open": "افتح", "tables": "الطاولات", "no_tables": "لسه مفيش طاولات. ضيف طاولات الصالة الأول.",
         "add_tables": "ضيف الطاولات", "others": "تيك أواي ودليفري مفتوحة", "none": "مفيش.", "new_takeaway": "تيك أواي جديد", "new_delivery": "دليفري جديد",
         "customer": "العميل", "walk_in": "— عميل نقدي —", "phone": "الموبايل", "address": "العنوان", "notes": "ملاحظات", "guests": "عدد الأفراد", "waiter": "الويتر",
@@ -50,7 +50,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
-        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو",
+        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل", "brands_title": "البراندات", "reservations_title": "الحجوزات", "preorders_title": "طلبات مسبقة", "brand": "البراند", "brand_default": "الافتراضي",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
         "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
@@ -83,7 +83,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
-        "modifiers_title": "Add-ons and choices", "combos_title": "Combos",
+        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones", "brands_title": "Brands", "reservations_title": "Reservations", "preorders_title": "Pre-orders", "brand": "Brand", "brand_default": "Default",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
         "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
@@ -99,6 +99,14 @@ WORDS = {
         "merge": "Merge with a table", "merge_hint": "The bill of the table you choose comes here with all its items, tickets and guests, and its table is free.",
         "merge_btn": "Merge here", "merged_ok": "Table {table}'s bill is merged into this one.", "merged_into": "This order was merged into {number}.",
     },
+}
+#: R8 (HG-118): the bill box's deposit rows (only when the table's seated reservation holds a deposit; R10: or the order's collected pre-order).
+DEPOSIT_BILL_WORDS = {
+    "ar": {"deposit": "عربون الحجز", "due": "المطلوب بعد العربون", "note": "العربون بيتخصم من الحساب لو اتدفع باسم عميل الحجز نفسه.",
+           # R10 (HG-119): the same rows for a collected pre-order's deposit
+           "preorder_deposit": "عربون الطلب المسبق", "preorder_note": "العربون بيتخصم من الحساب لو اتدفع باسم عميل الطلب نفسه."},
+    "en": {"deposit": "Booking deposit", "due": "To pay after the deposit", "note": "The deposit comes off the bill when it is paid in the booking customer's name.",
+           "preorder_deposit": "Pre-order deposit", "preorder_note": "The deposit comes off the bill when it is paid in the pre-order customer's name."},
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
 
@@ -216,7 +224,7 @@ def board(request):
                 request.user, kind=kind, table=_table(request.POST.get("table")), guests=request.POST.get("guests") or 1, entity=entity,
                 customer=_pick(Customer, request.POST.get("customer"), active=True), waiter=_pick(Employee, request.POST.get("waiter"), active=True),
                 address=request.POST.get("address", ""), phone=request.POST.get("phone", ""), notes=request.POST.get("notes", ""), lang=lang,
-                delivery_fee=request.POST.get("delivery_fee"),
+                delivery_fee=request.POST.get("delivery_fee"), brand=request.POST.get("brand") if kind != OrderKind.DINE_IN else None,  # R11 (HG-117)
             )
         except ValidationError as exc:
             messages.error(request, " ".join(exc.messages))
@@ -230,6 +238,13 @@ def board(request):
             row["ready"] = _ready_count(row["order"])
             row["ready_label"] = words["ready_n"].format(n=row["ready"])
     ready = {order.pk: _ready_count(order) for order in others}
+    from . import qr
+    from .views_qr import requests_context
+
+    waiting = qr.waiting()  # R5a (HG-115): what the guests asked from the tables' QR pages (stale ones are swept first)
+    asked = qr.counts(waiting)
+    for row in tables:
+        row["requests"] = asked.get(row["table"].pk, 0)
     grouped = branches.group_mode()
     groups = [{**choice, "tables": [row for row in tables if row["table"].entity_id == choice["pk"]]} for choice in branches.choices(request.user, lang)] if grouped else []
     return render(request, "restaurant/board.html", _base(
@@ -238,7 +253,20 @@ def board(request):
                                          "branch": order.entity.display(lang) if grouped else ""} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
         branch_groups=groups, branch_choices=branches.choices(request.user, lang) if grouped else [],
+        **brand_pickers(request.user, lang, grouped),
+        **requests_context(waiting, lang, _takes_orders(request.user)),
     ))
+
+
+def brand_pickers(user, lang, grouped):
+    """R11 (HG-117): the brand pickers of the takeaway and the delivery forms: ``brand_groups`` is ``[{label, brands: [{pk, label, default}]}]`` for the
+    branches that have an active brand, and empty when none has (the forms are then exactly as before). Across the group each branch is a group of
+    options; the server accepts only a brand of the very branch the order opens in."""
+
+    entities = [choice["entity"] for choice in branches.choices(user, lang)] if grouped else [branches.working_entity()]
+    rows = [{"label": entity.display(lang), "brands": [{"pk": one.pk, "label": one.label(lang), "default": one.is_default} for one in found]}
+            for entity, found in brands.choices(entities)]
+    return {"brand_groups": rows, "brand_grouped": grouped}
 
 
 def _raw_ingredient_ids():
@@ -258,8 +286,9 @@ def _raw_ingredient_ids():
     return ingredients - dishes - ordered
 
 
-def _menu():
+def _menu(brand=None):
     items = Item.objects.filter(active=True).exclude(item_code__in=services.OFF_MENU_CODES).select_related("category").order_by("category__category_code", "item_name")
+    items = brands.menu_items(items, brand)  # R11 (HG-117): the brand's categories; the whole menu when it has none
     categories, seen = [], set()
     for item in items:
         if item.category_id and item.category_id not in seen:
@@ -272,7 +301,7 @@ def _menu():
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity", "split_from__table", "merged_into")),
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity", "split_from__table", "merged_into", "brand")),
                               pk=pk)  # R12: another branch's is a 404
     if request.method == "POST":
         if not _takes_orders(request.user):
@@ -345,6 +374,7 @@ def order_detail(request, pk):
                     discount=_money(request.POST.get("discount"), words), tendered=_money(request.POST.get("tendered"), words),
                     customer=_pick(Customer, request.POST.get("customer"), active=True), lang=lang,
                     **({"tenders": _tenders(request.POST, order, words)} if split else {}),
+                    **_posted_offer(request, lang),  # R6 (HG-114): the coupon, the points and the gift card the bill box worked out
                 )
                 text = words["paid"].format(number=order.number, invoice=invoice.invoice_number, total=f"{invoice.total_amount:,.2f}")
                 if change:
@@ -362,7 +392,7 @@ def order_detail(request, pk):
     from .views_combos import COMBO_WORDS, combo_sheets
     from .views_modifiers import MODIFIER_WORDS, menu_entries, sheets
 
-    items, categories = _menu()
+    items, categories = _menu(order.brand)
     raw_ids = _raw_ingredient_ids()
     lines = list(order.lines.select_related("item", "ticket", "combo__item"))
     taking = order.status == OrderStatus.OPEN and _takes_orders(request.user)
@@ -382,8 +412,17 @@ def order_detail(request, pk):
     default_cashbox = shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first()
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     families = combos.blocks(modifiers.grouped(lines))  # R1b: each combo taken is one block of its components
+    offer_box = _offer_box(request, order, lines, lang) if order.status == OrderStatus.OPEN else None  # R6 (HG-114)
+    from . import qr
+    from .views_qr import requests_context
+
+    asked = qr.waiting(order.table) if order.status == OrderStatus.OPEN and order.table_id else []  # R5a (HG-115)
+    due_total = (offer_box["summary"]["cash_due"] if offer_box else services.bill_total(order, lines)) if order.status == OrderStatus.OPEN else None
+    # R8 (HG-118): the seated reservation's held deposit, shown in the bill box and taken off what the drawer is asked for. None with no deposit.
+    deposit_box = services.deposit_due(order, order.customer, due_total) if due_total is not None and order.customer_id else None
     return render(request, "restaurant/order.html", _base(
-        request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang), raw_ids=raw_ids, categories=categories, kind_label=_kind_label(order, lang),
+        request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang, offer_box), offer_box=offer_box, raw_ids=raw_ids,
+        categories=categories, kind_label=_kind_label(order, lang),
         families=families, sheets=choice_sheets, **_split_merge_context(order, families, request.user, lang),
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
         combo_sheets=combo_choice_sheets, cw=COMBO_WORDS[lang],
@@ -393,10 +432,11 @@ def order_detail(request, pk):
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
         cashboxes=cashboxes, default_cashbox=default_cashbox,
         split_rows=_split_defaults(cashboxes, default_cashbox) if order.status == OrderStatus.OPEN and len(cashboxes) > 1 else [],  # R2b
-        bill_total=services.bill_total(order, lines) if order.status == OrderStatus.OPEN else None,
-        branch_label=order.entity.display(lang) if is_multi_entity() else "",
+        bill_total=deposit_box["due"] if deposit_box else due_total, deposit_box=deposit_box, deposit_words=DEPOSIT_BILL_WORDS[lang],
+        branch_label=order.entity.display(lang) if is_multi_entity() else "", brand_label=brands.label(order, lang),
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
+        **requests_context(asked, lang, _takes_orders(request.user)), requests_order=order.pk,
     ))
 
 
@@ -424,20 +464,29 @@ CHARGE_WORDS = {
 }
 
 
-def _charge_context(order, lines, lang):
+def _charge_context(order, lines, lang, offer_box=None):
     """R3 (HG-113): the bill box's top-up and service rows and its total before VAT, from the same preview that ``pay`` posts.
     A closed order shows the charge lines its invoice really has. With both settings off and no charge line, the page is as
-    before: ``total`` is ``Order.total`` and nothing else is added."""
+    before: ``total`` is ``Order.total`` and nothing else is added.
 
-    from . import charges
+    R6 (HG-114): the offer is a row too, «عرض: …» with what it takes off, before the charges (the service is worked out after
+    it). An open order reads the preview whenever promotions are on (or the bill box's own, with its coupon and customer); a
+    paid one shows the offer its invoice recorded. With promotions off, or no offer running, nothing changes."""
+
+    from . import charges, offers
 
     words = CHARGE_WORDS[lang]
     config = charges.settings()
-    rows, note = [], ""
+    rows, note, offer_rows, bill = [], "", [], None
     if order.status == OrderStatus.OPEN:
-        if config.on:
+        if offer_box is not None:
+            bill = offer_box["bill"]
+        elif config.on or offers.promotions_on():
             bill = charges.preview(order, lines, lang, config)
+        if bill is not None:
             rows = [{"kind": row["kind"], "description": row["description"], "amount": row["net"]} for row in bill["rows"] if row["kind"] in ("min", "service")]
+            if bill["offer"]:
+                offer_rows = [{"description": offers.words(lang)["offer_row"].format(name=bill["promotion"].name), "amount": bill["offer"]}]
             if config.minimum is not None and order.kind == OrderKind.DINE_IN:
                 if order.split_from_id:
                     note = words["part_note"]
@@ -447,9 +496,135 @@ def _charge_context(order, lines, lang):
         kinds = {charges.MIN_ITEM_CODE: "min", charges.SERVICE_ITEM_CODE: "service"}
         rows = [{"kind": kinds[line.item.item_code], "description": line.description or line.item.item_name, "amount": line.line_total_amount}
                 for line in order.invoice.lines.select_related("item").filter(item__item_code__in=charges.CHARGE_CODES).order_by("line_number")]
-    total = money_round(order.total + sum((row["amount"] for row in rows), Decimal("0")))
-    return {"total": total, "charge_rows": rows, "charge_note": note, "chw": words,
-            "can_check": config.on and order.status == OrderStatus.OPEN and any(not line.voided for line in lines)}
+        from promotions.models import InvoicePromotion
+
+        offer_rows = [{"description": offers.words(lang)["offer_row"].format(name=use.promotion.name), "amount": use.discount}
+                      for use in InvoicePromotion.objects.filter(invoice_id=order.invoice_id).select_related("promotion")]
+    offer_off = sum((row["amount"] for row in offer_rows), Decimal("0"))
+    total = money_round(order.total - offer_off + sum((row["amount"] for row in rows), Decimal("0")))
+    shown = bool(offer_rows) or bool(offer_box and offer_box["active"])
+    return {"total": total, "charge_rows": rows, "charge_note": note, "chw": words, "offer_rows": offer_rows,
+            "can_check": (config.on or shown) and order.status == OrderStatus.OPEN and any(not line.voided for line in lines)}
+
+
+def _offer_fields(data):
+    """R6 (HG-114): the bill box's «خصم أو نقاط أو كارت هدية» as typed (the page's query, or the pay form's copy of it)."""
+
+    return {key: str(data.get(key) or "").strip()[:60] for key in ("phone", "customer", "coupon", "redeem_points", "gift_code", "gift_amount")}
+
+
+def _offer_box(request, order, lines, lang):
+    """R6 (HG-114): the bill worked out with what the cashier typed in the bill box (sent as the page's query, so the printed
+    check can carry it too): the customer by mobile (POS-002's directory) or by the list, the coupon, the points and the gift
+    card, each checked by the till's own rules. A refused one is named and left out; the rest still count. None when
+    promotions, loyalty and gift cards are all off (the page is then exactly as before R6)."""
+
+    from sales.pos import WALK_IN_CODE, _gift_card_part
+
+    from . import charges, offers
+
+    user = request.user
+    if not offers.any_on(user):
+        return None
+    text = offers.words(lang)
+    fields = _offer_fields(request.GET)
+    errors = []
+    customer = _pick(Customer, fields["customer"], active=True)
+    if fields["phone"] and customer is None:
+        customer = offers.find_customer(fields["phone"])
+        if customer is None:
+            errors.append(text["no_customer"])
+    named = customer or order.customer
+    payer = named or Customer.objects.filter(customer_code=WALK_IN_CODE).first()  # never made here: the page writes nothing
+    config = charges.settings()
+    coupon = fields["coupon"] if offers.promotions_on() else ""
+    try:
+        bill = charges.preview(order, lines, lang, config, offers.Offer(coupon=coupon, customer=payer))
+    except ValidationError as exc:
+        errors.append(_error(exc, lang))
+        coupon = ""
+        bill = charges.preview(order, lines, lang, config, offers.Offer(customer=payer))
+    spent, points_off = 0, Decimal("0.00")
+    raw_points = fields["redeem_points"] if offers.loyalty_on() else ""
+    if raw_points:
+        try:
+            spent, points_off = offers.points_part(payer, raw_points, bill["rows"], lang)
+        except ValidationError as exc:
+            errors.append(text["points_walk_in"] if named is None else _error(exc, lang))
+    gift = None
+    if fields["gift_code"] and offers.gift_cards_on(user):
+        try:
+            gift = _gift_card_part({"gift_code": fields["gift_code"], "gift_amount": fields["gift_amount"]}, lang, user)
+            _check_gift(gift, order, bill["total"] - points_off, lang)
+        except ValidationError as exc:
+            errors.append(_error(exc, lang))
+            gift = None
+    balance = None
+    if named is not None and offers.loyalty_on():
+        from loyalty.services import balance as points_balance
+
+        balance = points_balance(named)
+    kept = {"phone": fields["phone"], "customer": str(named.pk) if named else "", "coupon": coupon, "redeem_points": str(spent) if spent else "",
+            "gift_code": fields["gift_code"] if gift else "", "gift_amount": f"{gift[1]:.2f}" if gift else ""}
+    from urllib.parse import urlencode
+
+    from settings_core.templatetags.hesba_format import money
+
+    lines_text = {"customer_line": text["customer_found"].format(name=named.name) if named else "",
+                  "balance_line": text["balance"].format(points=max(balance["points"], 0), value=money(balance["value"])) if balance else "",
+                  "points_line": text["points_row"].format(points=spent) if spent else "",
+                  "gift_line": text["gift_row"].format(card=gift[0].number) if gift else ""}
+    return {"fields": fields, "kept": kept, "errors": errors, "bill": bill, "customer": named, "balance": balance, "words": text, **lines_text,
+            "summary": offers.summary(bill, spent, points_off, gift), "active": any(fields.values()),
+            "query": urlencode({key: value for key, value in kept.items() if value and key != "phone"}),
+            "coupon_on": offers.promotions_on(), "points_on": offers.loyalty_on(), "gift_on": offers.gift_cards_on(user)}
+
+
+def _check_gift(gift, order, due, lang):
+    """The card's own refusals, said on the bill box before paying (the payment checks them again in ``giftcards.redeem``):
+    a card of another branch's entity (R12, HG-034), a balance below the amount, an amount above what the bill asks."""
+
+    from giftcards import services as giftcards
+
+    from . import branches
+
+    card, amount = gift
+    text = giftcards.MESSAGES["en" if lang == "en" else "ar"]
+    location = branches.selling_location(order)
+    entity = getattr(location, "entity", None) if location is not None else None
+    if entity is None:
+        from entities.services import main_entity
+
+        entity = main_entity()
+    giftcards.check_card(card, entity, text)
+    held = giftcards.balance(card)
+    if amount > held:
+        raise ValidationError(text["above_balance"].format(balance=f"{held:,.2f}"))
+    if amount > due:
+        raise ValidationError("err_gift_amount")
+
+
+def _posted_offer(request, lang):
+    """R6 (HG-114): the pay form's copy of the bill box (hidden fields), as ``services.pay`` takes it. Nothing when none was
+    sent, so a bill paid without the box is the plain payment it always was."""
+
+    from sales.pos import _gift_card_part
+
+    from . import offers
+
+    post = request.POST
+    extra = {}
+    if (post.get("coupon") or "").strip():
+        extra["coupon"] = post["coupon"].strip()
+    if (post.get("redeem_points") or "").strip():
+        extra["points"] = post["redeem_points"].strip()
+    gift = _gift_card_part(post, lang, request.user)  # the till's own check: the switch, giftcards.sell, the code, the amount
+    if gift is not None:
+        extra["gift"] = gift
+    for key, name in (("promotion_seen", "promotion_seen"), ("points_seen", "points_seen")):
+        if name in post:
+            extra[key] = offers.seen_value(post.get(name))
+    return extra
 
 
 @require_any_permission(*FLOOR)
@@ -462,10 +637,12 @@ def check(request, pk):
     from . import charges
 
     lang = _lang(request)
-    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "waiter", "split_from__table")), pk=pk)  # R12
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "waiter", "split_from__table", "brand")), pk=pk)  # R12
     if order.status != OrderStatus.OPEN:
         raise Http404("Only an open order has a check to print.")
-    bill = charges.preview(order, lang=lang)
+    lines = list(order.lines.select_related("item", "combo__item"))
+    offer_box = _offer_box(request, order, lines, lang)  # R6 (HG-114): the bill box's coupon, customer, points and card ride on the link
+    bill = offer_box["bill"] if offer_box is not None else charges.preview(order, lines, lang=lang)
     rows, seen = [], set()
     for row in bill["rows"]:
         line = row["line"]
@@ -482,9 +659,18 @@ def check(request, pk):
         rows.append({"row": row, "name": name, "combo": head, "bundle": line.bundle if line is not None else None})
     services._audit(order, request.user, "print_check", {"number": order.number, "subtotal": f"{bill['subtotal']:.2f}", "tax": f"{bill['tax']:.2f}",
                                                          "total": f"{bill['total']:.2f}", "service": f"{bill['service']:.2f}", "topup": f"{bill['topup']:.2f}",
-                                                         "rows": len(rows)})
+                                                         "rows": len(rows), **({"offer": f"{bill['offer']:.2f}"} if bill["offer"] else {})})
+    summary = offer_box["summary"] if offer_box is not None else None
+    saved_text = ""
+    if bill["offer"]:  # R6: the offer is already in the rows above (each «− …»); the guest is told what it saved, not shown it twice
+        from settings_core.templatetags.hesba_format import money
+
+        from . import offers
+
+        saved_text = offers.words(lang)["saved"].format(amount=money(bill["offer"]), name=bill["promotion"].name)
     return render(request, "restaurant/check.html", _base(request, order=order, bill=bill, rows=rows, chw=CHARGE_WORDS[lang], kind_label=_kind_label(order, lang),
-                                                        company=company_details(), now=timezone.localtime()))
+                                                        company=company_details(), now=timezone.localtime(), summary=summary, saved_text=saved_text, brand_name=brands.label(order, lang), brand_header=order.brand.header if order.brand_id else "",
+                                                        ow=offer_box["words"] if offer_box is not None else None))
 
 
 def _save_charges(request, lang):
@@ -580,7 +766,7 @@ def ticket(request, pk):
     sequence: each is its own page, so each station's printer takes its own."""
 
     lang = _lang(request)
-    first = get_object_or_404(branches.tickets(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by", "station")), pk=pk)
+    first = get_object_or_404(branches.tickets(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "order__brand", "sent_by", "station")), pk=pk)
     upto = request.GET.get("upto", "")
     tickets = [first]
     if upto.isdigit() and int(upto) > first.sequence:
@@ -603,6 +789,7 @@ def ticket(request, pk):
              for one in tickets]
     return render(request, "restaurant/ticket.html", _base(
         request, ticket=first, order=first.order, cards=cards, kind_label=_kind_label(first.order, lang), company=company_details(),
+        brand_name=brands.label(first.order, lang),
     ))
 
 
@@ -643,7 +830,13 @@ def tables(request):
     chosen = str(form.get("entity") or "")
     return render(request, "restaurant/tables.html", _base(request, rows=branches.tables(DiningTable.objects.select_related("entity")), form=form, editing=editing,
                                                          error=error, branch_choices=branches.choices(request.user, lang) if grouped else [], chosen_branch=chosen,
-                                                         charges_error=charges_error, **_charges_form(lang, posted)))
+                                                         charges_error=charges_error, qw=_qr_words(lang), **_charges_form(lang, posted)))
+
+
+def _qr_words(lang):
+    from .views_qr import QR_WORDS
+
+    return QR_WORDS[lang]
 
 
 REPORT_VIEW, COST_VIEW = "reports.view_all_sales_report", "inventory.view_cost"
@@ -670,6 +863,8 @@ INSIGHT_WORDS = {
            "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي",
            "combo_discount": "خصم الكومبو", "combo_discount_note": "الأطباق فوق بسعر المنيو؛ ده اللي الكومبو وفّره على العملاء منها، فالأطباق ناقص الرقم ده بتساوي صافي سطورها.",
            "service": "الخدمة", "min_topup": "فرق الحد الأدنى",
+           "by_brand": "حسب البراند", "brand": "البراند", "no_brand": "من غير براند",
+           "brand_note": "الطلب المتفتح قبل ما تتعمل البراندات بيظهر في «من غير براند»؛ الفاتورة والضريبة والمخزن واحدة لكل البراندات.",
            "charges_note": "الخدمة وفرق الحد الأدنى سطور على الفواتير، مش أطباق، فمش داخلين في الأكثر مبيعًا. الأطباق ناقص خصم الكومبو زائد الخدمة وفرق الحد الأدنى بتساوي مبيعات الطلبات قبل الضريبة (من غير رسوم التوصيل والمرتجعات)."},
     "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing. A dish marked “Taken from stock” is made from its ingredients before it sells; selling any other dish takes nothing out of stock.",
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
@@ -685,6 +880,8 @@ INSIGHT_WORDS = {
            "bad_period": "The period was not valid; showing this month.", "delivery_fee": "Delivery fee", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total",
            "combo_discount": "Combo discount", "combo_discount_note": "The dishes above are at menu price; this is what combos saved customers on them, so the dishes less this figure come to their lines' net value.",
            "service": "Service charge", "min_topup": "Minimum charge top-up",
+           "by_brand": "By brand", "brand": "Brand", "no_brand": "No brand",
+           "brand_note": "An order opened before brands were set up shows under “No brand”; the invoice, the tax and the stock are one for every brand.",
            "charges_note": "The service charge and the minimum's top-up are invoice lines, not dishes, so they are not among the best sellers. The dishes less the combo discount plus the service charge and the top-up come to the orders' sales before VAT (delivery fees and returns aside)."},
 }
 
@@ -899,6 +1096,10 @@ def report(request):
     data = insights.period_report(first, last)
     for row in data["kinds"]:
         row["label"] = words.get(row["kind"], row["kind"])
+    show_brands = brands.exist()  # R11 (HG-117): «حسب البراند» only where a brand was ever set up
+    for row in data["brands"]:
+        row["label"] = row["brand"].label(lang) if row["brand"] else words["no_brand"]
+        row["branch"] = row["brand"].entity.display(lang) if row["brand"] and branches.group_mode() else ""
     waste_rows, waste_total = insights.waste(first, last)
     # TRACK-ACTS W14: the report counts restaurant orders only; name the rest so it agrees with the dashboard.
     from reports.selectors import profit_totals
@@ -908,5 +1109,5 @@ def report(request):
     others = words["others"].format(other=money(all_sales - data["totals"]["sales"]), all=money(all_sales)) if all_sales > data["totals"]["sales"] else ""
     return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note, others=others,
                                                          deliveries=insights.deliveries(first, last), dw=DELIVERY_WORDS[lang],
-                                                         today=timezone.localdate(), waste=waste_rows, waste_total=waste_total,
+                                                         today=timezone.localdate(), waste=waste_rows, waste_total=waste_total, show_brands=show_brands,
                                                          can_cost=user_has_permission(request.user, COST_VIEW), **data))

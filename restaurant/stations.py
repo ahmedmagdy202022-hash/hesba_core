@@ -175,7 +175,7 @@ def shown_tickets(station=None, now=None):
     if station is not None:
         tickets = tickets.filter(station=station)
     tickets = tickets.filter(Q(done_at__isnull=True) | Q(lines__voided=True, lines__ready_at__isnull=True)).distinct()
-    return (tickets.select_related("order", "order__table", "order__split_from__table", "order__waiter", "station")
+    return (tickets.select_related("order", "order__table", "order__split_from__table", "order__waiter", "order__brand", "station")
             .prefetch_related("lines__item", "lines__combo__item").order_by("sent_at", "pk"))
 
 
@@ -214,7 +214,8 @@ def ticket_card(ticket, now, kind_label, table_word, lang="ar"):
             row["combo"] = line.combo.label(lang)
             row["bundle"] = line.bundle
         lines.append(row)
-    return {"id": ticket.pk, "sequence": ticket.sequence, "number": order.number, "age": age, "level": level(age),
+    extra = {"brand": order.brand.label(lang)} if order.brand_id else {}  # R11 (HG-117): only when the order has a brand, so a plain card is as before
+    return {**extra, "id": ticket.pk, "sequence": ticket.sequence, "number": order.number, "age": age, "level": level(age),
             "where": f"{table_word} {order.home_table.name}" if order.home_table else kind_label,  # R2a: a part's ticket names its table's
             "waiter": order.waiter.name if order.waiter_id else "", "station": ticket.station.label(lang) if ticket.station_id else "",
             "cancelled": order.status == OrderStatus.CANCELLED, "done": bool(ticket.done_at), "notes": order.notes, "lines": lines,

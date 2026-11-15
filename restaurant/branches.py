@@ -55,6 +55,14 @@ def tickets(queryset=None):
     return entity_scope.scope(queryset if queryset is not None else KitchenTicket.objects.all(), TICKET)
 
 
+def requests(queryset=None):
+    """R5a (HG-115): the table requests of the entity being worked in (a table's request carries its table's entity)."""
+
+    from .models import TableRequest
+
+    return entity_scope.scope(queryset if queryset is not None else TableRequest.objects.all(), "entity")
+
+
 def choices(user, lang="ar"):
     """The branches this person may put a new table or order in: [{pk, code, label, entity}]."""
 

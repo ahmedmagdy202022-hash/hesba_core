@@ -1,0 +1,15 @@
+{% load hesba_format %}{# R5a (HG-115): one orderable line on the public menu (a dish, or one size of a family): its price as paid, a stepper, its choices and a note. #}
+<div class="tm-dish__row">
+  <div class="tm-dish__txt"><span class="tm-dish__name">{{ d.name }}</span><span class="tm-dish__price"><bdi dir="ltr">{{ d.price|money }}</bdi></span></div>
+  <div class="tm-step" role="group" aria-label="{{ words.qty }}: {{ d.name }}">
+    <button type="button" class="tm-step__b" data-step="-1" aria-label="{{ words.minus }}: {{ d.name }}">−</button>
+    <input class="tm-step__q" type="number" name="q-{{ d.pk }}" value="{{ d.qty }}" min="0" max="10" inputmode="numeric" aria-label="{{ words.qty }}: {{ d.name }}" data-tm-qty>
+    <button type="button" class="tm-step__b" data-step="1" aria-label="{{ words.plus }}: {{ d.name }}">+</button>
+  </div>
+</div>
+<details class="tm-more"{% if d.open %} open{% endif %} data-tm-more><summary>{% if d.groups %}{{ words.details }}{% if d.required %} <em>{{ words.required }}</em>{% endif %}{% else %}{{ words.line_note }}{% endif %}</summary>
+{% for g in d.groups %}<fieldset class="tm-group"><legend>{{ g.label }} <small>{{ g.rule }} · {% if g.required %}{{ words.required }}{% else %}{{ words.optional }}{% endif %}</small></legend>
+{% for o in g.options %}<label class="tm-choice"><input type="{% if g.radio %}radio{% else %}checkbox{% endif %}" name="o-{{ d.pk }}-{{ g.pk }}" value="{{ o.pk }}"{% if o.checked %} checked{% endif %}><span>{{ o.label }}</span>{% if o.price is not None %}<small dir="ltr">+{{ o.price|money }}</small>{% endif %}</label>
+{% endfor %}</fieldset>
+{% endfor %}<label class="tm-field">{{ words.line_note }}<input name="n-{{ d.pk }}" maxlength="60" value="{{ d.note }}" placeholder="{{ words.line_note_hint }}" autocomplete="off"></label>
+</details>

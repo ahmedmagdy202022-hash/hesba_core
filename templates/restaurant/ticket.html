@@ -26,6 +26,7 @@ body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-b
 .kt li.kt-combo{font-size:15px;font-weight:800;border-bottom:0;padding-bottom:0}
 .kt li.kt-in-combo{padding-inline-start:12px}
 .kt .kt-notes{font-size:14px;font-weight:700}
+.kt .kt-brand{font-size:18px;font-weight:800;text-align:center;margin:2px 0}
 .kt .kt-station{font-size:18px;font-weight:800;text-align:center;margin:2px 0;border:2px solid #000;border-radius:6px;padding:2px 0}
 @media print{.kt-bar{display:none}body{background:#fff}.kt{margin:0;width:auto;padding:0;break-after:page;page-break-after:always}.kt:last-of-type{break-after:auto;page-break-after:auto}}
 </style>
@@ -34,6 +35,7 @@ body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-b
 <nav class="kt-bar"><a href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ order.number }}</a><button type="button" data-print>{{ words.reprint }}</button></nav>
 {% for card in cards %}<article class="kt" data-kitchen-ticket="{{ order.number }}-{{ card.ticket.sequence }}">
   <h1>{{ words.kitchen }} · {{ words.ticket }} {{ card.ticket.sequence }}</h1>
+  {% if brand_name %}<p class="kt-brand" data-ticket-brand>{{ brand_name }}</p>{% endif %}
   {% if card.station %}<p class="kt-station" data-ticket-station>{{ card.station }}</p>{% endif %}
   <p class="kt-where">{% if order.home_table %}{{ words.table }} {{ order.home_table.name }}{% else %}{{ kind_label }}{% endif %}</p>
   <p class="kt-meta"><span dir="ltr">{{ order.number }}</span><span dir="ltr">{{ card.sent_at|date:"H:i" }}</span></p>

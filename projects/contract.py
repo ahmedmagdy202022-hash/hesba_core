@@ -17,6 +17,9 @@
   than what is left of the advance.
 * **Collections:** ordinary customer payments marked as received for this
   project, so its due-now figure is exact even when the owner has several.
+  A collection paid by cheque (C9, HG-122) counts by the cheque's own status:
+  in hand or deposited it is *under collection* (off due now, shown apart),
+  cleared it is collected, bounced it counts as nothing, so due now returns.
 
 Rules, stated once:
 
@@ -32,7 +35,7 @@ Rules, stated once:
 Net payable on a certificate = its invoice total − retention − recovery.
 Due now on the project = what its posted invoices still add to the owner's
 account (after paid-now and posted returns) − retention held − recovered
-advance − collections. The owner's account itself (the customer ledger) is
+advance − collections − cheques under collection. The owner's account itself (the customer ledger) is
 untouched: retention and advances are only split out of it for reading.
 """
 
@@ -41,7 +44,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import ProtectedError, Sum
+from django.db.models import ProtectedError, Q, Sum
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -71,6 +74,7 @@ MESSAGES = {
         "boq_after_lump": "المشروع ده اتعمل عليه مستخلص مقطوعية؛ مينفعش تضيف مقايسة بعده عشان الأعمال اللي اتفوترت متتفوترش تاني.", "date_order": "تاريخ المستخلص لازم ميكونش قبل آخر مستخلص ({date}).",
         "boq_locked": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة؛ تعديل الكميات والفئات وإضافة البنود ومسحها يتم بأمر تغيير من «أوامر التغيير».",
         "boq_in_order": "البند ده مذكور في أمر تغيير؛ مينفعش يتمسح.",
+        "boq_in_request": "البند ده مذكور في طلب شراء من الموقع؛ مينفعش يتمسح.",
         "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ يتربط بالمشروع كتحصيل بس، ولو فاتورته مربوطة بالمشروع ده.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
@@ -87,6 +91,7 @@ MESSAGES = {
         "boq_after_lump": "This project already has a lump-sum certificate; a bill of quantities cannot be added after it, so billed work is never billed twice.", "date_order": "A certificate cannot be dated before the latest one ({date}).",
         "boq_locked": "This project has certificates or approved variation orders; quantities, rates, new items and deletions go through a variation order (the Variation orders tab).",
         "boq_in_order": "This item is on a variation order and cannot be deleted.",
+        "boq_in_request": "This item is named on a site purchase request and cannot be deleted.",
         "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it can be linked only as a collection, and only when its invoice is on this project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
@@ -306,11 +311,28 @@ def delete_boq_line(project, line, user, lang="ar"):
         raise ValidationError(words["boq_locked"])
     if line.variation_lines.exists():  # a variation order (a draft, or one kept as a record) names this item
         raise ValidationError(words["boq_in_order"])
+    if line.purchase_request_lines.exists():  # C7 (HG-125): a purchase request from the site names this item (Codex)
+        raise ValidationError(words["boq_in_request"])
     _audit(project, user, "delete_boq_line", {"line": line.line_number, "description": line.description}, AuditEventType.DELETE)
     line.delete()
 
 
 # ---- payments: advances and collections ----
+
+#: C9 (HG-122): a collection paid by a cheque in these states is under collection, not yet collected.
+UNDER_COLLECTION = ("in_hand", "deposited")
+
+
+def collected(links):
+    """The project payments that are money in: no cheque, or a cheque that cleared. A bounced cheque is neither
+    collected nor under collection (its payment stays posted; the cheque's status says it came back)."""
+
+    return links.filter(Q(payment__cheque__isnull=True) | Q(payment__cheque__status="cleared"))
+
+
+def under_collection(links):
+    return links.filter(payment__cheque__status__in=UNDER_COLLECTION)
+
 
 def _posted_payments(project, kind):
     return project.payments.filter(kind=kind, payment__status="posted")
@@ -369,7 +391,11 @@ def receive_payment(project, user, *, kind, cashbox, amount, payment_date=None, 
 
 
 @transaction.atomic
-def link_payment(project, payment, user, *, kind, lang="ar"):
+def link_payment(project, payment, user, *, kind, lang="ar", uncleared_cheque=False):
+    """Mark a posted payment of the owner as this project's collection or advance. ``uncleared_cheque`` is passed by
+    ``receive_cheque`` only (C9, HG-122): it lets a collection be a cheque in hand or deposited, which the project
+    counts as under collection; an advance stays cleared-only whatever is passed (owner question 6)."""
+
     from closing.services import ensure_period_is_open
 
     words = MESSAGES[lang]
@@ -380,10 +406,11 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
         raise ValidationError(words["payment_status"])
     if ProjectPayment.objects.filter(payment=payment).exists():
         raise ValidationError(words["payment_linked"])
-    cheque = getattr(payment, "cheque", None)
-    if cheque is not None and cheque.status != "cleared":
-        raise ValidationError(words["cheque_open"])  # T4: a cheque that may still bounce is not money the project has
     kind = kind if kind in ProjectPaymentKind.values else ProjectPaymentKind.COLLECTION
+    cheque = getattr(payment, "cheque", None)
+    waiting = uncleared_cheque and kind == ProjectPaymentKind.COLLECTION and cheque is not None and cheque.status in UNDER_COLLECTION
+    if cheque is not None and cheque.status != "cleared" and not waiting:
+        raise ValidationError(words["cheque_open"])  # T4: a cheque that may still bounce is not money the project has
     if hasattr(payment, "instalment_link"):
         # It settles an instalment plan: a collection of this project only when the plan's invoice is on it,
         # never an advance (the plan already counts it against its invoice).
@@ -399,6 +426,36 @@ def link_payment(project, payment, user, *, kind, lang="ar"):
     link = ProjectPayment.objects.create(project=project, payment=payment, kind=kind, created_by=user)
     _audit(project, user, "link_project_payment", {"payment": payment.payment_number, "kind": kind})
     return link
+
+
+@transaction.atomic
+def receive_cheque(project, user, *, data, kind=ProjectPaymentKind.COLLECTION, lang="ar"):
+    """C9 (HG-122): the owner pays by cheque from the project's payments tab. The cheques engine records it unchanged
+    (``cheques.services.receive``: a customer payment into the entity's cheques-in-hand box, so the owner's account falls
+    today), and the same transaction marks that payment as a collection of this project. The project counts it under
+    collection until it clears, and not at all if it bounces. An advance is refused: it waits until its cheque clears."""
+
+    from django.core.exceptions import PermissionDenied
+
+    from cashboxes.models import CashboxKind
+    from cheques import services as cheques
+    from permissions.services import user_has_permission
+
+    words = MESSAGES[lang]
+    if not user_has_permission(user, cheques.RECEIVE):
+        raise PermissionDenied(f"Receiving a cheque needs {cheques.RECEIVE}.")
+    project = _locked(project, lang)
+    from master_data.models import Customer
+
+    # The engine's lock order (the customer, then the entity in ``box``), so a cheque for the same owner saved on the cheques screen at once waits, never deadlocks.
+    Customer.objects.select_for_update().filter(pk=project.customer_id).first()
+    if (kind or ProjectPaymentKind.COLLECTION) != ProjectPaymentKind.COLLECTION:
+        raise ValidationError(words["cheque_open"])  # owner question 6: an advance only once its cheque has cleared
+    # The cheque sits in the box of the entity being worked in (the whole group: the main entity's); the project's money stays in one entity.
+    _same_entity(project, cheques.box(CashboxKind.CHEQUES_IN), words)
+    cheque = cheques.receive(project.customer, data, user, lang)
+    link_payment(project, cheque.customer_payment, user, kind=ProjectPaymentKind.COLLECTION, lang=lang, uncleared_cheque=True)
+    return cheque
 
 
 @transaction.atomic
@@ -805,14 +862,17 @@ def position(project):
     released = retention_released(project) if in_reach(project) else ZERO
     recovered = money_round(sum((f[2] for f in figures), ZERO))
     payments = entity_scope.scope(project.payments.filter(payment__status="posted"), "payment__" + entity_scope.CUSTOMER_PAYMENT)
-    collections = money_round(payments.filter(kind=ProjectPaymentKind.COLLECTION).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
+    collecting = payments.filter(kind=ProjectPaymentKind.COLLECTION)
+    collections = money_round(collected(collecting).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
+    waiting = money_round(under_collection(collecting).aggregate(total=Sum("payment__amount"))["total"] or ZERO)  # C9: cheques not yet cleared
     received = money_round(payments.filter(kind=ProjectPaymentKind.ADVANCE).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
     contract = contract_value(project)
     return {
         "contract": contract, "certified": gross, "certified_progress": int(min(gross / contract * 100, Decimal("999"))) if contract > 0 else 0,
         "retention": retention, "released": released, "retention_held": money_round(retention - released),
         "advance": received, "recovered": recovered, "advance_left": money_round(max(received - recovered, ZERO)),
-        "collections": collections, "due_now": money_round(added - (retention - released) - recovered - collections),
+        "collections": collections, "under_collection": waiting,
+        "due_now": money_round(added - (retention - released) - recovered - collections - waiting),
     }
 
 
@@ -844,7 +904,8 @@ def due_now_many(projects):
     with_returns = set(certificates.filter(invoice__returns__isnull=False).values_list("project_id", flat=True))
     payments = entity_scope.scope(ProjectPayment.objects.filter(project_id__in=ids, payment__status="posted", kind=ProjectPaymentKind.COLLECTION),
                                   "payment__" + entity_scope.CUSTOMER_PAYMENT)
-    collections = grouped(payments, "payment__amount")
+    collections = grouped(collected(payments), "payment__amount")
+    waiting = grouped(under_collection(payments), "payment__amount")  # C9 (HG-122): cheques in hand or deposited
     released = grouped(RetentionRelease.objects.filter(project_id__in=ids, reversed_on__isnull=True), "amount")
     scoped = current_entity() is not None
     result = {}
@@ -855,5 +916,5 @@ def due_now_many(projects):
             continue
         held = Decimal(retention.get(pk, ZERO)) - Decimal(released.get(pk, ZERO))
         result[pk] = money_round(Decimal(remaining.get(pk, ZERO)) - Decimal(returned.get(pk, ZERO)) - held
-                                 - Decimal(recovery.get(pk, ZERO)) - Decimal(collections.get(pk, ZERO)))
+                                 - Decimal(recovery.get(pk, ZERO)) - Decimal(collections.get(pk, ZERO)) - Decimal(waiting.get(pk, ZERO)))
     return result

@@ -23,6 +23,8 @@ from education import views_portal as education_portal
 from payments import views as payments_views
 from appointments import public as appointments_public
 from appointments import views_booking as booking_views
+from restaurant import views_qr as table_menu_views
+from restaurant import views_reservations as table_booking_views
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
 
@@ -65,6 +67,12 @@ urlpatterns = [
     # throttled, 404 unless the «الحجز أونلاين» capability is on and the entity takes bookings.
     path("book/<str:key>/", login_not_required(booking_views.page), name="book_page"),
     path("book/<str:key>/done/<str:token>/", login_not_required(booking_views.done), name="book_done"),
+    # R5a (HG-115): a table's QR menu (random key). No account; CSRF-protected, throttled, a guest's request waits for staff to accept it,
+    # and every invalid key answers one dead 404 page.
+    path("t/<str:key>/", login_not_required(table_menu_views.page), name="table_menu"),
+    # R8 (HG-118): a branch's public table-booking request page (random key, off until the owner switches it on). No account;
+    # CSRF-protected, throttled, no-store; it makes a «booked» request with no table for staff to confirm, and shows nothing back.
+    path("book-table/<str:key>/", login_not_required(table_booking_views.book_table), name="book_table"),
     path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
@@ -109,6 +117,7 @@ urlpatterns = [
     path("shipping/", include("shipping.urls")),
     path("payments/", include("payments.urls")),  # S4 (HG-070): the staff side of payment links
     path("giftcards/", include("giftcards.urls")),  # S6 (HG-071): gift cards
+    path("guarantees/", include("guarantees.urls")),  # C4 (HG-123): letters of guarantee (memo only, no money moves)
     path("approvals/", include("approvals.urls")),  # FB-27
     path("ereceipt/", include("ereceipt.urls")),
     path("expenses/", include("expenses.urls")),

@@ -33,6 +33,7 @@
     </div>
     <div class="pr-doc">
       <h2 class="pr-doc__title">{{ doc.title }}</h2>
+      {% if doc.brand %}<p class="pr-doc__brand" data-print-brand style="margin:0 0 6px;font-size:14px"><strong>{{ doc.brand.name }}</strong>{% if doc.brand.header %}<br><small data-print-brand-header>{{ doc.brand.header }}</small>{% endif %}</p>{% endif %}
       <dl class="pr-meta">
         <div><dt>{{ words.number }}</dt><dd><bdi>{{ doc.number }}</bdi></dd></div>
         <div><dt>{{ words.date }}</dt><dd>{{ doc.date|date:"Y-m-d" }}</dd></div>

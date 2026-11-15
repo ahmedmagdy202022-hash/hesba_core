@@ -20,6 +20,9 @@ being worked in (HG-034):
   parent's order, table, waiter, kind, guests and stay: the order is counted once, at the first of its invoices in the
   period (the parent's when it is there), with the parent's table and guests, and its stay runs from the parent's opening.
   A merged order (MERGED) is never paid, so it is never counted: its lines are the receiving order's.
+- R11 (HG-117): ``brands`` is the same orders and the same net sales split by the brand of the order a bill belongs to (a part counts under
+  its parent's brand, as it counts in its parent's order). An order opened with no brand (before any was set up) is a row of its own with
+  ``brand`` None: it is never moved to the default brand, so history is not relabelled. The overall totals are the sum of the rows.
 
 Waste is what was taken out of stock by an adjustment in the period, with its
 reason, at movement cost.
@@ -120,7 +123,7 @@ def _paid(first, last):
     start, end = _span(first, last)
     return (entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE)
             .filter(status=OrderStatus.PAID, invoice__status="posted", closed_at__gte=start, closed_at__lt=end)
-            .select_related("invoice", "table", "waiter", "split_from__table").prefetch_related("lines__item"))
+            .select_related("invoice", "table", "waiter", "split_from__table", "brand__entity", "split_from__brand__entity").prefetch_related("lines__item"))
 
 
 def period_report(first, last):
@@ -152,7 +155,7 @@ def period_report(first, last):
             standing.add(order.pk)
     days = (last - first).days + 1
     hours = OrderedDict((hour, {"hour": hour, "orders": 0, "sales": ZERO}) for hour in range(24))
-    dishes, tables, waiters, kinds = {}, {}, {}, {}
+    dishes, tables, waiters, kinds, by_brand = {}, {}, {}, {}, {}
     total, guests, minutes, combo_discount = ZERO, 0, [], ZERO
     for order in orders:
         sales = net_sales(order.invoice)
@@ -187,6 +190,9 @@ def period_report(first, last):
                 table["minutes"].append(stay)
                 guests += root.guests
                 minutes.append(stay)
+        brand = by_brand.setdefault(root.brand_id, {"brand": root.brand, "orders": 0, "sales": ZERO})  # R11: the bill's brand, a part's being its parent's
+        brand["orders"] += 1 if stands else 0
+        brand["sales"] += sales
         # R2a: a part's sales belong to its bill's waiter (after a merge, the receiving order's), with the bill's one order
         waiter = waiters.setdefault(root.waiter_id, {"waiter": root.waiter, "orders": 0, "sales": ZERO})
         waiter["orders"] += 1 if stands else 0
@@ -195,7 +201,7 @@ def period_report(first, last):
         row["per_day"] = round(row["orders"] / days, 1)
         row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else row["sales"]
         row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"])) if row["minutes"] else None
-    for row in list(waiters.values()) + list(kinds.values()):
+    for row in list(waiters.values()) + list(kinds.values()) + list(by_brand.values()):
         row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else ZERO
     busy = [row for row in hours.values() if row["orders"] or row["sales"]]
     count = len(standing)
@@ -210,6 +216,7 @@ def period_report(first, last):
         "tables": sorted(tables.values(), key=lambda row: (-row["orders"], row["table"].sort_order, row["table"].name)),
         "waiters": sorted(waiters.values(), key=lambda row: -row["sales"]),
         "kinds": sorted(kinds.values(), key=lambda row: -row["orders"]),
+        "brands": sorted(by_brand.values(), key=lambda row: (row["brand"] is None, -row["sales"], row["brand"].name_ar if row["brand"] else "")),
         "totals": {"orders": count, "sales": money_round(total), "average": money_round(total / count) if count else ZERO,
                    "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None, "combo_discount": money_round(combo_discount),
                    "service": money_round(charged.get(SERVICE_ITEM_CODE) or ZERO), "min_topup": money_round(charged.get(MIN_ITEM_CODE) or ZERO)},

@@ -45,6 +45,7 @@ WORDS = {
         "issued": "اتصرفت الخامات ({ref}).", "issue_note": "الصرف بيطلع من المخزون بتكلفة متوسط الصنف، وبيتسجل كتسوية خروج مرتبطة بالمشروع.",
         "expenses_title": "مصروفات المشروع", "link_expense": "اربط مصروف متسجل", "expense_hint": "سجّل المصروف الأول من شاشة المصروفات، وبعدين اربطه هنا.",
         "none": "مفيش.", "view_only": "التعديل لصاحب صلاحية البيع بس.", "statuses": "غيّر الحالة",
+        "purchase_requests": "طلبات الشراء",  # Contracting C7 (HG-125)
     },
     "en": {
         "page_title": "Projects", "title": "Projects", "intro": "Each project with its customer and contract value: progress bills, materials used, expenses and profit.",
@@ -61,6 +62,7 @@ WORDS = {
         "issued": "Materials issued ({ref}).", "issue_note": "Issuing takes the stock out at the item's average cost, recorded as an adjustment out linked to the project.",
         "expenses_title": "Project expenses", "link_expense": "Link a recorded expense", "expense_hint": "Record the expense on the expenses screen first, then link it here.",
         "none": "None.", "view_only": "Only users who can sell can change projects.", "statuses": "Change status",
+        "purchase_requests": "Purchase requests",  # Contracting C7 (HG-125)
     },
 }
 
@@ -210,6 +212,9 @@ def project_detail(request, pk):
     context.update(tab="overview", cwords=CONTRACT_WORDS[lang], site_cta=cta(project, request.user, lang), position=position(project) if context["can_view_sales"] else None,
                    variation=variations.figures(project) if context["can_view_sales"] and variations.in_reach(project) else None,  # Contracting C1 (HG-103)
                    expense_headings=localized_choices(ProjectExpense, "heading", lang))
+    from .views_schedule import header_flag
+
+    context["schedule_flag"] = header_flag(project, request.user, lang)  # Contracting C3 (HG-124): the delay line under the title
     return render(request, "projects/detail.html", context)
 
 
@@ -220,14 +225,16 @@ REPORT_WORDS = {
            "retention": "ضمان محجوز", "losing": "مشاريع خسرانة", "behind_n": "متأخرة عن الجدول", "overdue": "مستخلصات متأخرة",
            "overdue_intro": "مستخلصات مترحّلة لسه عليها فلوس وعدّى عليها أكتر من {days} يوم (مدة الآجل في إعدادات أعمار الديون).",
            "certificate": "المستخلص", "date": "التاريخ", "owed": "الباقي", "age": "عمره (يوم)", "late": "متأخر (يوم)", "customer": "العميل",
-           "none": "مفيش مشاريع.", "no_overdue": "مفيش مستخلصات متأخرة.", "total": "الإجمالي"},
+           "none": "مفيش مشاريع.", "no_overdue": "مفيش مستخلصات متأخرة.", "total": "الإجمالي",
+           "plan": "الجدول: المخطط {planned}% والمنفّذ {actual}%"},
     "en": {"report": "Projects report", "intro": "Each project: contract and billed, the calendar against billing, cost and profit, and the retention held. Posted documents only.",
            "all": "All statuses", "show": "Show", "project": "Project", "contract": "Contract", "billed": "Billed", "progress": "Billed %",
            "time": "Time gone", "behind": "Behind schedule", "cost": "Cost", "profit": "Profit", "loss": "Loss", "margin": "Margin", "due": "Owed by client",
            "retention": "Retention held", "losing": "Projects losing money", "behind_n": "behind schedule", "overdue": "Overdue certificates",
            "overdue_intro": "Posted certificates still owed and older than {days} days (the credit days in the aging settings).",
            "certificate": "Certificate", "date": "Date", "owed": "Owed", "age": "Age (days)", "late": "Late (days)", "customer": "Client",
-           "none": "No projects.", "no_overdue": "No overdue certificates.", "total": "Total"},
+           "none": "No projects.", "no_overdue": "No overdue certificates.", "total": "Total",
+           "plan": "Schedule: planned {planned}%, done {actual}%"},
 }
 
 
@@ -243,6 +250,11 @@ def report(request):
     rows, totals = insights.portfolio(status)
     overdue, overdue_total, terms = insights.overdue_certificates(status=status)
     words = REPORT_WORDS[lang]
+    from .views_schedule import _pct
+
+    for row in rows:  # Contracting C3 (HG-124): a project with a schedule shows its planned and done progress beside the flag
+        plan = row["schedule"]
+        row["plan_text"] = words["plan"].format(planned=_pct(plan["planned"]), actual=_pct(plan["actual"])) if plan else ""
     return render(request, "projects/report.html", _base(request, page_title=words["report"], rw=words, rows=rows, totals=totals, status=status,
                                                        overdue=overdue, overdue_total=overdue_total,
                                                        overdue_intro=words["overdue_intro"].format(days=terms)))

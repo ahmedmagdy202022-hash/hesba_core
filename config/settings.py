@@ -90,6 +90,7 @@ LOCAL_APPS = [
     "payments",  # HG-070 (S4): online payment links (Paymob first)
     "giftcards",  # HG-071 (S6): gift cards (a liability until spent)
     "ai",  # HG-078 (A0): one AI provider layer, mock unless a server sets it live
+    "guarantees",  # HG-123 (C4): letters of guarantee and their renewal dates (memo only, no money moves)
 ]
 
 INSTALLED_APPS = DJANGO_APPS + LOCAL_APPS
