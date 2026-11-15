@@ -483,15 +483,14 @@ def net_purchase(invoice):
 
 def actual_by_heading(project):
     from cashboxes.models import CashboxOperationStatus
-    from inventory.models import StockOperationStatus
 
     from entities import scope as entity_scope
 
+    from .returns import posted_operations, signed_value
+
     actual = defaultdict(lambda: ZERO)
-    issues = entity_scope.scope(project.issues.select_related("operation").filter(operation__status=StockOperationStatus.POSTED),
-                                tuple("operation__" + path for path in entity_scope.STOCK_OPERATION))
-    for issue in issues:
-        actual[CostHeading.MATERIALS] += money_round(issue.operation.quantity * issue.operation.unit_cost)
+    for operation in posted_operations(project):  # Contracting C12 (HG-127): a return from the site takes off, it never adds
+        actual[CostHeading.MATERIALS] += signed_value(operation)
     expenses = entity_scope.scope(project.expenses.select_related("expense").filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED),
                                   "expense__" + entity_scope.EXPENSE)
     for link in expenses:

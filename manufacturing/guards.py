@@ -132,3 +132,8 @@ def before_stock_operation_reversal(operation_id):
     owner = guarded([operation_id]).get(int(operation_id))
     if owner is not None:
         raise ValidationError(owner.refusal)
+    from projects.returns import reversal_refusal  # HG-127: an issue to a site that something already came back from
+
+    refusal = reversal_refusal(operation_id)
+    if refusal is not None:
+        raise ValidationError(refusal)

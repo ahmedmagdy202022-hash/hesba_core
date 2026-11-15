@@ -18,6 +18,8 @@ urlpatterns = [
     path("workers/", views_labour.register, name="labour_register"),
     path("workers/<int:wid>/", views_labour.worker_edit, name="labour_worker"),
     path("<int:pk>/", views.project_detail, name="detail"),
+    # Contracting C12 (HG-127): the printed issue and return vouchers
+    path("<int:pk>/materials/<str:kind>/<int:number>/print/", views.voucher_print, name="voucher_print"),
     # CONTRACT-002
     path("<int:pk>/boq/", contract_views.boq, name="boq"),
     path("<int:pk>/certificates/", contract_views.certificates, name="certificates"),
