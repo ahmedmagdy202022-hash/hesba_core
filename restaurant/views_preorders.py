@@ -216,7 +216,7 @@ def preorders_view(request):
             return redirect(_url(day, lang))
     elif editing is not None:
         form = _form_of(editing)
-        rows = [{"item": line.item_id, "quantity": line.quantity.normalize(), "unit_price": line.unit_price, "note": line.note} for line in editing.lines.all()]
+        rows = [{"item": line.item_id, "quantity": format(line.quantity.normalize(), "f"), "unit_price": line.unit_price, "note": line.note} for line in editing.lines.all()]
     takes = _takes_orders(request.user)
     can_prepare = kitchen.may_cancel(request.user)
     return render(request, "restaurant/preorders.html", _base(

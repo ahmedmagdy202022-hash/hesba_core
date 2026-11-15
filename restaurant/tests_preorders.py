@@ -202,7 +202,7 @@ class PreparedAheadTests(PreOrderSetup):
         self.assertEqual(ProductionRun.objects.count(), 1)  # no second run at the bill
         self.assertEqual((self.stock(self.choc), self.stock(self.rice)), (D("0"), D("19.5")))  # the cake left stock; the rice went down once
         self.assertTrue(SalesLine.objects.filter(invoice=invoice, item=self.choc, quantity=D("1")).exists())
-        self.assertEqual(StockMovement.objects.filter(item=self.choc, quantity__lt=0).count() + StockMovement.objects.filter(item=self.choc, quantity__gt=0).count(), 2)
+        self.assertEqual(sorted(StockMovement.objects.filter(item=self.choc).values_list("movement_type", flat=True)), ["adjustment_in", "sale_out"])  # made once, sold once
 
     def test_without_the_evening_batch_the_bill_makes_it_once_at_payment(self):
         self.pay(self.collect(self.booked).order, tendered=D("513.00"))
@@ -535,6 +535,14 @@ class ScreenTests(PreOrderSetup):
         refused = self.post("save", customer=self.nour.pk, day=self.day(), time="18:00", notes="مكتوب", item=[""], quantity=[""], unit_price=[""], line_note=[""])
         self.assertContains(refused, "ضيف صنف واحد على الأقل")
         self.assertContains(refused, 'value="مكتوب"')
+
+    def test_a_round_quantity_shows_as_typed_in_the_edit_form(self):
+        booked = self.preorder(at(2, "18:00"), rows=[{"item": self.cake, "quantity": "20"}, {"item": self.grill, "quantity": "1.5"}])
+        form = self.screen(day=self.day(2), edit=booked.pk)  # tomorrow's production list is empty, so only the form's rows show quantities
+        self.assertContains(form, "data-no-production")
+        self.assertContains(form, 'name="quantity" inputmode="decimal" dir="ltr" value="20"')
+        self.assertContains(form, 'name="quantity" inputmode="decimal" dir="ltr" value="1.5"')
+        self.assertNotContains(form, "E+")
 
     def test_the_stylesheet_uses_the_tokens_only(self):
         from django.contrib.staticfiles import finders
