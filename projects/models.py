@@ -554,3 +554,62 @@ class PurchaseRequestLine(models.Model):
             models.CheckConstraint(condition=models.Q(quantity__gt=0), name="projects_purchase_request_line_quantity_positive"),
             models.CheckConstraint(condition=models.Q(item__isnull=False) | ~models.Q(description=""), name="projects_purchase_request_line_item_or_description"),
         ]
+
+
+# ---- Contracting C6 (HG-129): equipment, owned and hired, with operating hours. A machine is not a stock item or a
+# fixed asset (it has no hours and no site), and an hour is not a purchase. None of these rows holds money: a hire bill
+# is an ordinary draft purchase invoice linked as a project purchase under the equipment heading, and an owned
+# machine's hours are a memo allocation shown on the project, never booked.
+
+
+class EquipmentKind(models.TextChoices):
+    OWNED = "owned", "Owned"
+    HIRED = "hired", "Hired"
+
+
+class Equipment(models.Model):
+    """A machine the company owns (internal hour rate, a memo) or hires from a supplier (the supplier's hour rate)."""
+
+    name = models.CharField(max_length=255)
+    kind = models.CharField(max_length=10, choices=EquipmentKind.choices, default=EquipmentKind.OWNED)
+    fixed_asset = models.ForeignKey("fixed_assets.FixedAsset", on_delete=models.PROTECT, null=True, blank=True, related_name="equipment")
+    supplier = models.ForeignKey("master_data.Supplier", on_delete=models.PROTECT, null=True, blank=True, related_name="hired_equipment")
+    hour_rate = models.DecimalField(max_digits=14, decimal_places=2)
+    active = models.BooleanField(default=True)
+    # ENT-001: the entity whose books hold this machine's hire bills; a machine made without one belongs to the main entity.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="equipment")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            from entities.services import main_entity
+
+            self.entity = main_entity()
+        super().save(*args, **kwargs)
+
+
+class EquipmentLog(models.Model):
+    """Hours a machine worked on a project on a day, at the rate it had then (copied, so a later rate change moves nothing)."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="equipment_logs")
+    equipment = models.ForeignKey(Equipment, on_delete=models.PROTECT, related_name="logs")
+    work_date = models.DateField()
+    hours = models.DecimalField(max_digits=6, decimal_places=2)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    operator = models.CharField(max_length=120, blank=True)
+    # The hire bill's line that billed these hours (hired machines). SET_NULL: a deleted draft frees its hours; a
+    # cancelled bill is read from the invoice's status, nothing is written on cancel.
+    purchase_line = models.ForeignKey("purchases.PurchaseLine", on_delete=models.SET_NULL, null=True, blank=True, related_name="equipment_logs")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-work_date", "-pk"]
+        indexes = [models.Index(fields=["project", "work_date"])]
