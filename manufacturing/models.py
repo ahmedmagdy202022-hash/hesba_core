@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -11,6 +12,8 @@ class Recipe(models.Model):
     output_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=1, help_text="Units of the product one batch yields.")
     active = models.BooleanField(default=True)
     notes = models.CharField(max_length=255, blank=True)
+    # Manufacturing F3 (HG-131): days from the run date to the product lot's expiry; NULL = the product has no shelf life.
+    shelf_life_days = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="recipes")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -134,3 +137,24 @@ class OrderStageLog(models.Model):
 
     class Meta:
         ordering = ["done_at", "pk"]
+
+
+class LotUse(models.Model):
+    """Manufacturing F3 (HG-131): which lot of an ingredient a run (or an order's start) used, and how much.
+
+    Written at the moment of the issue as the batch positions before it minus the positions after it (see
+    ``manufacturing.lots``); never recomputed later, because positions move with stock. ``batch`` NULL is the quantity no
+    lot covered ("no lot"). A tracking record only: no stock, cost or ledger row is written or read here."""
+
+    run = models.ForeignKey(ProductionRun, on_delete=models.CASCADE, null=True, blank=True, related_name="lot_uses")
+    order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, null=True, blank=True, related_name="lot_uses")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    batch = models.ForeignKey("batches.Batch", on_delete=models.PROTECT, null=True, blank=True, related_name="uses")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(run__isnull=False) | models.Q(order__isnull=False), name="mfg_lotuse_has_run_or_order"),
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="mfg_lotuse_positive"),
+        ]

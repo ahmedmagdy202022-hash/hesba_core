@@ -30,7 +30,7 @@ WORDS = {
         "uncovered": "كميات في المخزون من غير تشغيلة", "uncovered_hint": "غالبًا رصيد قبل تشغيل الخاصية؛ سجّل تشغيلتها من الفورم تحت.",
         "register": "تسجيل تشغيلة لرصيد موجود", "item_code": "كود الصنف أو الباركود", "quantity": "الكمية", "note": "ملاحظة", "save": "تسجيل",
         "saved": "اتسجلت التشغيلة.", "bad_item": "الصنف مش موجود.", "bad_qty": "الكمية لازم رقم أكبر من صفر.", "bad_date": "التاريخ مش صحيح.", "need_one": "اكتب رقم التشغيلة أو تاريخ الصلاحية.",
-        "retire": "إلغاء", "retired": "اتلغت التشغيلة من المتابعة.", "from_purchase": "من فاتورة شراء", "manual": "مسجلة يدويًا",
+        "retire": "إلغاء", "retired": "اتلغت التشغيلة من المتابعة.", "from_purchase": "من فاتورة شراء", "manual": "مسجلة يدويًا", "from_run": "من تشغيلة إنتاج",
         "summary_expired": "تشغيلات منتهية لسه في المخزون", "summary_soon": "تشغيلات قربت تنتهي", "empty": "مفيش تشغيلات.", "prev": "السابق", "next": "التالي",
     },
     "en": {
@@ -42,7 +42,7 @@ WORDS = {
         "uncovered": "Stock on hand with no batch", "uncovered_hint": "Usually stock from before batches were switched on; register it with the form below.",
         "register": "Register a batch for stock on hand", "item_code": "Item code or barcode", "quantity": "Quantity", "note": "Note", "save": "Register",
         "saved": "Batch registered.", "bad_item": "No such item.", "bad_qty": "Quantity must be a number above zero.", "bad_date": "Invalid date.", "need_one": "Enter a batch number or an expiry date.",
-        "retire": "Remove", "retired": "Batch removed from tracking.", "from_purchase": "From a purchase", "manual": "Registered by hand",
+        "retire": "Remove", "retired": "Batch removed from tracking.", "from_purchase": "From a purchase", "manual": "Registered by hand", "from_run": "From a production run",
         "summary_expired": "Expired batches still in stock", "summary_soon": "Batches expiring soon", "empty": "No batches.", "prev": "Previous", "next": "Next",
     },
 }
@@ -91,7 +91,7 @@ def batch_index(request):
         if not can_manage:
             raise PermissionDenied("Registering batches needs inventory.adjust_stock.")
         if request.POST.get("retire"):
-            batch = get_object_or_404(Batch, pk=request.POST["retire"], purchase_line__isnull=True, active=True)
+            batch = get_object_or_404(Batch, pk=request.POST["retire"], purchase_line__isnull=True, production_run__isnull=True, active=True)
             retire_batch(batch, request.user)
             messages.success(request, words["retired"])
         else:
