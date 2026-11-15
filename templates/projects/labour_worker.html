@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_labour.css' %}?v=c5-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C5 (HG-130): one site worker. A new day rate applies to the days recorded from then on. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:labour_register' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ lw.open_register }}</a><h1>{{ worker.name }}</h1></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<form class="op-form hs-form" method="post" data-worker-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+{% include "projects/_labour_worker_fields.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.save }}</button></div></form>
+{% endblock %}

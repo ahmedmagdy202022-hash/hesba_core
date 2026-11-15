@@ -1,0 +1,8 @@
+<div class="op-form-grid">
+<div class="op-field"><label for="lw-name">{{ lw.name }}</label><input id="lw-name" name="name" value="{{ form.name|default:'' }}" maxlength="160" required></div>
+<div class="op-field"><label for="lw-trade">{{ lw.trade }}</label><input id="lw-trade" name="trade" value="{{ form.trade|default:'' }}" maxlength="80" placeholder="{{ lw.trade_ph }}"></div>
+<div class="op-field"><label for="lw-phone">{{ lw.phone }}</label><input id="lw-phone" name="phone" value="{{ form.phone|default:'' }}" maxlength="40" inputmode="tel" dir="ltr"></div>
+<div class="op-field"><label for="lw-rate">{{ lw.rate }}</label><input id="lw-rate" name="day_rate" value="{{ form.day_rate|default:'' }}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="lw-active">{{ lw.status }}</label><select id="lw-active" name="active"><option value="1"{% if form.active != "0" %} selected{% endif %}>{{ lw.active }}</option><option value="0"{% if form.active == "0" %} selected{% endif %}>{{ lw.stopped }}</option></select></div>
+</div>
+<p class="lab-note">{{ lw.rate_hint }}</p>
