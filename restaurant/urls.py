@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_brands, views_callcentre, views_combos, views_kds, views_modifiers, views_qr
+from . import views, views_brands, views_callcentre, views_combos, views_kds, views_modifiers, views_qr, views_reservations
 
 
 app_name = "restaurant"
@@ -28,4 +28,5 @@ urlpatterns = [
     path("call/", views_callcentre.call, name="call"),  # R7 (HG-116): the caller by number, their addresses and the zone
     path("zones/", views_callcentre.zone_setup, name="zones"),
     path("brands/", views_brands.setup, name="brands"),  # R11 (HG-117): several brands from one kitchen
+    path("reservations/", views_reservations.reservations_view, name="reservations"),  # R8 (HG-118): table reservations
 ]

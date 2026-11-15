@@ -50,7 +50,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
-        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل", "brands_title": "البراندات", "brand": "البراند", "brand_default": "الافتراضي",
+        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل", "brands_title": "البراندات", "reservations_title": "الحجوزات", "brand": "البراند", "brand_default": "الافتراضي",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
         "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
@@ -83,7 +83,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
-        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones", "brands_title": "Brands", "brand": "Brand", "brand_default": "Default",
+        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones", "brands_title": "Brands", "reservations_title": "Reservations", "brand": "Brand", "brand_default": "Default",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
         "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
@@ -99,6 +99,11 @@ WORDS = {
         "merge": "Merge with a table", "merge_hint": "The bill of the table you choose comes here with all its items, tickets and guests, and its table is free.",
         "merge_btn": "Merge here", "merged_ok": "Table {table}'s bill is merged into this one.", "merged_into": "This order was merged into {number}.",
     },
+}
+#: R8 (HG-118): the bill box's deposit rows (only when the table's seated reservation holds a deposit).
+DEPOSIT_BILL_WORDS = {
+    "ar": {"deposit": "عربون الحجز", "due": "المطلوب بعد العربون", "note": "العربون بيتخصم من الحساب لو اتدفع باسم عميل الحجز نفسه."},
+    "en": {"deposit": "Booking deposit", "due": "To pay after the deposit", "note": "The deposit comes off the bill when it is paid in the booking customer's name."},
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
 
@@ -409,6 +414,9 @@ def order_detail(request, pk):
     from .views_qr import requests_context
 
     asked = qr.waiting(order.table) if order.status == OrderStatus.OPEN and order.table_id else []  # R5a (HG-115)
+    due_total = (offer_box["summary"]["cash_due"] if offer_box else services.bill_total(order, lines)) if order.status == OrderStatus.OPEN else None
+    # R8 (HG-118): the seated reservation's held deposit, shown in the bill box and taken off what the drawer is asked for. None with no deposit.
+    deposit_box = services.deposit_due(order, order.customer, due_total) if due_total is not None and order.customer_id else None
     return render(request, "restaurant/order.html", _base(
         request, order=order, lines=lines, items=items, **_charge_context(order, lines, lang, offer_box), offer_box=offer_box, raw_ids=raw_ids,
         categories=categories, kind_label=_kind_label(order, lang),
@@ -421,7 +429,7 @@ def order_detail(request, pk):
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
         cashboxes=cashboxes, default_cashbox=default_cashbox,
         split_rows=_split_defaults(cashboxes, default_cashbox) if order.status == OrderStatus.OPEN and len(cashboxes) > 1 else [],  # R2b
-        bill_total=(offer_box["summary"]["cash_due"] if offer_box else services.bill_total(order, lines)) if order.status == OrderStatus.OPEN else None,
+        bill_total=deposit_box["due"] if deposit_box else due_total, deposit_box=deposit_box, deposit_words=DEPOSIT_BILL_WORDS[lang],
         branch_label=order.entity.display(lang) if is_multi_entity() else "", brand_label=brands.label(order, lang),
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,

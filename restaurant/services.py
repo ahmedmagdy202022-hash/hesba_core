@@ -677,7 +677,7 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
 
     from sales.pos import walk_in_customer
 
-    from . import kitchen, offers
+    from . import kitchen, offers, reservations
 
     words = MESSAGES[lang]
     if tenders is not None:
@@ -691,15 +691,60 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     spent, points_off = offers.points_part(customer, points, rows, lang)
     if spent:
         offers.check_seen(points_seen, points_off)
-    invoice, change = _settle_and_post(order, rows, customer=customer, location=location, cashbox=cashbox, discount=discount + points_off if spent else discount,
+    discount = discount + points_off if spent else discount
+    gift_part = money_round(gift[1]) if gift is not None else Decimal("0.00")
+    # R8 (HG-118): the held deposit of the table's seated reservation (this customer's) settles part of the bill. The drawer is asked
+    # for the rest only; the deposit is applied after posting with S5's own attach and apply (``reservations.settle_at_bill``).
+    booking, credit, predicted, own_change = None, Decimal("0.00"), None, None
+    held_booking, held = reservations.bill_deposit(order, customer)
+    if held is not None:
+        predicted = _checkout_total(rows, discount)
+        credit = min(held.payment.amount, max(predicted - gift_part, Decimal("0.00")))
+        if credit > 0:
+            booking = held_booking
+            if tenders is None:
+                due = predicted - gift_part - credit
+                given = money_round(tendered or 0)
+                tendered, own_change = min(given, due), (money_round(given - due) if given > due else Decimal("0.00"))
+    invoice, change = _settle_and_post(order, rows, customer=customer, location=location, cashbox=cashbox, discount=discount,
                                        tendered=tendered, user=user, lang=lang, tenders=tenders,
                                        promotion=(promotion, promotion_off, coupon) if promotion is not None else None,
                                        points=(spent, points_off) if spent else None, gift=gift)
-    gift_part = money_round(gift[1]) if gift is not None else Decimal("0.00")
-    if tenders is not None and money_round(sum((amount for _box, amount in tenders), Decimal("0"))) + gift_part != invoice.total_amount:
-        raise ValidationError(words["split_total"].format(total=f"{invoice.total_amount - gift_part:,.2f}"))  # the whole payment is undone
+    if tenders is not None and money_round(sum((amount for _box, amount in tenders), Decimal("0"))) + gift_part + credit != invoice.total_amount:
+        raise ValidationError(words["split_total"].format(total=f"{invoice.total_amount - gift_part - credit:,.2f}"))  # the whole payment is undone
+    if booking is not None:
+        if invoice.total_amount != predicted:  # the sales engine worked out another total: nothing is kept
+            raise ValidationError(reservations.MESSAGES[lang]["deposit_mismatch"])
+        reservations.settle_at_bill(booking, invoice, credit, lang)
+        if own_change is not None:
+            change = own_change
     _close(order, invoice, customer, user)
     return invoice, change
+
+
+def _checkout_total(rows, discount):
+    """R8 (HG-118): the invoice total ``sales.pos.checkout`` will post for these rows and this discount, by its own formula (each
+    row rounded, VAT per line from the items' rates, the discount after tax). Read only; ``pay`` checks it against the posted
+    invoice and undoes everything when they differ."""
+
+    from taxes.services import compute_lines, vat_enabled
+
+    subtotal = money_round(sum((money_round(row["quantity"] * row["unit_sale_price"] - (row.get("line_discount_amount") or 0)) for row in rows), Decimal("0")))
+    tax = money_round(sum((line_tax for *_, line_tax in compute_lines(rows)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
+    return money_round(subtotal - money_round(discount or 0) + tax)
+
+
+def deposit_due(order, customer, total):
+    """R8 (HG-118): for the bill box, the seated reservation's held deposit this bill would use and what is left to pay:
+    ``{"reservation", "amount", "due"}``, or None when there is none."""
+
+    from . import reservations
+
+    booking, held = reservations.bill_deposit(order, customer)
+    if held is None:
+        return None
+    amount = min(held.payment.amount, max(total, Decimal("0.00")))
+    return {"reservation": booking, "amount": amount, "due": money_round(total - amount)} if amount > 0 else None
 
 
 def board():
