@@ -77,7 +77,7 @@ def certificate_owed(project):
 
     Everything the client was billed is lined up by date: each linked posted invoice at what it left owed after its
     returns (a certificate also less the retention it holds and the advance it recovers), and each retention release
-    on its own date. The project's collections then pay the oldest first. So money owed on another invoice, or on
+    on its own date. The project's collections (and its cheques under collection, C9) then pay the oldest first. So money owed on another invoice, or on
     released retention, is never put on an old certificate, and a returned certificate owes only what is left."""
 
     from django.db.models import Sum
@@ -102,7 +102,8 @@ def certificate_owed(project):
     if in_reach(project):
         for release in project.retention_releases.filter(reversed_on__isnull=True):
             items.append((release.release_date, 1, release.pk, Decimal(release.amount), None))
-    paid = position(project)["collections"]
+    figures = position(project)
+    paid = figures["collections"] + figures["under_collection"]  # C9 (HG-122): a cheque in hand pays it until it bounces
     owed = {}
     for *_, amount, certificate in sorted(items, key=lambda item: item[:3]):  # the oldest is paid first
         share = min(amount, paid)
