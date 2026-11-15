@@ -40,7 +40,7 @@ def _activity():
 #: ENT-002: sections that belong to one activity. While working in an entity
 #: that has its own activity, the others' sections step aside (the whole-group
 #: view keeps every enabled section).
-ACTIVITY_OWNED = {"manufacturing": "manufacturing", "projects": "contracting", "restaurant": "restaurants"}
+ACTIVITY_OWNED = {"manufacturing": "manufacturing", "projects": "contracting", "guarantees": "contracting", "restaurant": "restaurants"}
 
 
 def _hidden_for_entity(key):
@@ -100,6 +100,9 @@ NAV_ITEMS = (
     # T4: cheques received and issued, and what falls due.
     {"key": "cheques", "ar": "الشيكات", "en": "Cheques", "url_name": "cheques:register", "module": "cashboxes",
      "permission": ("cashboxes.view_finance", "sales.receive_customer_payment", "purchases.pay_supplier")},
+    # C4 (HG-123): letters of guarantee and their renewal dates, with the projects module (owner question 11's managers).
+    {"key": "guarantees", "ar": "خطابات الضمان", "en": "Letters of guarantee", "url_name": "guarantees:list", "module": "projects",
+     "permission": ("cashboxes.manage_cashboxes", "sales.create_sales_invoice")},
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
      "permission": ("sales.view_sales_invoices", "projects.view_projects")},
@@ -163,7 +166,7 @@ NAV_GROUPS = (
     {"key": "people", "ar": "الناس", "en": "People",
      "keys": ("customers", "education", "classes", "medical", "messages", "staff", "attendance", "my_attendance", "my_day")},
     {"key": "money", "ar": "الفلوس", "en": "Money",
-     "keys": ("cashboxes", "expenses", "banks", "cheques", "payroll", "assets", "taxes", "ledger", "closing")},
+     "keys": ("cashboxes", "expenses", "banks", "cheques", "guarantees", "payroll", "assets", "taxes", "ledger", "closing")},
     {"key": "reports", "ar": "التقارير", "en": "Reports", "keys": ("reports",)},
     {"key": "settings", "ar": "الإعدادات", "en": "Settings", "keys": ("settings", "profile")},
     {"key": "extras", "ar": "إضافات", "en": "Add-ons",
@@ -291,6 +294,7 @@ TAB_LABELS = {
     "payroll": {"ar": "المرتبات", "en": "Payroll"},
     "banks": {"ar": "البنوك", "en": "Banks"},
     "cheques": {"ar": "الشيكات", "en": "Cheques"},
+    "guarantees": {"ar": "الضمانات", "en": "Guarantees"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},

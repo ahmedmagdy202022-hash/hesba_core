@@ -1,0 +1,7 @@
+{% load hesba_format %}{% if show %}<section class="lg-card" data-project-guarantees aria-label="{{ words.card_title }}">
+<h2>{{ words.card_title }}</h2>
+{% if rows %}<ul>{% for row in rows %}{% with g=row.g %}<li data-project-guarantee="{{ g.pk }}"><span>{% if manager %}<a href="{% url 'guarantees:detail' g.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ g.number }}</bdi></a> · {% endif %}{{ row.kind }} · {{ g.bank }}</span>
+<span>{% if manager %}<strong data-guarantee-amount="{{ g.pk }}"><bdi>{{ g.amount|money }}</bdi></strong> · {% endif %}<small>{{ words.expires_on }}</small> <bdi dir="ltr">{{ g.expires_on|date:"Y-m-d" }}</bdi>{% if row.alert %}<span class="lg-badge lg-badge--{{ row.alert }}" data-guarantee-alert="{{ row.alert }}">{{ row.alert_label }}</span>{% endif %}{% if g.status != 'active' %} <small>{{ row.status }}</small>{% endif %}</span></li>{% endwith %}{% endfor %}</ul>
+{% else %}<p class="op-muted">{{ words.none }}</p>{% endif %}
+{% if manager %}<p class="op-muted"><a href="{% url 'guarantees:new' %}?lang={{ lang }}&amp;project={{ project.pk }}" data-add-project-guarantee>{{ words.add_for_project }} →</a></p>{% endif %}
+</section>{% endif %}
