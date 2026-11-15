@@ -27,12 +27,11 @@ from decimal import Decimal, InvalidOperation
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
-from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
 from config.money import money_round
 
-from .models import Project, ProjectExpense, ProjectInvoice, ProjectIssue, ProjectStatus
+from .models import Project, ProjectExpense, ProjectInvoice, ProjectStatus
 from entities import scope as entity_scope
 
 
@@ -226,34 +225,11 @@ def unlink(project, link, user, lang="ar"):
 
 @transaction.atomic
 def issue_materials(project, user, *, item, location, quantity, operation_date=None, lang="ar"):
-    """Take materials out of stock for the site, through the inventory engine."""
+    """Take materials out of stock for the site, through the inventory engine: a voucher of one line (C12, ``returns.py``)."""
 
-    from inventory.models import StockAdjustmentDirection
-    from inventory.services import adjust_stock
+    from .returns import issue_voucher
 
-    words = MESSAGES[lang]
-    project = _open(project, words)
-    if item is None:
-        raise ValidationError(words["item"])
-    if not item.is_stock_tracked:
-        raise ValidationError(words["stock_item"])
-    if location is None:
-        raise ValidationError(words["location"])
-    try:
-        quantity = Decimal(str(quantity).strip().replace(",", "."))
-    except (InvalidOperation, AttributeError):
-        quantity = Decimal("0")
-    if not quantity.is_finite() or quantity <= 0:
-        raise ValidationError(words["qty"])
-    sequence = project.issues.count() + 1
-    operation = adjust_stock(
-        f"PI-{project.code}-{sequence:03d}", operation_date or timezone.localdate(), item, location, StockAdjustmentDirection.OUT,
-        quantity.quantize(Decimal("0.001")), f"صرف خامات لمشروع {project.code} / Materials for project {project.code}", user,
-        stand_in="projects.issue_to_site",  # HG-048: a site engineer issues to the site without general stock adjustment
-    )
-    ProjectIssue.objects.create(project=project, operation=operation, created_by=user)
-    _audit(project, user, "issue_project_materials", {"operation": operation.reference_number, "item": item.item_code, "quantity": str(operation.quantity)})
-    return operation
+    return issue_voucher(project, user, location=location, lines=[{"item": item, "quantity": quantity}], operation_date=operation_date, lang=lang)[0]
 
 
 def summary(project):
@@ -261,7 +237,6 @@ def summary(project):
 
     from appointments.services import net_sales
     from cashboxes.models import CashboxOperationStatus
-    from inventory.models import StockOperationStatus
 
     # As the entity being worked in sees it (HG-034): its own documents only.
     invoices = entity_scope.scope(project.invoices.select_related("invoice"), "invoice__" + entity_scope.SALES_INVOICE)
@@ -270,9 +245,9 @@ def summary(project):
     invoiced = money_round(sum((Decimal(invoice.total_amount) for invoice in posted), Decimal("0")))
     due = money_round(sum((Decimal(invoice.remaining_due) for invoice in posted), Decimal("0")))
     drafts = invoices.filter(invoice__status="draft").aggregate(total=Sum("invoice__total_amount"))["total"] or Decimal("0")
-    issues = entity_scope.scope(project.issues.select_related("operation").filter(operation__status=StockOperationStatus.POSTED),
-                                tuple("operation__" + path for path in entity_scope.STOCK_OPERATION))
-    materials = money_round(sum((issue.operation.quantity * issue.operation.unit_cost for issue in issues), Decimal("0")))
+    from .returns import materials_cost
+
+    materials = materials_cost(project)  # Contracting C12 (HG-127): issues less returns from the site
     expenses = entity_scope.scope(project.expenses.filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED), "expense__" + entity_scope.EXPENSE)
     expenses = money_round(expenses.aggregate(total=Sum("expense__amount"))["total"] or 0)
     from .contract import contract_value

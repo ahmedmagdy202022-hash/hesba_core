@@ -17,6 +17,8 @@ urlpatterns = [
     path("<int:pk>/", views.project_detail, name="detail"),
     # Contracting C10 (HG-135): the owner's follow-up link (the public page itself is printing.share's /share/<token>/)
     path("<int:pk>/owner-link/", views.owner_link, name="owner_link"),
+    # Contracting C12 (HG-127): the printed issue and return vouchers
+    path("<int:pk>/materials/<str:kind>/<int:number>/print/", views.voucher_print, name="voucher_print"),
     # CONTRACT-002
     path("<int:pk>/boq/", contract_views.boq, name="boq"),
     path("<int:pk>/certificates/", contract_views.certificates, name="certificates"),
