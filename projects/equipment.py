@@ -37,7 +37,7 @@ UNBILLED = Q(purchase_line__isnull=True) | Q(purchase_line__invoice__status="can
 MESSAGES = {
     "ar": {
         "name": "اكتب اسم المعدة.", "kind": "اختار نوع المعدة: ملك أو إيجار.", "rate": "اكتب سعر الساعة أكبر من صفر.",
-        "supplier": "اختار المورد اللي بتستأجر منه المعدة.", "asset": "الأصل الثابت لازم يكون نشط.", "kind_locked": "المعدة دي عليها ساعات تشغيل؛ مينفعش نوعها يتغيّر.",
+        "supplier": "اختار المورد اللي بتستأجر منه المعدة.", "asset": "الأصل الثابت لازم يكون نشط.", "kind_locked": "المعدة دي عليها ساعات تشغيل؛ مينفعش نوعها يتغيّر.", "supplier_locked": "المعدة دي عليها ساعات تشغيل؛ مينفعش موردها يتغيّر. سجّل المعدة من المورد الجديد كمعدة جديدة.",
         "equipment": "اختار المعدة.", "inactive": "المعدة دي موقوفة؛ فعّلها الأول من سجل المعدات.", "hours": "اكتب عدد الساعات: أكبر من صفر ومايزيدش عن 24 في اليوم.",
         "day_hours": "ساعات المعدة دي في اليوم ده ({total}) بتعدّي 24 ساعة.", "date": "التاريخ مش صحيح.", "future": "مينفعش تسجّل ساعات بتاريخ جاي.",
         "closed": "المشروع ده خلص أو اتلغى.", "entity": "المعدة دي تابعة لكيان تاني؛ اشتغل من الكيان ده.",
@@ -47,7 +47,7 @@ MESSAGES = {
     },
     "en": {
         "name": "Enter the machine's name.", "kind": "Choose the kind: owned or hired.", "rate": "Enter an hour rate above zero.",
-        "supplier": "Choose the supplier the machine is hired from.", "asset": "The fixed asset must be active.", "kind_locked": "This machine has logged hours; its kind cannot change.",
+        "supplier": "Choose the supplier the machine is hired from.", "asset": "The fixed asset must be active.", "kind_locked": "This machine has logged hours; its kind cannot change.", "supplier_locked": "This machine has logged hours; its supplier cannot change. Register the machine from the new supplier as a new machine.",
         "equipment": "Choose the machine.", "inactive": "This machine is switched off; switch it on in the equipment register first.",
         "hours": "Enter the hours: above zero and no more than 24 a day.", "day_hours": "This machine's hours on that day ({total}) pass 24.",
         "date": "Invalid date.", "future": "Hours cannot be logged for a future date.", "closed": "This project is done or cancelled.",
@@ -118,6 +118,9 @@ def save_equipment(user, data, equipment=None, lang="ar"):
         _reach(equipment, words)
         if kind != equipment.kind and equipment.logs.exists():
             raise ValidationError(words["kind_locked"])
+        if supplier is not None and supplier.pk != equipment.supplier_id and equipment.logs.exists():
+            # Codex #436: its hours were worked for the old supplier at its rate; billing reads the machine's supplier
+            raise ValidationError(words["supplier_locked"])
     else:
         from entities.current import current_entity
 
