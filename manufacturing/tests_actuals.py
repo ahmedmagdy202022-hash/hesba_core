@@ -232,6 +232,26 @@ class ExtraAndReturnTests(ActualsSetup):
         self.assertEqual(back.unit_cost, D("30.6667"))
         self.assertEqual([(row["item"].pk, row["left"]) for row in actuals.returnable(order)], [(self.flour.pk, D("10.000")), (self.sugar.pk, D("2.000"))])
 
+    def test_a_return_after_a_return_and_a_cheaper_extra_takes_only_what_is_left(self):
+        """Codex on #439: a return prices from the value still on the order, never the average of every issue, so after a
+        return and a cheaper extra the next return cannot take more than the order holds."""
+
+        order = self.start()                                                     # sugar 2 at 30.00 = 60.00
+        first = actuals.return_materials(order, self.owner, item=self.sugar, quantity="1.5")
+        self.assertEqual(first.unit_cost, D("30.0000"))                          # 45.00 back, 0.5 and 15.00 left
+        stock_in(self.sugar, self.plant, 100, "1.00", movement_date=TODAY)       # the average drops well below 30.00
+        extra = actuals.extra_issue(order, self.owner, item=self.sugar, quantity="2", reason="زيادة")
+        self.assertLess(extra.unit_cost, D("30"))
+        held = D("15.00") + extra.quantity * extra.unit_cost
+        self.assertEqual(actuals.net_left(order, self.sugar), (D("2.5"), held))
+        self.assertEqual([row["unit_cost"] for row in actuals.returnable(order) if row["item"].pk == self.sugar.pk], [actuals.return_cost(order, self.sugar)])
+        last = actuals.return_materials(order, self.owner, item=self.sugar, quantity="2.5")
+        self.assertEqual(last.unit_cost, (held / D("2.5")).quantize(D("0.0001")))
+        self.assertLess(last.quantity * last.unit_cost, D("60"))                 # the old average, (60 + extra) / 4, took far more
+        left, value = actuals.net_left(order, self.sugar)
+        self.assertEqual(left, 0)
+        self.assertLess(abs(value), D("0.01"))                                   # nothing left on the order but a rounding residue
+
     def test_a_return_above_what_was_issued_is_refused(self):
         order = self.start()
         with self.assertRaisesMessage(ValidationError, "المتاح للرجوع من «سكر (كيلو)» 2"):

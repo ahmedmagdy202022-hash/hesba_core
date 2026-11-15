@@ -115,6 +115,28 @@ def position(order, item):
     return issued, value, back
 
 
+def net_left(order, item):
+    """(quantity of ``item`` still on ``order``, its value): the issues and extras less the returns, each return at the cost it
+    came back at. A return is priced from this, so a return after an earlier return and a cheaper extra takes only what is
+    left on the order, never the average of every issue (Codex on #439)."""
+
+    from inventory.models import StockOperationStatus
+
+    left, value = ZERO, ZERO
+    for row in order.issues.filter(operation__item=item, operation__status=StockOperationStatus.POSTED).select_related("operation"):
+        operation = row.operation
+        left += sign(operation) * operation.quantity
+        value += sign(operation) * operation.quantity * operation.unit_cost
+    return left, value
+
+
+def return_cost(order, item):
+    """The unit cost a return of ``item`` comes back at: the value still on the order over the quantity still on it."""
+
+    left, value = net_left(order, item)
+    return cost_round(max(value, ZERO) / left) if left > 0 else ZERO
+
+
 def issued_cost(order, item):
     """The cost ``item`` was issued to ``order`` at, weighted over its issue and extra rows (trap 3)."""
 
@@ -135,7 +157,7 @@ def returnable(order):
         seen.add(item.pk)
         issued, value, back = position(order, item)
         if issued - back > 0:
-            rows.append({"item": item, "left": issued - back, "unit_cost": cost_round(value / issued)})
+            rows.append({"item": item, "left": issued - back, "unit_cost": return_cost(order, item)})
     return rows
 
 
@@ -193,7 +215,8 @@ def extra_issue(order, user, *, item, quantity, reason, lang="ar"):
 
 @transaction.atomic
 def return_materials(order, user, *, item, quantity, reason="", lang="ar"):
-    """«رجّع خامات»: ``quantity`` of ``item`` back from work in progress to the order's location, at its issued cost."""
+    """«رجّع خامات»: ``quantity`` of ``item`` back from work in progress to the order's location, at the cost still on the
+    order (``return_cost``: the issued value less what earlier returns took, over the quantity left)."""
 
     from inventory.models import StockAdjustmentDirection, StockOperation
     from inventory.services import adjust_stock
@@ -214,7 +237,7 @@ def return_materials(order, user, *, item, quantity, reason="", lang="ar"):
     if quantity > issued - back:
         raise ValidationError(words["too_much"].format(item=item.item_name, left=fmt_qty(issued - back)))
     reason = (reason or "").strip()
-    unit_cost = cost_round(value / issued)
+    unit_cost = return_cost(order, item)
     operation = adjust_stock(services._next(StockOperation, "reference_number", f"{order.number}-R", 2), timezone.localdate(), item, order.location,
                              StockAdjustmentDirection.IN, quantity,
                              f"رجوع خامات {order.number} / Materials returned {order.number}{': ' + reason if reason else ''}"[:255], user,
