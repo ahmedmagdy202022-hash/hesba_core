@@ -274,6 +274,13 @@ class GuardTests(LabourSetup):
         with self.assertRaisesMessage(ValidationError, "يوم كامل في اليوم ده"):
             self.record(WEEK[0], [(mason, "1", "0")], project=other)
         self.assertEqual(LabourDay.objects.count(), 2)
+        # Codex #437: the 24-hour limit is the worker's whole day across projects. Half a day + 15 h overtime here (19 h)
+        # would pass on its own, but with the other site's half day (4 h) and 2 h overtime it is 25 h: refused.
+        self.record(WEEK[0], [(mason, "0.5", "2")], project=other)
+        with self.assertRaisesMessage(ValidationError, "(25 ساعة) بيعدّي 24 ساعة"):
+            self.record(WEEK[0], [(mason, "0.5", "15")])
+        self.record(WEEK[0], [(mason, "0.5", "14")])  # 4 + 14 + 4 + 2 = 24 h: allowed
+        self.assertEqual(LabourDay.objects.get(project=self.project, worker=mason).overtime_hours, D("14"))
         with self.assertRaisesMessage(ValidationError, "أكبر من صفر"):
             labour.save_worker(self.owner, {"name": "x", "day_rate": "0"})
         with self.assertRaisesMessage(ValidationError, "اسم العامل"):

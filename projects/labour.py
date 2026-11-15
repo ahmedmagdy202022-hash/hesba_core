@@ -214,10 +214,16 @@ def record_day(project, user, *, work_date, entries, lang="ar"):
         total = days * hours + overtime
         if total > MAX_DAY_HOURS:
             raise ValidationError(words["day_total"].format(total=format(total.normalize(), "f")))
-        elsewhere = (LabourDay.objects.filter(worker=worker, work_date=work_date).exclude(project=project)
-                     .aggregate(total=Sum("days"))["total"] or ZERO)
+        others = (LabourDay.objects.filter(worker=worker, work_date=work_date).exclude(project=project)
+                  .aggregate(days=Sum("days"), overtime=Sum("overtime_hours")))
+        elsewhere = others["days"] or ZERO
         if elsewhere + days > 1:
             raise ValidationError(words["two_projects"])
+        # Codex #437: the 24-hour limit counts the worker's whole day, every project's days and overtime together
+        # (the worker row is locked above, so two projects recording the same day cannot both pass).
+        combined = total + elsewhere * hours + (others["overtime"] or ZERO)
+        if combined > MAX_DAY_HOURS:
+            raise ValidationError(words["day_total"].format(total=format(combined.normalize(), "f")))
         if existing is None:
             day = LabourDay.objects.create(project=project, worker=worker, work_date=work_date, days=days, overtime_hours=overtime,
                                            rate=worker.day_rate, created_by=user)
