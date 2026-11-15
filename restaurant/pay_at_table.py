@@ -51,6 +51,7 @@ MESSAGES = {
         "user_pick": "اختار مستخدم من القايمة، أو سيبه فاضي عشان توقف الدفع من الطاولة.",
         "user_rights": "المستخدم ده لازم يكون شغّال وليه صلاحية البيع.",
         "no_live": "مفيش رابط دفع شغال على الطلب ده.",
+        "review": "فيه دفعة على الحساب ده وصلت لشركة الدفع، والفريق بيراجعها. الجرسون هيأكد الحساب مع حضرتك.",
     },
     "en": {
         "locked": "This order is locked for payment: the guest is paying the bill from the table now. Wait for the payment to finish, or cancel the payment link on the order page first.",
@@ -63,6 +64,7 @@ MESSAGES = {
         "user_pick": "Choose a user from the list, or leave it empty to switch paying from the table off.",
         "user_rights": "This user must be active and allowed to sell.",
         "no_live": "There is no live payment link on this order.",
+        "review": "A payment on this bill reached the payment company and our team is checking it. Your waiter will confirm the bill with you.",
     },
 }
 
@@ -163,6 +165,9 @@ def blocker(order, lang="ar"):
         return text["part"]
     if reservations.bill_deposit(order, payer(order))[1] is not None:
         return text["deposit"]
+    found = state(order)
+    if found is not None and found["kind"] == "review":  # a payment was taken and nothing posted: never a second one from here
+        return text["review"]
     try:
         pay.gateway_box(order.entity, lang)
     except ValidationError:

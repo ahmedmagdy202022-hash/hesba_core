@@ -6,6 +6,12 @@ key. It is server-rendered and works without JavaScript: every dish has a quanti
 read: the menu (names, prices, choices), the service and minimum notice, and the status of the requests made from this browser
 (a signed cookie, never an id in a URL). What they can write: a ``TableRequest`` (``restaurant.qr``), within its limits. Never an
 order line, never anything about a bill, another table, the staff or any customer.
+
+R5b (HG-121) changes one rule: when paying from the table is offered (``pay_at_table.offered``: the online-payment capability,
+a connected gateway and a chosen online-payments user), the page also shows **this table's open bill** (its rows and total, as
+«اطبع الشيك» prints them) with «ادفع». Pressing it is a POST on the same address (``action=pay``, the same throttle, CSRF
+check and honeypot) that locks the order and sends the guest to the payment company's page; nothing is posted until the
+gateway's verified callback. With paying from the table off, the page is exactly R5a's.
 """
 
 import re
@@ -26,7 +32,7 @@ from entities.services import is_multi_entity
 from permissions.decorators import require_any_permission, require_permission
 from printing.company import company_details
 
-from . import branches, qr
+from . import branches, pay_at_table, qr
 from .models import DiningTable, RequestKind, TableRequest
 from .views import FLOOR, TABLES, _lang, _order_url, _takes_orders
 
@@ -80,6 +86,58 @@ WORDS = {
         "dead_title": "This code is not working", "dead_body": "Try scanning the code on the table again, or ask a member of the team.",
     },
 }
+
+
+#: R5b (HG-121): the bill box on the public page.
+PAY_WORDS = {
+    "ar": {
+        "title": "حساب الطاولة", "total": "الإجمالي", "pay": "ادفع", "resume": "كمّل الدفع", "vat": "شامل ضريبة القيمة المضافة",
+        "secure": "هتدفع على الصفحة الآمنة الخاصة بشركة الدفع، وبيانات الكارت مابتوصلناش. ممكن كمان تدفع مع الجرسون.",
+        "waiting": "الدفع جاري: الحساب مقفول لحد ما الدفع يخلص. لو قفلت صفحة الدفع، اضغط «كمّل الدفع».",
+        "review": "دفعة حضرتك وصلت لشركة الدفع، والفريق هيأكد الحساب مع حضرتك على الطاولة.",
+        "pay_note": "تقدر تدفع الحساب من هنا، أو مع الجرسون.",
+    },
+    "en": {
+        "title": "Your table's bill", "total": "Total", "pay": "Pay", "resume": "Continue paying", "vat": "VAT included",
+        "secure": "You will pay on the payment company's secure page; your card details never reach us. You can also pay with your waiter.",
+        "waiting": "Payment in progress: the bill is held until it finishes. If you closed the payment page, press “Continue paying”.",
+        "review": "Your payment reached the payment company; our team will confirm the bill with you at the table.",
+        "pay_note": "You can pay the bill here, or with your waiter.",
+    },
+}
+
+
+def _row_name(row):
+    """A bill row as the guest reads it: the dish's name (a combo's component and an add-on keep their bill wording)."""
+
+    line = row.get("line")
+    if row["kind"] == "food" and line is not None and not line.combo_id:
+        return row["item"].item_name
+    return row["description"] or (row["item"].item_name if row.get("item") else "")
+
+
+def pay_box(table, lang):
+    """R5b (HG-121): the table's bill and «ادفع», or None (paying from the table off, or no bill at this table now)."""
+
+    if not pay_at_table.offered():
+        return None
+    order = pay_at_table.table_order(table)
+    if order is None or not order.lines.filter(voided=False).exists():
+        return None
+    from payments.services import live_order_link
+
+    bill = pay_at_table.preview(order, lang)
+    rows = [{"name": _row_name(row), "quantity": row["quantity"], "amount": row["net"] + row["tax"]} for row in bill["rows"]]
+    live = live_order_link(order)
+    found = pay_at_table.state(order)
+    if live is not None:
+        kind, total, reason = "waiting", live.amount, ""
+    elif found is not None and found["kind"] == "review":
+        kind, total, reason = "review", bill["total"], ""
+    else:
+        reason = pay_at_table.blocker(order, lang)
+        kind, total = ("blocked" if reason else "ready"), bill["total"]
+    return {"state": kind, "rows": rows, "total": total, "reason": reason, "vat": bill["tax"] > 0}
 
 
 # --- the public page ---------------------------------------------------------------------------------------------------
@@ -142,7 +200,7 @@ def _remember(request, response, table, request_id):
                                secure=request.is_secure(), path=reverse("table_menu", args=[table.qr_key]))
 
 
-def _notices(text):
+def _notices(text, paying=False, lang="ar"):
     """The VAT note and R3's service and minimum notice, from the same settings the bill reads."""
 
     from settings_core.templatetags.hesba_format import money
@@ -159,7 +217,7 @@ def _notices(text):
         notes.append(text["service_note"].format(percent=charges._shown_percent(config.percent)))
     if config.minimum is not None:
         notes.append(text["minimum_note"].format(amount=money(config.minimum)))
-    return notes + [text["pay_note"]]
+    return notes + [PAY_WORDS[lang]["pay_note"] if paying else text["pay_note"]]
 
 
 def menu(lang, posted=None):
@@ -249,9 +307,11 @@ def _render(request, table, lang, error="", posted=None, note="", status=200):
     sections = menu(lang, posted)
     mine = [{"request": found, "text": text[f"{found.status}_{found.kind}"], "kind": text[f"kind_{found.kind}"],
              "time": timezone.localtime(found.created_at).strftime("%H:%M")} for found in _remembered(request, table)]
-    context = _shell(request, lang, table=table, table_label=text["table"].format(name=table.name), sections=sections, notices=_notices(text),
-                     mine=mine, error=error, note=note, entity_name=table.entity.display(lang) if is_multi_entity() else "",
-                     dish_count=sum(len(found["entries"]) for found in sections))
+    box = pay_box(table, lang)  # R5b (HG-121): None while paying from the table is off, so the page is R5a's
+    context = _shell(request, lang, table=table, table_label=text["table"].format(name=table.name), sections=sections,
+                     notices=_notices(text, paying=box is not None, lang=lang), mine=mine, error=error, note=note,
+                     entity_name=table.entity.display(lang) if is_multi_entity() else "", dish_count=sum(len(found["entries"]) for found in sections),
+                     pay_box=box, pw=PAY_WORDS[lang])
     return _private(render(request, "restaurant/table_menu.html", context, status=status))
 
 
@@ -276,6 +336,12 @@ def _submit(request, table, lang):
     if _throttled("post_ip", _address(request), POST_IP_LIMIT, POST_WINDOW) or _throttled("post_table", table.pk, TABLE_LIMIT, TABLE_WINDOW):
         return _too_many(lang)
     action = request.POST.get("action", "")
+    if action == "pay":  # R5b (HG-121): «ادفع»: lock the order and go to the payment company's page
+        try:
+            link = pay_at_table.start(table, lang)
+        except ValidationError as exc:
+            return _render(request, table, lang, " ".join(exc.messages), status=400)
+        return _private(HttpResponseRedirect(link.checkout_url, status=303))
     kind = {"order": RequestKind.ORDER, "call": RequestKind.CALL, "bill": RequestKind.BILL}.get(action)
     if kind is None:
         return _render(request, table, lang, text["failed"], status=400)
