@@ -375,9 +375,13 @@ def take_deposit(preorder, cashbox, amount, user, lang="ar"):
     from deposits import services as deposits
 
     words = MESSAGES[lang]
-    if cashbox is None or not cashboxes(preorder).filter(pk=cashbox.pk).exists():
-        raise ValidationError(words["cashbox"])
-    return deposits.take(preorder, preorder.customer, cashbox, amount, user, lang)
+    with transaction.atomic():
+        # the pre-order as it is now, under the lock ``save_preorder`` takes: its customer may have changed since the screen
+        # loaded it, and the deposit must be that customer's (Codex on #423, as R8's take_deposit)
+        preorder = _locked(preorder)
+        if cashbox is None or not cashboxes(preorder).filter(pk=cashbox.pk).exists():
+            raise ValidationError(words["cashbox"])
+        return deposits.take(preorder, preorder.customer, cashbox, amount, user, lang)
 
 
 # --- the deposit at the bill -----------------------------------------------------

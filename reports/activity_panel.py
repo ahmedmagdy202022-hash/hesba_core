@@ -44,7 +44,7 @@ WORDS = {
         "runs": "تشغيلات", "units": "وحدات اتنتجت", "prod_cost": "تكلفة الإنتاج", "short_recipes": "وصفات ناقصها خامات", "open_orders_mfg": "أوامر إنتاج شغالة", "late_orders": "متأخر عن ميعاده", "late_none": "مفيش تأخير",
         "short_none": "كل الوصفات خاماتها كفاية لتشغيلة", "short_list": "ناقصها خامات:",
         "active_projects": "مشاريع شغالة", "contract_total": "قيمة العقود", "billed_pct": "اتفوتر من العقود", "losing": "مشاريع خسرانة",
-        "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "open": "افتح", "of": "من",
+        "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "behind_schedule": "متأخرة عن الجدول", "open": "افتح", "of": "من",
         "queue_waiting": "مستنيين في الاستقبال دلوقتي", "follow_missed": "متابعات فاتت", "follow_coming": "متابعات جاية (7 أيام)",
         "insurers_owe": "على شركات التأمين", "hours_unbilled": "ساعات لسه ماتفوترتش", "contracts_due": "فترات عقود مستحقة الفوترة",
     },
@@ -57,7 +57,7 @@ WORDS = {
         "runs": "Runs", "units": "Units produced", "prod_cost": "Production cost", "short_recipes": "Recipes short of materials", "open_orders_mfg": "Open production orders", "late_orders": "past their due date", "late_none": "nothing late",
         "short_none": "Every recipe has materials for a batch", "short_list": "Short:",
         "active_projects": "Active projects", "contract_total": "Contract value", "billed_pct": "Billed of contracts", "losing": "Projects losing money",
-        "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "open": "Open", "of": "of",
+        "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "behind_schedule": "Behind schedule", "open": "Open", "of": "of",
         "queue_waiting": "Waiting at reception now", "follow_missed": "Missed follow-ups", "follow_coming": "Follow-ups due (7 days)",
         "insurers_owe": "Owed by insurers", "hours_unbilled": "Hours not billed yet", "contracts_due": "Contract periods due to bill",
     },
@@ -201,12 +201,18 @@ def _projects(words, today):
     billed = sum((s["billed"] for s in sums), ZERO)
     losing = [project.name for project, s in zip(active, sums) if s["profit"] < 0]
     dues = sum((s["due"] for s in sums), ZERO)
+    # Contracting C3 (HG-124): behind schedule as the projects report reads it: by the schedule where a project has tasks, else billing against the calendar
+    from projects.insights import time_share
+    from projects.schedule import behind as schedule_behind
+
+    late = [project.name for project, s in zip(active, sums) if schedule_behind(project, s, time_share(project, today), today)[0]]
     return [
         _tile("active_projects", words["active_projects"], len(active), tone="lead"),
         _tile("contract_total", words["contract_total"], money_round(contract), "money"),
         _tile("billed_pct", words["billed_pct"], f"{round(billed / contract * 100)}%" if contract > 0 else "—", "text"),
         _tile("project_dues", words["project_dues"], money_round(dues), "money"),
         _tile("losing", words["losing"], len(losing), tone="bad" if losing else "good", sub="، ".join(losing[:3])),
+        _tile("behind_schedule", words["behind_schedule"], len(late), tone="bad" if late else "good", sub="، ".join(late[:3])),
         _overdue_tile(words, today),
     ], []
 

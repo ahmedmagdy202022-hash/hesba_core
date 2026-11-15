@@ -1,0 +1,31 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/guarantees.css' %}?v=c4-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><a class="op-primary" href="{% url 'guarantees:new' %}?lang={{ lang }}" data-new-guarantee>{{ words.new }}</a></section>
+<nav class="lg-alerts" aria-label="{{ words.filter_alerts }}" data-guarantee-alerts>
+<a class="{% if expired_count %}is-bad{% endif %}{% if show == 'expired' %} is-current{% endif %}" href="?lang={{ lang }}&amp;show=expired" data-count="expired"><strong>{{ expired_count }}</strong>{{ words.expired_n }}</a>
+<a class="{% if expiring_count %}is-warn{% endif %}{% if show == 'expiring' %} is-current{% endif %}" href="?lang={{ lang }}&amp;show=expiring" data-count="expiring"><strong>{{ expiring_count }}</strong>{{ expiring_label }}</a>
+<a class="{% if show == 'active' %}is-current{% endif %}" href="?lang={{ lang }}&amp;show=active" data-count="active"><strong>{{ active_count }}</strong>{{ words.show_active }}</a>
+</nav>
+<form class="op-filters lg-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}">
+<select name="show" aria-label="{{ words.show }}">{% for key, label in shows %}<option value="{{ key }}"{% if show == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<select name="bank" aria-label="{{ words.bank }}"><option value="">{{ words.all_banks }}</option>{% for box in banks %}<option value="{{ box.pk }}"{% if bank and bank.pk == box.pk %} selected{% endif %}>{{ box }}</option>{% endfor %}</select>
+<select name="project" aria-label="{{ words.project }}"><option value="">{{ words.all_projects }}</option>{% for p in projects %}<option value="{{ p.pk }}"{% if project and project.pk == p.pk %} selected{% endif %}>{{ p.code }} · {{ p.name }}</option>{% endfor %}</select>
+<button type="submit">{{ words.show }}</button></form>
+<div class="op-table-wrap"><table class="op-table lg-table" data-guarantees><thead><tr><th>{{ words.number }}</th><th>{{ words.kind }}</th><th>{{ words.bank }}</th><th>{{ words.beneficiary }}</th><th>{{ words.project }}</th><th>{{ words.amount }}</th><th>{{ words.expires_on }}</th><th>{{ words.status }}</th></tr></thead><tbody>
+{% for row in rows %}{% with g=row.g %}<tr data-guarantee="{{ g.pk }}"{% if row.alert %} data-alert="{{ row.alert }}"{% endif %}>
+<td data-cell="{{ words.number }}"><a href="{% url 'guarantees:detail' g.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ g.number }}</bdi></a></td>
+<td data-cell="{{ words.kind }}">{{ row.kind }}</td>
+<td data-cell="{{ words.bank }}">{{ g.bank }}</td>
+<td data-cell="{{ words.beneficiary }}">{{ g.beneficiary.name }}</td>
+<td data-cell="{{ words.project }}">{% if g.project %}{{ g.project.name }}{% else %}—{% endif %}</td>
+<td data-cell="{{ words.amount }}"><bdi>{{ g.amount|money }}</bdi> <small>{{ g.currency }}</small></td>
+<td data-cell="{{ words.expires_on }}"><span><bdi dir="ltr">{{ g.expires_on|date:"Y-m-d" }}</bdi>{% if row.alert %}<span class="lg-badge lg-badge--{{ row.alert }}" data-guarantee-alert="{{ row.alert }}" data-for="{{ g.pk }}">{{ row.alert_label }}</span>{% endif %}{% if g.status == 'active' %}<span class="lg-left">{{ row.left }}</span>{% endif %}</span></td>
+<td data-cell="{{ words.status }}"><span class="op-status{% if g.status == 'active' %} op-status-posted{% elif g.status == 'liquidated' or g.status == 'cancelled' %} op-status-cancelled{% endif %}">{{ row.status }}</span></td>
+</tr>{% endwith %}
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_set_days %}<form class="lg-days" method="post" data-alert-days>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="alert_days">
+<label for="lg-days">{{ words.alert_days }}</label><input id="lg-days" name="days" value="{{ days }}" inputmode="numeric" dir="ltr" required><span>{{ words.days }}</span><button class="op-secondary" type="submit">{{ words.save_days }}</button></form>{% endif %}
+{% endblock %}

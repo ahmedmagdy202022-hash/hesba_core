@@ -712,6 +712,45 @@ class DepositAtBillTests(ReservationSetup):
         self.assertEqual(balance(self.nour), D("-200.00"))
 
 
+class CodexDepositFindingsTests(ReservationSetup):
+    """Codex on #422: the deposit's customer read from a stale reservation, and a deposit stuck after its seated order or bill
+    was cancelled."""
+
+    seat_with_deposit = DepositAtBillTests.seat_with_deposit
+    pay = DepositAtBillTests.pay
+
+    def test_a_deposit_taken_on_a_stale_copy_goes_to_the_reservations_customer_now(self):
+        booking = self.book()
+        stale = TableReservation.objects.get(pk=booking.pk)  # the screen loaded it with نور
+        other = make_customer(customer_code="C-OTHER", name="عميل تاني")
+        reservations.save_reservation({"name": "عميل تاني", "party_size": 4, "starts_at": at(2, "20:00"), "table": self.a_t1, "customer": other},
+                                      self.owner, booking)
+        deposit = self.take(stale)
+        self.assertEqual(deposit.payment.customer_id, other.pk)
+
+    def test_after_the_seated_order_is_cancelled_the_held_deposit_can_be_refunded(self):
+        booking, order = self.seat_with_deposit()
+        services.cancel_order(Order.objects.get(pk=order.pk), self.owner, reason="الضيوف مشيوا")
+        self.assertContains(self.page(self.owner, day=at(0, "00:00").date().isoformat()), "data-deposit-refund")
+        self.act("deposit_refund", booking, self.owner, reason="رجّع العربون")
+        self.assertEqual(Deposit.objects.get().status, DepositStatus.REFUNDED)
+        self.assertEqual(balance(self.nour), D("0.00"))
+
+    def test_after_the_bill_is_cancelled_the_released_deposit_can_be_refunded(self):
+        booking, order = self.seat_with_deposit()
+        invoice, _ = self.pay(order)
+        cancel_posted_sales_invoice(invoice.pk, self.owner, "خطأ")
+        self.act("deposit_refund", booking, self.owner, reason="رجّع العربون")
+        self.assertEqual(Deposit.objects.get().status, DepositStatus.REFUNDED)
+
+    def test_a_seated_reservation_with_an_open_order_still_cannot_refund_or_forfeit(self):
+        booking, order = self.seat_with_deposit()
+        self.assertNotContains(self.page(self.owner, day=at(0, "00:00").date().isoformat()), "data-deposit-refund")
+        self.act("deposit_refund", booking, self.owner, reason="x")
+        self.act("deposit_forfeit", booking, self.owner)
+        self.assertEqual(Deposit.objects.get().status, DepositStatus.HELD)
+
+
 class NoReservationTests(ReservationSetup):
     def test_with_no_reservation_the_bill_and_the_screens_are_as_before(self):
         order = self.grills(services.open_order(self.owner, table=self.a_t1, guests=4, customer=self.nour))

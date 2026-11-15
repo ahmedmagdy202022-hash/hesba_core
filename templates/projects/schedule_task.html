@@ -1,0 +1,28 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_schedule.css' %}?v=c3-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C3 (HG-124): one task of the schedule: its plan, the percent done typed on site, and the office's edit form. #}
+{% include "projects/_head.html" %}
+<section class="sch-card" data-task-facts><a class="op-back" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ sw.back }}</a><h2>{{ task.name }}</h2>
+<dl class="sch-facts">
+<div><dt>{{ sw.start }}</dt><dd>{{ start }}</dd></div><div><dt>{{ sw.end }}</dt><dd>{{ end }} · {{ days }}</dd></div>
+<div><dt>{{ sw.predecessor }}</dt><dd>{% if task.predecessor %}«{{ task.predecessor.name }}»{% else %}{{ sw.none_dash }}{% endif %}</dd></div>
+<div><dt>{{ sw.progress }}</dt><dd><span dir="ltr" data-task-actual>{{ actual }}%</span> · {% if is_boq %}{{ sw.source_boq }}{% else %}{{ sw.source_manual }}{% endif %}</dd></div>
+</dl><p class="sch-hint">{{ created }}</p></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+{% if not is_open %}<p class="op-message" data-project-closed>{{ sw.closed }}</p>{% else %}
+{% if can_progress %}<section class="sch-card" data-progress-card><h2>{{ sw.progress_title }}</h2>
+{% if is_boq %}<p class="sch-hint" data-progress-boq>{{ sw.progress_boq }}</p>
+{% else %}<form class="op-form hs-form" method="post" data-progress-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="progress">
+<div class="op-field"><label for="tk-progress">{{ sw.progress_label }}</label><input id="tk-progress" name="progress" type="number" min="0" max="100" step="1" inputmode="numeric" dir="ltr" value="{{ task.progress }}" required></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ sw.progress_save }}</button></div></form>{% endif %}
+</section>{% endif %}
+{% if can_plan %}<form class="op-form hs-form sch-card" method="post" data-task-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="save"><h2>{{ heading }}</h2>
+{% include "projects/_task_fields.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ sw.save }}</button></div></form>
+<form class="sch-card" method="post" data-task-delete>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="delete"><button class="op-secondary" type="submit">{{ sw.delete }}</button></form>
+{% elif can_progress %}<p class="op-muted" data-plan-only>{{ sw.plan_only }}</p>
+{% else %}<p class="op-muted" data-view-only>{{ sw.view_only }}</p>{% endif %}
+{% endif %}
+{% endblock %}
