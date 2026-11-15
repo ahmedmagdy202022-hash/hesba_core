@@ -45,6 +45,7 @@ MESSAGES = {
         "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات النهائية بس.",
         "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
         "value_locked": "قيمة العقد اتعدّلت بأوامر تغيير معتمدة؛ أي تعديل جديد في القيمة يتم بأمر تغيير.",
+        "labour_link": "ده مصروف كشف عمالة يومية؛ مينفعش يتفك من المشروع. لو فيه غلط الغي المصروف من شاشة المصروفات، وأيامه بترجع لكشف جديد.",
     },
     "en": {
         "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Type the contract value as a number, 0 or more.", "dates": "The end date is before the start.",
@@ -52,6 +53,7 @@ MESSAGES = {
         "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
         "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
         "value_locked": "Approved variation orders changed the contract value; any further change in value goes through a variation order.",
+        "labour_link": "This is a daily-labour pay sheet's expense; it cannot be unlinked from the project. If it is wrong, cancel the expense on the expenses screen and its days go back for a new sheet.",
     },
 }
 
@@ -218,6 +220,9 @@ def unlink(project, link, user, lang="ar"):
         raise ValidationError(MESSAGES[lang]["certificate_link"])
     if isinstance(link, ProjectInvoice) and project.payments.filter(payment__instalment_link__plan__invoice_id=link.invoice_id).exists():
         raise ValidationError(MESSAGES[lang]["instalments_linked"])  # its instalments count as this project's collections
+    if isinstance(link, ProjectExpense) and hasattr(link.expense, "labour_sheet"):
+        # Contracting C5 (HG-130): a pay sheet's days stay paid while its expense is posted, so the expense stays on the project.
+        raise ValidationError(MESSAGES[lang]["labour_link"])
     kind = type(link).__name__
     label = link.invoice.invoice_number if isinstance(link, ProjectInvoice) else link.expense.expense_number
     link.delete()
