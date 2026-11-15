@@ -76,12 +76,26 @@ class ProductionConsumption(models.Model):
         ordering = ["pk"]
 
 
+class IssueKind(models.TextChoices):
+    """Manufacturing F12 (HG-132): what an order's material row is."""
+
+    ISSUE = "issue", "Issue"
+    EXTRA = "extra", "Extra issue"
+    RETURN = "return", "Return"
+
+
 class OrderMaterialIssue(models.Model):
     """HG-036: a component issued to the floor when an order starts. Its value
-    sits in work in progress until the order finishes (or is cancelled)."""
+    sits in work in progress until the order finishes (or is cancelled).
+
+    Manufacturing F12 (HG-132): ``kind`` tells the start's issue (every row made before F12) from an extra issue while
+    the order is on the floor (an adjustment out at the average) and a return of what was not used (an adjustment in
+    at the cost this order was issued at). ``reason`` is what the person wrote for an extra or a return."""
 
     order = models.ForeignKey("ProductionOrder", on_delete=models.CASCADE, related_name="issues")
     operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, related_name="order_issue")
+    kind = models.CharField(max_length=10, choices=IssueKind.choices, default=IssueKind.ISSUE)
+    reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["pk"]
@@ -158,3 +172,47 @@ class LotUse(models.Model):
             models.CheckConstraint(condition=models.Q(run__isnull=False) | models.Q(order__isnull=False), name="mfg_lotuse_has_run_or_order"),
             models.CheckConstraint(condition=models.Q(quantity__gt=0), name="mfg_lotuse_positive"),
         ]
+
+
+class OrderStandardLine(models.Model):
+    """Manufacturing F12 (HG-132): the standard of one component for one order, written when the order starts (the
+    recipe's quantity times the order's batches, at the cost it was issued at). The variance report reads it, so an
+    edit of the recipe later never rewrites what an order was measured against."""
+
+    order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name="standard_lines")
+    component = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=4)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.UniqueConstraint(fields=["order", "component"], name="mfg_one_standard_per_component")]
+
+
+class CostLineKind(models.TextChoices):
+    LABOUR = "labour", "Labour"
+    OVERHEAD = "overhead", "Overhead"
+    OUTSIDE = "outside", "Outside processing"
+
+
+class OrderCostLine(models.Model):
+    """Manufacturing F12 (HG-132): labour or overhead actually spent on an order (hours x rate, or an amount), added
+    and cancelled until the finish. ``outside`` is reserved for processing at an outside workshop (F4).
+
+    At the finish, each kind's live lines replace that kind's planned figure on the order (``labor_cost``,
+    ``overhead_cost``); a kind with no live line keeps its planned figure."""
+
+    order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name="cost_lines")
+    kind = models.CharField(max_length=10, choices=CostLineKind.choices)
+    description = models.CharField(max_length=255, blank=True)
+    employee = models.ForeignKey("staff.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    hours = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rate = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="mfg_costline_positive")]

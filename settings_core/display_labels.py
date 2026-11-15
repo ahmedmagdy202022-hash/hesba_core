@@ -36,6 +36,8 @@ AR_LABELS = {
     ("restaurant.order", "status"): {"open": "مفتوح", "paid": "اتدفع", "cancelled": "ملغي", "merged": "اتدمج"},
     ("manufacturing.productionrun", "status"): {"posted": "نهائية", "cancelled": "ملغية"},
     ("manufacturing.productionorder", "status"): {"planned": "لسه مبدأش", "in_progress": "شغال", "done": "خلص", "cancelled": "ملغي"},
+    ("manufacturing.ordermaterialissue", "kind"): {"issue": "صرف البداية", "extra": "صرف إضافي", "return": "رجوع خامات"},
+    ("manufacturing.ordercostline", "kind"): {"labour": "عمالة", "overhead": "مصاريف تشغيل", "outside": "تشغيل خارجي"},
     ("einvoice.submission", "status"): {"sending": "بتتبعت دلوقتي", "cancel_requested": "طلب إلغاء — مستني المنظومة", "submitted": "اتبعتت — بتتراجع", "valid": "مقبولة", "invalid": "مرفوضة بعد المراجعة", "rejected": "مرفوضة", "cancelled": "ملغاة"},
     ("projects.project", "status"): {"planned": "لسه مبدأش", "active": "شغال", "on_hold": "متوقف", "done": "خلص", "cancelled": "ملغي"},
     # CONTRACT-002: cost headings and project payments.
