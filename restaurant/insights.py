@@ -193,7 +193,8 @@ def period_report(first, last):
         brand = by_brand.setdefault(root.brand_id, {"brand": root.brand, "orders": 0, "sales": ZERO})  # R11: the bill's brand, a part's being its parent's
         brand["orders"] += 1 if stands else 0
         brand["sales"] += sales
-        waiter = waiters.setdefault(order.waiter_id, {"waiter": order.waiter, "orders": 0, "sales": ZERO})
+        # R2a: a part's sales belong to its bill's waiter (after a merge, the receiving order's), with the bill's one order
+        waiter = waiters.setdefault(root.waiter_id, {"waiter": root.waiter, "orders": 0, "sales": ZERO})
         waiter["orders"] += 1 if stands else 0
         waiter["sales"] += sales
     for row in tables.values():
