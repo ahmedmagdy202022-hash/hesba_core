@@ -413,7 +413,13 @@ def _repeat_combo(order, members, user, lang):
             raise changed
         choices[slot.pk] = choice.pk
         options[slot.pk] = _rebuilt(line, children, lang)
-    services.add_combo(order, combo, user, choices, quantity=1, note=head.note, lang=lang, options=options)
+    first = services.add_combo(order, combo, user, choices, quantity=1, note=head.note, lang=lang, options=options)
+    # add_combo writes the note on the head only; each component's own kitchen note («من غير ملح») comes back too
+    rebuilt = order.lines.filter(bundle=first.bundle, parent__isnull=True).order_by("pk")
+    for line, (taken, _children) in zip(rebuilt, members):
+        if line.note != taken.note:
+            line.note = taken.note
+            line.save(update_fields=["note"])
 
 
 @transaction.atomic
