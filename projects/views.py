@@ -215,6 +215,11 @@ def project_detail(request, pk):
     from .views_schedule import header_flag
 
     context["schedule_flag"] = header_flag(project, request.user, lang)  # Contracting C3 (HG-124): the delay line under the title
+    if context["can_profit"]:
+        from . import equipment
+
+        memo = equipment.memo(project, profit=context["figures"]["profit"])  # Contracting C6 (HG-129): owned equipment, a memo beside the profit
+        context["equipment_memo"] = memo if memo["amount"] else None
     return render(request, "projects/detail.html", context)
 
 

@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_equipment.css' %}?v=c6-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C6 (HG-129): the equipment register. A machine holds no money; its hours are logged on a project. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ ew.register_title }}</h1><p>{{ ew.register_intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-equipment-register><thead><tr><th>{{ ew.name }}</th><th>{{ ew.kind }}</th>{% if can_money %}<th>{{ ew.supplier }}</th><th>{{ ew.rate }}</th>{% endif %}<th>{{ ew.hours_total }}</th><th>{{ ew.status }}</th>{% if can_edit_register %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}{% with machine=row.machine %}<tr data-equipment="{{ machine.pk }}"><td>{{ machine.name }}</td><td>{{ row.kind_label }}</td>{% if can_money %}<td>{% if machine.supplier %}{{ machine.supplier.name }}{% elif machine.fixed_asset %}<bdi dir="ltr">{{ machine.fixed_asset.code }}</bdi>{% else %}—{% endif %}</td><td>{{ machine.hour_rate|money }}</td>{% endif %}<td dir="ltr">{{ row.hours|qty }}</td><td><span class="op-status op-status-{% if machine.active %}posted{% else %}cancelled{% endif %}">{% if machine.active %}{{ ew.active }}{% else %}{{ ew.stopped }}{% endif %}</span></td>{% if can_edit_register %}<td class="eqp-actions"><a class="op-secondary" href="{{ row.url }}" data-equipment-edit>{{ words.edit }}</a></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty" data-equipment-none>{{ ew.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_edit_register %}
+<form class="op-form hs-form" method="post" data-equipment-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ ew.add }}</h2>
+{% include "projects/_equipment_fields.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ ew.save }}</button></div></form>
+{% else %}<p class="op-muted" data-view-only>{{ ew.view_only }}</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,9 @@
+<div class="op-form-grid">
+<div class="op-field"><label for="eqf-name">{{ ew.name }}</label><input id="eqf-name" name="name" value="{{ form.name }}" maxlength="255" required></div>
+<div class="op-field"><label for="eqf-kind">{{ ew.kind }}</label><select id="eqf-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if form.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="eqf-rate">{{ ew.rate }}</label><input id="eqf-rate" name="hour_rate" value="{{ form.hour_rate }}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="eqf-supplier">{{ ew.supplier }}</label><select id="eqf-supplier" name="supplier"><option value="">—</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}"{% if form.supplier|stringformat:'s' == supplier.pk|stringformat:'s' %} selected{% endif %}>{{ supplier.name }}</option>{% endfor %}</select></div>
+{% if assets %}<div class="op-field"><label for="eqf-asset">{{ ew.asset }}</label><select id="eqf-asset" name="fixed_asset"><option value="">{{ ew.no_asset }}</option>{% for asset in assets %}<option value="{{ asset.pk }}"{% if form.fixed_asset|stringformat:'s' == asset.pk|stringformat:'s' %} selected{% endif %}>{{ asset.code }} — {{ asset.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="eqf-active">{{ ew.status }}</label><select id="eqf-active" name="active"><option value="1"{% if form.active != "0" %} selected{% endif %}>{{ ew.active }}</option><option value="0"{% if form.active == "0" %} selected{% endif %}>{{ ew.stopped }}</option></select></div>
+</div>
+<p class="eqp-note">{{ ew.owned_hint }}</p><p class="eqp-note">{{ ew.hired_hint }}</p><p class="eqp-note">{{ ew.rate_hint }}</p>
