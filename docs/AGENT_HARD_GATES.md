@@ -5278,6 +5278,103 @@ The product now enters stock at what the order really used (issues + extras − 
 - `templates/manufacturing/`: `_actuals.html` (new), `costs.html` (new), `order.html`, `home.html`.
 - Outside `manufacturing/`: `ledger/projector.py` (the rule above), `settings_core/display_labels.py` (two label maps), `docs/AGENT_HARD_GATES.md` (this entry and a dated note under HG-036), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure).
 
+## HG-133 — Manufacturing F6a: work centres, a routing on the recipe, planned and recorded minutes per stage, a 14-day load, and suggested labour lines priced from the minutes (`manufacturing/0007_workcentres`); no money moves by itself
+
+- **Status:** implemented on `claude/manufacturing-f6a-workcentres` (cut from the open F12 branch `claude/manufacturing-f12-actuals`, PR #439, which sits on F3, PR #438, so `manufacturing/0006_actuals`, F12's `OrderCostLine` and `manufacturing/actuals.py` are already there), **awaiting Ahmed's review before merge**. **T2**: new tables, one new column on the stage log, two on F12's cost line. It writes no stock movement, no journal and no cashbox row; the only path from a minute to a cost is a labour line F12's finish already absorbs.
+- **Why:** a machine could sit in the fixed-asset register with no hours, rate or capacity, and a stage was a name in a JSON list: nothing said where a stage is done, how long it should take, how loaded a machine is next week, or what a stage's time costs. Labour and overhead were typed once per order, as one figure.
+- **Why no existing table serves:** a fixed asset has no capacity, rate or stage; a stage is a name in `ProductionOrder.stages`. The F12 cost line had no link to what it priced, and a "once per stage" rule needs one.
+
+### Schema (`manufacturing/0007_workcentres`, depends on `0006_actuals` and `fixed_assets/0002`; no data step)
+
+- `WorkCentre(code unique 20, name_ar 120, name_en 120 blank, kind machine/line/manual, fixed_asset → fixed_assets.FixedAsset NULL PROTECT, hours_per_day 4,2 default 8, rate_per_hour 14,2 default 0, active, entity → entities.Entity NULL PROTECT, created_at)`. Check constraints: `0 < hours_per_day <= 24`, `rate_per_hour >= 0`.
+- `RecipeStep(recipe CASCADE, order, stage_key 30, name_ar, name_en, work_centre PROTECT, minutes_per_batch 10,2, setup_minutes 10,2 default 0)`. Unique `(recipe, order)` and `(recipe, stage_key)`; check `minutes_per_batch > 0` and `setup_minutes >= 0`.
+- `OrderStageLog.minutes` (10,2, NULL): how long the stage took. NULL on every old row and whenever nobody typed it.
+- **Two columns on F12's `OrderCostLine`, not one:** `work_centre` (→ `WorkCentre`, NULL, PROTECT; the brief's "add it if missing") **and `stage_log`** (→ `OrderStageLog`, NULL, PROTECT). The second is what makes a stage confirmable once: a live (not cancelled) line that points at a log hides that log's suggestion, and cancelling the line brings the suggestion back. Without it a second click would add a second line and the finish would absorb 330.00 instead of 260.00. Both are NULL on every line made before F6a and on every line typed by hand.
+- `ProductionOrder.stages` is still a JSON list. A routed stage is `[key, name_ar, name_en, work_centre_id, planned_minutes]` (the factory's own stages stay three items); every reader that already indexes positions 0 to 2 is unaffected, and positions 3 and 4 are read with a length check, so an order opened before F6a is read as having no work centre.
+- `makemigrations --check --dry-run`: clean (the migration was generated, not written by hand).
+
+### Rules (`manufacturing/workcentres.py`)
+
+- **Work centre.** Entity-scoped with `entity_scope.scope(WorkCentre.objects, "entity")` (NULL is the main entity, as for locations); a new one is created in the entity being worked in. The list, the form (`get_object_or_404` on the scoped queryset), the routing form and the load table only ever see that entity's centres; another entity's centre is not offered and its page returns **404** (tested, both directions, and the whole group sees both). `save_routing` resolves each posted centre id through the same scoped queryset, so a hand-posted id from another entity is refused with a message and the saved routing is untouched.
+- **Routing.** `save_routing(recipe, rows)` replaces the recipe's steps (blank rows skipped; no row at all removes the routing). A row needs a stage name (Arabic), an active centre of the entity (one switched off since stays usable on the recipe that already has it), minutes per batch above zero, and setup minutes zero or more. The stage key is the English name as a slug, else `s<n>`, made unique within the recipe. An order keeps the list it was opened with: editing the routing never touches an open order (tested).
+- **Stages on orders (`orders.create_order`).** `workcentres.stages_for(recipe, quantity)` gives the routed list, else None and the order copies `current_stages()` exactly as before (tested: the food list is equal to `STAGES["food"]`, three items each). **Planned minutes = setup + minutes per batch × batches**, batches being the order's quantity over the recipe's output kept to three decimals (the same figure `orders._batches` uses), the result kept to two (half up): 2 batches → mixing 30 × 2 = 60.00, baking 45 × 2 = 90.00; with 10 minutes' setup 70.00; 2.5 batches → 112.50; 0.1 batch → 4.50.
+- **Minutes recorded.** `orders.advance(..., minutes=None)`: optional, above zero, up to 99,999.99, stored on the stage log and in the audit record. A bad value is refused before anything is written.
+- **Planned conversion (a figure to read).** `workcentres.planned_conversion(order)` = the sum over routed stages of planned minutes × the centre's rate ÷ 60, each rounded once: 60.00 + 180.00 = **240.00**. It is shown on the order page to a user with the cost permission and **is not written to the order**. In particular it is not copied into `labor_cost`: that figure is typed by the person opening the order (owner question 7), and writing a rate-based number into it would make the finish absorb it even when nobody had confirmed anything, which contradicts "nothing is booked until the finish". Departure from a literal reading of the spec; see Risks.
+- **Suggested lines.** For every stage log with minutes whose stage has a work centre: amount = `money_round(minutes × rate_per_hour ÷ 60)` at the centre's rate **now**, never from rounded hours (70 minutes at 60.00 an hour is 70.00; 1.17 h × 60.00 would be 70.20, and 95 minutes at 120.00 is 190.00, not 1.58 h × 120.00 = 189.60). A stage whose amount is zero (a zero rate) has no suggestion. `workcentres.confirm(order, user, log_pk)` needs `inventory.view_cost`; takes the order lock through `actuals._open_for_lines` (so two clicks cannot both pass the "once" check); refuses a stage that is already confirmed, one that has no suggestion and one that is not on the order; then calls **`actuals.add_cost_line`** with `kind=labour`, the amount (no hours, no rate), a description (centre, stage, minutes), `work_centre` and `stage_log`. The line's rate is therefore fixed when it is confirmed. The suggested total of the example is 70.00 + 190.00 = **260.00**.
+- **Finish (F12, unchanged).** Confirmed lines are ordinary live labour lines; `actuals.conversion` replaces the planned labour figure with their sum, so the finish absorbs 260.00 (tested: `run.conversion_cost` 260.00, materials 190.00, journal finished goods 450.00 / work in progress −190.00 / 5102 −260.00). F12's finish rules are not touched.
+- **Load.** `workcentres.load(today, 14)`: per active centre of the entity and per day, the planned minutes of the stages **still ahead** (`index >= stage_index`) on open orders (planned or in progress) whose `due_date` is that day, against `hours_per_day × 60`, `over` when minutes exceed capacity. **Choices:** an overdue order is counted on today; an order due after the window is counted apart ("بعد الـ 14 يوم"); an order with no due date is counted apart ("من غير تاريخ استحقاق"); neither of those two is set against a day. Holidays from `attendance.Holiday` (global, one row per date) have capacity 0, so any planned minute on one is over, and a holiday with nothing planned is not. Orders are scoped by `location__entity`. Three orders on the oven on one day of 90, 180 and 300 minutes give 570 of 480, marked over (tested).
+- **Permissions.** Seeing a rate (list, form, routing cost, planned conversion, suggestions): `inventory.view_cost`. Setting one: `master_data.manage_items` **and** `inventory.view_cost` (you cannot set what you cannot see): the form has no rate field without the cost permission, and the service raises `PermissionDenied` if `rate_per_hour` arrives from a user without it. A user who may manage items but not see costs (the stock keeper and the manager do) can edit a centre's name and hours and the **stored rate stays** (tested; it is not reset to zero). The list and load table need `inventory.view_stock`; the form and the routing need `master_data.manage_items`. No new permission was added and no role matrix changed (the permission core is untouched).
+
+### Owner question 15 and the default built
+
+- **Question 15 — work centre rates: who sets them, and do they include machine depreciation and power?** Default built, as the plan proposed: the owner or a manager with the cost permission sets them; **one fully loaded rate per hour** (labour, power and the machine's wear). Nothing computes a rate from the asset; the optional link to the fixed-asset register is for reading and reporting only.
+
+### Trap 11, absorption and depreciation
+
+- Payroll books wages to 5201; an order absorbs labour into stock and credits 5102 at the finish. That is correct absorption costing **as long as what is absorbed is close to what was paid** (F12's monthly "absorbed against paid" line shows the gap). A work-centre rate is the same 5102 pattern: nothing new is booked here, the suggested line is an F12 labour line.
+- **Owned machines:** a rate that includes the machine's wear is absorbed into stock through 5102, and the depreciation expense (5210 in the profit and loss) is charged on the asset register's own schedule. 5102 offsets that expense, so profit is not charged twice and stock carries the machine's wear until the goods are sold. This is the opposite of contracting's C6, where an owned machine on a project is a memo because project cost is not inventory. **Do not copy one design into the other.**
+- **Never also** link the same wages or the same machine-hours as another line on the order (a hand-typed labour line for the same hours as a confirmed suggestion counts them twice). The order page lists both kinds of line together for that reason.
+- If rates are set above what is really paid and depreciated, 5102 exceeds 5201 + 5210 and stock is overstated until sold; if lower, products are undercosted. The F12 variance report's month line is the check.
+
+### Protected lines touched (all named)
+
+- **Schema:** the migration above.
+- `manufacturing/actuals.py::add_cost_line`: two optional keyword arguments, `work_centre` and `stage_log`, passed to the created line and written to its audit record. Nothing else in the file; `conversion`, `_open_for_lines` and the cost permission check are as F12 left them.
+- `manufacturing/orders.py`: `create_order` (the stage list: the routed one when the recipe has steps, else the same expression as before) and `advance` (the `minutes` argument, validated before the order is locked, stored on the log and in the audit). `finish`, `cancel`, `good_units`, `issued_value`, `cost_card` are untouched.
+- **Not touched:** `inventory/services.py` (the engine, average cost), `ledger/projector.py`, `manufacturing/services.py`, sales and purchase posting, customer and supplier ledgers, cashboxes, `reports/` calculations, closing, the permission core, `attendance/` (read only: `Holiday`), `fixed_assets/` (read only: the select), `restaurant/`, `prepare_demo.py`.
+
+### Screens (Arabic and English; existing `op-*` classes and `--hs-*` tokens only; no new CSS, no script)
+
+- **«مراكز العمل»** (`/manufacturing/work-centres/`, linked from the manufacturing home): the list (code, name, kind, hours, rate for the cost permission), then, per centre, a 14-row table (day, planned minutes, capacity, status «فوق الطاقة» / «إجازة» / «تمام») with the unscheduled and later minutes under it. One row per day (not one column per day) so the tables become cards at phone width through the existing table-card script. **Form** (`/new/` and `/<pk>/`): code, names, kind, the machine in the asset register, hours, the rate only with the cost permission.
+- **«المراحل»** on the recipe page: the saved routing and, for a manager, an inline form of the saved rows plus two blank ones (up to 10); a refusal keeps what was typed. No script (unlike the component rows, there is no «add a row» button).
+- **Order page:** the routing table (stage, centre, planned minutes, recorded minutes), the planned conversion and the suggested lines with «أكّد التكلفة» (cost permission only), a «الدقايق» field on the stage form, a minutes column in the stage history. **Board:** a routed order's stages get columns of their own (before «جاهز») instead of falling into «لسه مبدأش».
+- Arabic label map for `WorkCentre.kind` in `settings_core/display_labels.py`. No word from the banned list (tested over the new templates and files and over the rendered pages). Premium wording: «مركز عمل», «ماكينة», «خط إنتاج», «ترابيزة يدوية».
+- **Not seen in a phone browser:** markup assertions only; a 390 px look and Ahmed's «موافق» on the new screens are still to be taken before merge.
+
+### Defaults built (change on request)
+
+1. Question 15 as above.
+2. The load day is the due date until F6b; overdue counts today; undated and later orders are counted apart.
+3. A suggestion is priced at the centre's rate at the moment it is confirmed, not at the moment the minutes were typed.
+4. Stage key from the English name, so a routed stage's key is stable for the board and the log.
+
+### Departures from the plan
+
+- **Planned conversion is displayed, not written to `labor_cost`** (reason above). A routed order opened with no typed labour and finished with no confirmed suggestion absorbs no labour, exactly as an order does today.
+- **`OrderCostLine.stage_log` is a second new column** beyond the work centre the brief names (reason above).
+- The load table is on the work-centres page, not a page of its own.
+- The load counts only stages still ahead on an order that is already running (a finished stage no longer loads its centre).
+
+### Risks
+
+- **One live labour line replaces the whole planned labour figure** (F12's per-kind rule). Confirming a single suggestion on an order that also has a typed planned labour figure drops that figure from the finish. Intended by F12, but a surprise to a user who confirms one stage of three: the order page shows the planned and actual figures side by side.
+- **A hand-typed labour line for the same hours counts them twice** with a confirmed suggestion; nothing detects it.
+- **A rate that drifts from payroll.** A rate above what is really paid and depreciated overstates stock and profit until sold (trap 11); F12's month line is the only check.
+- **`Recipe` has no entity.** A shared recipe can be routed to one entity's centres, and another entity opening an order from it gets stages whose centre it cannot see (the stage still shows its name and minutes; the centre is read by id, the load table and the suggestions do not look at the entity of the centre). Not solved here; a recipe per entity is the clean answer.
+- **A centre switched off** stays on the orders already opened with it and on its recipe, and still loads and prices; it simply cannot be picked for a new step.
+- **Holidays are global** (`attendance.Holiday` has no entity), and weekends are not read: a factory that is closed on Fridays shows capacity on them until F6b brings a calendar per centre.
+- **The load assumes the due date is the day the stages are worked.** A long routing due on one day loads all its stages on that day; F6b's real dates replace this.
+- **Suggestion needs a recorded minute.** Stages with no minutes typed price nothing; F8's floor screen will measure them.
+- **Old orders and recipes are unchanged:** no data migration, no routing is created for anything that exists.
+
+### Tests (`manufacturing/tests_workcentres.py`, 25)
+
+- The reference plant: mixer 60.00 an hour, oven 120.00 an hour, 8 hours a day, the cake routing (30 and 45 minutes per batch).
+- Routing: an order of 2 batches gets mixing 60 and baking 90 planned minutes and a planned conversion of 240.00 with `labor_cost` still 0.00; setup minutes and fractional batches; a recipe without steps keeps the food list (and clearing a routing returns to it); an open order keeps its stages; every validation of a row and of a centre; the asset link; a unique stage key and position.
+- Minutes and cost: 70 and 95 minutes → suggestions 70.00 and 190.00 (260.00), no line and no stock, cost or journal change until confirmed, confirming makes labour lines with the centre and log and no hours, a second click is refused, cancelling a line brings the suggestion back, the finish absorbs 260.00 with its journal (finished goods 450.00, work in progress 190.00, 5102 260.00); no suggestion for a stage without minutes or with a zero rate; minutes are optional and must be above zero; confirming needs the cost permission and an open order.
+- Load: 90 + 180 + 300 on one day = 570 of 480 over capacity; 180 of 480 not over; a holiday has zero capacity (over only when something is planned); overdue, later, undated, a started order's remaining stages and a cancelled order.
+- Screens in both languages; the order page (routing, planned conversion, suggestions, one click, second click); the board column; the load page marking the day; saving a centre and a routing from the screens (a refusal keeps the typed rows); no banned word.
+- Permissions: a stock keeper, a site engineer and a manager, each **asserted to hold `inventory.view_stock` and not `inventory.view_cost`** before the page is read, see the list and no rate marker (and none of 60.00 / 120.00), no planned conversion, no suggestions, and 403 on confirming; a user who may manage items but not see costs keeps the stored rate; an engineer cannot manage; a cashier gets 403 on the list.
+- Entity: another entity's centre is not in the list, the routing form or the load table and its page returns 404 (get and post); a posted id from another entity is refused; a new centre belongs to the entity being worked in; the whole group sees both.
+- Unchanged until the finish: operations, movements and journal lines are counted (after `Projector().rebuild()`) after the start's issue, again after recording minutes and confirming both suggestions: equal; the finish then changes them.
+- **Existing tests:** none edited. `tests_orders`, `tests_board`, `tests_actuals`, `tests_hg036`, `tests_f11`, `tests_lots` and the rest of `manufacturing` pass unchanged.
+
+### Files
+
+- `manufacturing/`: `models.py`, `migrations/0007_workcentres.py`, `workcentres.py` (new), `workcentre_views.py` (new), `actuals.py` (the two keyword arguments), `orders.py`, `order_views.py`, `views.py` (the recipe page's routing section), `urls.py`, `tests_workcentres.py` (new).
+- `templates/manufacturing/`: `work_centres.html` (new), `work_centre_form.html` (new), `_routing.html` (new), `order.html`, `recipe.html`, `home.html`.
+- Outside `manufacturing/` and `templates/`: `settings_core/display_labels.py` (one label map), `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 13, 60.0% to 65.0%).
+
 ## HG-135 — Contracting C10: the owner's (or consultant's) project page behind a signed link, and the owner's approval of a draft variation order through the same approval core as the office's (no schema; one new `printing.share` kind)
 
 - **Status:** implemented on `claude/contracting-c10-owner-portal` under Ahmed's delegation, awaiting his review. **T2**: a new unauthenticated surface that reads money figures and can write one thing (a variation order's approval, which already moves no money). No model, column or migration (`makemigrations --check --dry-run`: no changes). Roadmap: `docs/MARKET_PARITY_ROADMAP.md`, «6. مقاولات», item 22 «بوابة للمالك أو الاستشاري».
