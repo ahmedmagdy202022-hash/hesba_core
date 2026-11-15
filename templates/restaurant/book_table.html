@@ -1,0 +1,25 @@
+{% extends "printing/share_base.html" %}
+{% load static %}
+{% block title %}{{ words.title }} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/booking.css' %}?v=bk-002">{% endblock %}
+{% block sub %}<div class="cl-shopsub">{% if entity_name %}{{ entity_name }} · {% endif %}{{ words.title }}</div>{% endblock %}
+{% block content %}<main class="bk-main" data-book-table>
+{# R8 (HG-118): a guest's table-booking request. It writes a «booked» request with no table and reads nothing back: no booking, table, staff or customer is shown here. #}
+<div class="bk-col">
+{% if sent %}<section class="cl-card cl-center" data-book-table-sent><h1 class="cl-h">{{ words.sent_h }}</h1><p>{{ words.sent_p }}</p><a class="cl-btn" href="?lang={{ lang }}">{{ words.again }}</a></section>
+{% else %}<section class="bk-sec" aria-labelledby="bt-h">
+<div class="bk-sech"><h1 class="bk-h2" id="bt-h">{{ words.title }}</h1></div><p>{{ words.lead }}</p>
+{% if error %}<div class="cl-msg cl-msg--danger" role="alert" data-book-table-error>{{ error }}</div>{% endif %}
+<form class="bk-form" method="post" data-book-table-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="bk-field"><label for="bt-name">{{ words.name }}</label><input id="bt-name" name="name" type="text" maxlength="120" autocomplete="name" required value="{{ form.name|default:'' }}"></div>
+<div class="bk-field"><label for="bt-phone">{{ words.phone }}</label><input id="bt-phone" class="bk-ltr" name="phone" type="tel" dir="ltr" inputmode="tel" maxlength="30" autocomplete="tel" required value="{{ form.phone|default:'' }}" aria-describedby="bt-phone-hint"><small id="bt-phone-hint">{{ words.phone_hint }}</small></div>
+<div class="bk-field"><label for="bt-party">{{ words.party }}</label><input id="bt-party" class="bk-ltr" name="party_size" type="number" min="1" max="99" dir="ltr" inputmode="numeric" required value="{{ form.party_size|default:'' }}"></div>
+<div class="bk-field"><label for="bt-day">{{ words.day }}</label><input id="bt-day" class="bk-ltr" name="day" type="date" dir="ltr" min="{{ min_day }}" max="{{ max_day }}" required value="{{ form.day|default:'' }}"></div>
+<div class="bk-field"><label for="bt-time">{{ words.time }}</label><input id="bt-time" class="bk-ltr" name="time" type="time" dir="ltr" required value="{{ form.time|default:'' }}"></div>
+<div class="bk-field"><label for="bt-notes">{{ words.notes }} <small>({{ words.optional }})</small></label><textarea id="bt-notes" name="notes" rows="2" maxlength="200">{{ form.notes|default:'' }}</textarea></div>
+<div class="bk-hp" aria-hidden="true"><label for="bt-website">{{ words.honeypot }}</label><input id="bt-website" name="website" type="text" tabindex="-1" autocomplete="off" value=""></div>
+<button class="cl-btn cl-btn--primary bk-submit" type="submit" data-book-table-submit>{{ words.send }}</button>
+</form></section>{% endif %}
+</div>
+</main>{% endblock %}
+{% block foot_note %}<p>{{ words.foot }}</p>{% endblock %}

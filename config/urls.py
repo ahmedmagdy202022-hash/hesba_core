@@ -24,6 +24,7 @@ from payments import views as payments_views
 from appointments import public as appointments_public
 from appointments import views_booking as booking_views
 from restaurant import views_qr as table_menu_views
+from restaurant import views_reservations as table_booking_views
 from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
 
@@ -69,6 +70,9 @@ urlpatterns = [
     # R5a (HG-115): a table's QR menu (random key). No account; CSRF-protected, throttled, a guest's request waits for staff to accept it,
     # and every invalid key answers one dead 404 page.
     path("t/<str:key>/", login_not_required(table_menu_views.page), name="table_menu"),
+    # R8 (HG-118): a branch's public table-booking request page (random key, off until the owner switches it on). No account;
+    # CSRF-protected, throttled, no-store; it makes a «booked» request with no table for staff to confirm, and shows nothing back.
+    path("book-table/<str:key>/", login_not_required(table_booking_views.book_table), name="book_table"),
     path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
