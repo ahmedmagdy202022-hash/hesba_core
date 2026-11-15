@@ -484,6 +484,13 @@ def check(subcontract, lang="en"):
 # ---- figures ----
 
 def figures(subcontract):
+    """The subcontract page's money figures, as the entity being worked in may see them: nothing of another entity's
+    subcontract (Codex #435), as ``costs.subcontract_figures`` shows none of its bills."""
+
+    from .costs import in_reach
+
+    if not in_reach(subcontract):
+        return {"lines_total": lines_total(subcontract), "advance": ZERO, "recovered": ZERO, "advance_left": ZERO, "paid": ZERO}
     received = advance_received(subcontract)
     recovered = advance_recovered(subcontract)
     paid = money_round(_posted_payments(subcontract, SubcontractPaymentKind.PAYMENT).aggregate(total=Sum("payment__amount"))["total"] or ZERO)
@@ -491,10 +498,21 @@ def figures(subcontract):
             "advance_left": money_round(max(received - recovered, ZERO)), "paid": paid}
 
 
+def visible_advance_left(subcontract):
+    """``advance_left`` for the subcontracts tab: zero for another entity's subcontract (Codex #435)."""
+
+    from .costs import in_reach
+
+    return advance_left(subcontract) if in_reach(subcontract) else ZERO
+
+
 def line_rows(subcontract):
+    from .costs import in_reach
+
     rows = []
+    reach = in_reach(subcontract)  # Codex #435: another entity's billed quantities are not shown
     for line in subcontract.lines.select_related("boq_line"):
-        billed = billed_quantity(line)
+        billed = billed_quantity(line) if reach else ZERO
         certified = owner_certified(line.boq_line) if line.boq_line_id else None
         rows.append({"line": line, "amount": line_amount(line), "billed": billed,
                      "done": int(min(billed / line.quantity * 100, Decimal("999"))) if line.quantity else 0,

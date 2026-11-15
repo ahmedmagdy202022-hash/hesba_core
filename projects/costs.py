@@ -116,6 +116,7 @@ def save_subcontract(project, user, data, subcontract=None, lang="ar"):
               "retention_rate": _rate(data.get("retention_rate"), words)}
     if subcontract is not None:
         subcontract = Subcontract.objects.select_for_update().get(pk=subcontract.pk, project=project)
+        _reach(subcontract, words)  # Codex #435: another entity's subcontract keeps its value and rates
         if subcontract.supplier_id != values["supplier"].pk and subcontract.bills.exists():
             raise ValidationError(words["supplier_locked"])  # its bills and payments are on that supplier's account
     # C11 (HG-128): the advance recovery rate is optional on the form; left out, it stays as it was (0 for a new subcontract).
