@@ -437,11 +437,27 @@ def take_deposit(reservation, cashbox, amount, user, lang="ar"):
     from deposits import services as deposits
 
     words = MESSAGES[lang]
-    if reservation.customer_id is None:
-        raise ValidationError(words["no_customer"])
-    if cashbox is None or not cashboxes(reservation).filter(pk=cashbox.pk).exists():
-        raise ValidationError(words["cashbox"])
-    return deposits.take(reservation, reservation.customer, cashbox, amount, user, lang)
+    with transaction.atomic():
+        # the reservation as it is now, under the lock ``save_reservation`` takes: its customer may have changed since the
+        # screen loaded it, and the deposit must be that customer's (Codex)
+        reservation = _locked(reservation)
+        if reservation.customer_id is None:
+            raise ValidationError(words["no_customer"])
+        if cashbox is None or not cashboxes(reservation).filter(pk=cashbox.pk).exists():
+            raise ValidationError(words["cashbox"])
+        return deposits.take(reservation, reservation.customer, cashbox, amount, user, lang)
+
+
+def deposit_released(reservation):
+    """A seated reservation whose order was cancelled, or whose bill was cancelled: its held deposit no longer belongs to a
+    live bill, so it may be refunded from the reservation screen (Codex on #422). Forfeiting stays refused: the guests came."""
+
+    if reservation.status != ReservationStatus.SEATED or reservation.order_id is None:
+        return False
+    order = Order.objects.select_related("invoice").get(pk=reservation.order_id)
+    if order.status == OrderStatus.CANCELLED:
+        return True
+    return order.invoice_id is not None and order.invoice.status == "cancelled"
 
 
 # --- the deposit at the bill -----------------------------------------------------
