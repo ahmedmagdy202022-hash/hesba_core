@@ -289,6 +289,33 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
 
 
 @transaction.atomic
+def add_agreed_line(order, item, user, quantity, unit_price, note="", lang="ar"):
+    """R10 (HG-119): a dish at a price agreed beforehand (a pre-order's line at «اتسلّم»): its own line, never merged into
+    another, at ``unit_price`` instead of the menu's. The bill reads every line's own ``unit_price``, so nothing else changes.
+    The refusals are ``add_item``'s: an inactive item, a charge or fee item, a combo's own item, and a dish whose choices are
+    required (a pre-order line carries none)."""
+
+    from . import charges, modifiers
+
+    from .models import Combo
+
+    words = MESSAGES[lang]
+    order = _locked_open(order, words)
+    if item is None or not item.active or item.item_code in OFF_MENU_CODES:
+        raise ValidationError(words["item"])
+    charges.refuse_charge_item(item, lang)
+    if Combo.objects.filter(item=item).exists():
+        from . import combos
+
+        raise ValidationError(combos.words(lang)["combo_item"].format(item=item.item_name))
+    modifiers.choose(item, [], lang)  # a required group refuses here
+    price = money_round(Decimal(str(unit_price)))
+    if price < 0:
+        raise ValidationError(words["item"])
+    return OrderLine.objects.create(order=order, item=item, quantity=_quantity(quantity, words), unit_price=price, note=(note or "").strip()[:120])
+
+
+@transaction.atomic
 def add_combo(order, combo, user, choices, quantity=1, note="", lang="ar", options=None):
     """R1b (HG-112): take ``quantity`` combos, each its own bundle of quantity-1 component lines at their menu prices with
     the saving spread over them as discounts (``restaurant.combos``). ``choices`` is {slot pk: choice pk} (one per slot);
@@ -731,7 +758,8 @@ def _checkout_total(rows, discount):
 
 def deposit_due(order, customer, total):
     """R8 (HG-118): for the bill box, the seated reservation's held deposit this bill would use and what is left to pay:
-    ``{"reservation", "amount", "due"}``, or None when there is none."""
+    ``{"reservation", "amount", "due"}``, or None when there is none. R10 (HG-119): ``reservation`` is the deposit's target, a
+    collected pre-order's too; ``preorder`` says which."""
 
     from . import reservations
 
@@ -739,7 +767,10 @@ def deposit_due(order, customer, total):
     if held is None:
         return None
     amount = min(held.payment.amount, max(total, Decimal("0.00")))
-    return {"reservation": booking, "amount": amount, "due": money_round(total - amount)} if amount > 0 else None
+    from .models import PreOrder
+
+    return ({"reservation": booking, "amount": amount, "due": money_round(total - amount), "preorder": isinstance(booking, PreOrder)}
+            if amount > 0 else None)
 
 
 def board():

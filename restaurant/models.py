@@ -597,3 +597,90 @@ class ReservationPage(models.Model):
 
     def __str__(self):
         return f"{self.entity_id}:{'on' if self.accepting else 'off'}"
+
+
+class PreOrderStatus(models.TextChoices):
+    """R10 (HG-119): a pre-order's life. ``booked``, ``confirmed``, ``cancelled`` and ``no_show`` are the names
+    ``deposits.services`` (S5, HG-069) reads (``take`` on booked/confirmed, ``is_late`` on no_show); ``ready`` and ``collected``
+    are the bakery's own steps («جاهز», «اتسلّم»)."""
+
+    BOOKED = "booked", "Booked"
+    CONFIRMED = "confirmed", "Confirmed"
+    READY = "ready", "Ready"
+    COLLECTED = "collected", "Collected"
+    CANCELLED = "cancelled", "Cancelled"
+    NO_SHOW = "no_show", "No-show"
+
+
+#: The statuses still to be made and handed over: what the production list counts.
+LIVE_PREORDER_STATUSES = (PreOrderStatus.BOOKED, PreOrderStatus.CONFIRMED, PreOrderStatus.READY)
+
+
+class PreOrder(models.Model):
+    """Restaurants R10 (HG-119): a customer's order for a pick-up day and time, agreed ahead with a deposit («طلب مسبق»): a
+    birthday cake for Friday at six.
+
+    Not ``Order``: an order is open now (it holds a table, it is on the board and the kitchen's screen) and its statuses are not
+    the ones S5 reads. Not ``orders.SalesOrder``: it is not offered to restaurants and has no deposit. The rules live in
+    ``restaurant.preorders``: the customer is a named one (never the walk-in; S5 refuses the walk-in's deposit anyway), each line
+    keeps the price agreed at booking, and «اتسلّم» opens a takeaway ``Order`` through ``services.open_order`` with those lines
+    at those prices and links it here. ``number``, ``entity``, ``starts_at`` (the pick-up time) and ``status`` are what
+    ``deposits.services`` reads on any target, so a deposit is taken, forfeited and refunded unchanged.
+
+    ``entity`` is NOT NULL, filled in ``save()`` (the main one when none is said) as ``TableReservation`` does."""
+
+    number = models.CharField(max_length=30, unique=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="preorders")
+    customer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="restaurant_preorders")
+    name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=50, blank=True)
+    starts_at = models.DateTimeField(help_text="The pick-up time.")
+    status = models.CharField(max_length=20, choices=PreOrderStatus.choices, default=PreOrderStatus.BOOKED)
+    notes = models.CharField(max_length=255, blank=True, help_text="What is written on the cake, the colours, the size…")
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, null=True, blank=True, related_name="preorders")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="restaurant_preorders")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["starts_at", "pk"]
+        indexes = [models.Index(fields=["entity", "starts_at"], name="restaurant_pre_entity_start")]
+
+    def __str__(self):
+        return self.number
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            self.entity_id = _main_entity().pk
+        super().save(*args, **kwargs)
+
+    @property
+    def is_live(self):
+        return self.status in LIVE_PREORDER_STATUSES
+
+    @property
+    def total(self):
+        """The lines at their agreed prices, before VAT."""
+
+        return money_round(sum((line.amount for line in self.lines.all()), Decimal("0.00")))
+
+
+class PreOrderLine(models.Model):
+    """R10 (HG-119): one dish of a pre-order at the price agreed at booking (a snapshot: a later menu price never changes it)."""
+
+    preorder = models.ForeignKey(PreOrder, on_delete=models.CASCADE, related_name="lines")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="restaurant_preorder_lines")
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2)
+    note = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [models.CheckConstraint(condition=Q(quantity__gt=0) & Q(unit_price__gte=0), name="restaurant_preorder_line_figures")]
+
+    def __str__(self):
+        return f"{self.preorder_id}:{self.item_id}"
+
+    @property
+    def amount(self):
+        return money_round(self.quantity * self.unit_price)

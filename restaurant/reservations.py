@@ -383,7 +383,6 @@ def cancel(reservation, status, user, lang="ar", reason=""):
     "refunded", "refund_pending", or a refusal that leaves the deposit held as the customer's credit: "forfeit_not_allowed",
     "forfeit_refused", "refund_not_allowed", "refund_blocked"."""
 
-    from approvals.gate import hold
     from deposits import services as deposits
 
     words = MESSAGES[lang]
@@ -403,7 +402,18 @@ def cancel(reservation, status, user, lang="ar", reason=""):
     if deposit is None:
         return result
     note = (reason or "").strip() or (f"Booking {reservation.number} cancelled" if lang == "en" else f"إلغاء الحجز {reservation.number}")
-    if deposits.policy(reservation) == "forfeit":
+    return run_policy(result, reservation, deposit, user, lang, note)
+
+
+def run_policy(result, target, deposit, user, lang, note):
+    """S5's cancellation policy on ``target``'s held ``deposit``, after its status was set (R8; R10 runs it on a pre-order too):
+    late (inside the policy's hours, or a no-show) → forfeit into a «رسوم إلغاء» invoice in its own savepoint, so a refusal keeps
+    the cancel; early → refund through HG-068's gate. Fills ``result``'s ``outcome``, ``invoice`` and ``detail`` and returns it."""
+
+    from approvals.gate import hold
+    from deposits import services as deposits
+
+    if deposits.policy(target) == "forfeit":
         if not user_has_permission(user, deposits.SELL):
             result["outcome"] = "forfeit_not_allowed"
             return result
@@ -448,7 +458,10 @@ def take_deposit(reservation, cashbox, amount, user, lang="ar"):
 
 def bill_deposit(order, customer):
     """The seated reservation of this order (or of an order merged into it) whose held deposit is ``customer``'s, as
-    (reservation, deposit); (None, None) when there is none. A deposit of another customer is not used: it stays held."""
+    (reservation, deposit); (None, None) when there is none. A deposit of another customer is not used: it stays held.
+
+    R10 (HG-119): with no such reservation, the collected pre-order of this order whose held deposit is ``customer``'s, as
+    (pre-order, deposit) (``preorders.bill_deposit``)."""
 
     from deposits import services as deposits
 
@@ -460,12 +473,15 @@ def bill_deposit(order, customer):
         deposit = deposits.held_for(reservation)
         if deposit is not None and deposit.payment.customer_id == customer.pk:
             return reservation, deposit
-    return None, None
+    from . import preorders
+
+    return preorders.bill_deposit(order, customer)  # R10 (HG-119): the collected pre-order of this order, the same way
 
 
 def settle_at_bill(reservation, invoice, expected, lang="ar"):
     """After the bill posted: point the held deposit at the invoice and apply it (S5's ``attach`` and ``apply``, as posting
-    would). ``expected`` is what the bill left for the deposit; anything else undoes the whole payment."""
+    would). ``expected`` is what the bill left for the deposit; anything else undoes the whole payment. ``reservation`` is the
+    deposit's target: a seated reservation, or (R10) a collected pre-order."""
 
     from deposits import services as deposits
     from deposits.models import DepositStatus
@@ -479,7 +495,12 @@ def settle_at_bill(reservation, invoice, expected, lang="ar"):
     deposit.refresh_from_db()
     if deposit.status != DepositStatus.APPLIED:
         raise ValidationError(MESSAGES[lang]["deposit_mismatch"])
-    _audit(reservation, None, "reservation_deposit_at_bill", {"invoice": invoice.invoice_number, "amount": str(settled), "payment": deposit.payment.payment_number})
+    after = {"invoice": invoice.invoice_number, "amount": str(settled), "payment": deposit.payment.payment_number}
+    if isinstance(reservation, TableReservation):
+        _audit(reservation, None, "reservation_deposit_at_bill", after)
+    else:  # R10 (HG-119): a collected pre-order's deposit, audited on the pre-order
+        AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=None, module="restaurant", action="preorder_deposit_at_bill",
+                                object_type=f"restaurant.{type(reservation).__name__}", object_id=str(reservation.pk), after_data=after)
     return settled
 
 
