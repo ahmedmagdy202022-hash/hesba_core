@@ -333,6 +333,31 @@ class ScreenTests(GuaranteeSetup):
         self.assertEqual(services.alert_days(), 60)
 
 
+class EditKeepsItsChoicesTests(GuaranteeSetup):
+    """Codex: the form's pickers are limited (the newest projects, the first active customers); a letter whose project or
+    beneficiary falls outside them must keep them when an unrelated field is corrected."""
+
+    def test_a_correction_keeps_a_project_outside_the_picker_and_an_inactive_beneficiary(self):
+        bond = self.bond(notes="")
+        self.customer.active = False
+        self.customer.save()
+        self.client.force_login(self.owner)
+        from . import views
+
+        with mock.patch.object(views, "PROJECT_PICKER", 0), mock.patch.object(views, "CUSTOMER_PICKER", 0):
+            page = self.client.get(reverse("guarantees:edit", args=[bond.pk]))
+            self.assertContains(page, f'<option value="{self.project.pk}" selected')
+            self.assertContains(page, f'<option value="{self.customer.pk}" selected')
+            self.client.post(reverse("guarantees:edit", args=[bond.pk]), {
+                "lang": "ar", "kind": bond.kind, "number": bond.number, "bank": str(bond.bank_id), "beneficiary": str(self.customer.pk),
+                "project": str(self.project.pk), "amount": f"{bond.amount:.2f}", "issued_on": bond.issued_on.isoformat(),
+                "expires_on": bond.expires_on.isoformat(), "margin_percent": "25", "commission": "1500", "notes": "تصحيح"})
+        bond.refresh_from_db()
+        self.assertEqual(bond.notes, "تصحيح")
+        self.assertEqual(bond.project_id, self.project.pk)
+        self.assertEqual(bond.beneficiary_id, self.customer.pk)
+
+
 class PermissionScreenTests(GuaranteeSetup):
     def setUp(self):
         super().setUp()

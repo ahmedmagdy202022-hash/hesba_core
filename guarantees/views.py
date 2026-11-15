@@ -3,6 +3,7 @@ guarantee's page with its history and actions. Nothing here moves money."""
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -102,6 +103,20 @@ def _guarantee_or_404(pk):
     return guarantee
 
 
+#: how many projects and active customers the form's pickers offer (the newest projects, customers by name)
+PROJECT_PICKER = 300
+CUSTOMER_PICKER = 1000
+
+
+def _offer(rows, own):
+    """A picker's rows, with the letter's own current choice added when the limit or a switch-off left it out (Codex)."""
+
+    rows = list(rows)
+    if own is not None and all(row.pk != own.pk for row in rows):
+        rows.insert(0, own)
+    return rows
+
+
 def _projects():
     from projects.models import Project
 
@@ -155,9 +170,16 @@ def guarantee_list(request):
         expiring_label=words["expiring_n"].format(days=days), can_set_days=services.can_set_days(request.user)))
 
 
-def _form_data(request):
-    return {"kind": request.POST.get("kind"), "number": request.POST.get("number"), "bank": _pick(services.banks(), request.POST.get("bank")),
-            "beneficiary": _pick(Customer.objects.filter(active=True), request.POST.get("beneficiary")),
+def _with_own(queryset, own_pk):
+    """``queryset`` plus the letter's own current choice (a beneficiary since switched off, a bank account since closed)."""
+
+    return queryset.model.objects.filter(Q(pk__in=queryset.values("pk")) | Q(pk=own_pk)) if own_pk else queryset
+
+
+def _form_data(request, guarantee=None):
+    return {"kind": request.POST.get("kind"), "number": request.POST.get("number"),
+            "bank": _pick(_with_own(services.banks(), guarantee.bank_id if guarantee else None), request.POST.get("bank")),
+            "beneficiary": _pick(_with_own(Customer.objects.filter(active=True), guarantee.beneficiary_id if guarantee else None), request.POST.get("beneficiary")),
             "project": _pick(_projects(), request.POST.get("project")), "amount": request.POST.get("amount"),
             "issued_on": request.POST.get("issued_on"), "expires_on": request.POST.get("expires_on"),
             "margin_percent": request.POST.get("margin_percent"), "commission": request.POST.get("commission"), "notes": request.POST.get("notes")}
@@ -177,7 +199,7 @@ def guarantee_form(request, pk=None):
         return redirect(f"{reverse('guarantees:detail', args=[guarantee.pk])}?lang={lang}")  # a closed letter is history
     error = ""
     if request.method == "POST":
-        data = _form_data(request)
+        data = _form_data(request, guarantee)
         form = request.POST
         try:
             if _bad_project(request, data):
@@ -199,8 +221,9 @@ def guarantee_form(request, pk=None):
                 "beneficiary": str(project.customer_id) if project else ""}
     locked = guarantee is not None and guarantee.events.exists()
     return render(request, "guarantees/form.html", _context(
-        request, guarantee=guarantee, form=form, error=error, locked=locked, banks=services.banks(),
-        customers=Customer.objects.filter(active=True).order_by("name")[:1000], projects=_projects()[:300],
+        request, guarantee=guarantee, form=form, error=error, locked=locked, banks=_offer(services.banks(), guarantee and guarantee.bank),
+        customers=_offer(Customer.objects.filter(active=True).order_by("name")[:CUSTOMER_PICKER], guarantee and guarantee.beneficiary),
+        projects=_offer(_projects()[:PROJECT_PICKER], guarantee and guarantee.project),
         kinds=[(value, services.label("kinds", value, lang)) for value in GuaranteeKind.values],
         page_title=words["edit"] if guarantee else words["new"]))
 
