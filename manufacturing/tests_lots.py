@@ -436,6 +436,20 @@ class TraceTests(LotSetup):
         self.assertFalse(page.context["paths"][0]["sold"]["open"])
         self.assertEqual(self.client.get(reverse("manufacturing:trace"), {"lang": "en", "lot": self.lot_a.pk}).status_code, 200)
 
+    def test_a_lot_used_up_then_restored_by_a_cancelled_sale_lists_the_later_sale_too(self):
+        """Codex #438: the replay does not stop at the first time the lot runs out. Mona's 8 cakes come back when her
+        invoice is cancelled, the positions hand them to LOT-A's cake lot again, and Sara's later 8 are listed; Mona's
+        cancelled sale is not, and Hala's (from the second run's later-expiring cakes, while LOT-A's had none) still is not."""
+        from sales.services import cancel_posted_sales_invoice
+
+        cancel_posted_sales_invoice(self.sale_2.pk, self.owner, reason="اتلغت")
+        sara = make_customer("C-SARA", name="سارة")
+        sale_4 = self.sell("8", sara)
+        path = self.trace(lot=self.lot_a.pk).context["paths"][0]["sold"]
+        self.assertEqual([(sale["invoice"].invoice_number, sale["customer"].name) for sale in path["sales"]],
+                         [(self.sale_1.invoice_number, "علي"), (sale_4.invoice_number, "سارة")])
+        self.assertFalse(path["open"])
+
     def test_lot_b_went_into_the_same_cakes_and_the_search_finds_a_lot_by_its_number(self):
         page = self.trace(lot=self.lot_b.pk)
         self.assertEqual({path["run"] for path in page.context["paths"]}, {self.run, self.second})      # LOT-B also fed the second run
