@@ -513,3 +513,87 @@ class CustomerAddress(models.Model):
 
     def __str__(self):
         return f"{self.customer_id}:{self.label or self.address[:20]}"
+
+
+class ReservationStatus(models.TextChoices):
+    """R8 (HG-118): a table booking's life. ``booked``, ``confirmed``, ``cancelled`` and ``no_show`` are the names
+    ``deposits.services`` (S5, HG-069) reads (``take`` on booked/confirmed, ``is_late`` on no_show)."""
+
+    BOOKED = "booked", "Booked"
+    CONFIRMED = "confirmed", "Confirmed"
+    SEATED = "seated", "Seated"
+    CANCELLED = "cancelled", "Cancelled"
+    NO_SHOW = "no_show", "No-show"
+
+
+#: The statuses that hold a table: two of them on one table may not overlap in time.
+LIVE_RESERVATION_STATUSES = (ReservationStatus.BOOKED, ReservationStatus.CONFIRMED, ReservationStatus.SEATED)
+
+
+class TableReservation(models.Model):
+    """Restaurants R8 (HG-118): a table booked for a party at a time («حجز طاولة»).
+
+    Not ``appointments.Appointment``: that one is per employee and service and its clash check is per employee; a table needs
+    a seat count and a clash check per table. The rules live in ``restaurant.reservations``: no two live reservations on one
+    table overlap (checked under the table's row lock); a party bigger than the table's seats needs the user's say-so; «وصل»
+    opens the table's order through ``services.open_order``. ``number``, ``entity``, ``starts_at`` and ``status`` are what
+    ``deposits.services`` reads on any target, so a deposit is taken, forfeited and refunded unchanged.
+
+    ``entity`` is NOT NULL, filled in ``save()`` (the table's, else the main one) as ``DeliveryZone`` and ``Brand`` do. ``table``
+    is empty until one is assigned (a request from the public page has none), ``order`` is set when the guests are seated."""
+
+    number = models.CharField(max_length=30, unique=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="table_reservations")
+    customer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, null=True, blank=True, related_name="table_reservations")
+    name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=50, blank=True)
+    party_size = models.PositiveSmallIntegerField(default=2)
+    starts_at = models.DateTimeField()
+    duration_minutes = models.PositiveSmallIntegerField(default=90)
+    table = models.ForeignKey(DiningTable, on_delete=models.PROTECT, null=True, blank=True, related_name="reservations")
+    notes = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=20, choices=ReservationStatus.choices, default=ReservationStatus.BOOKED)
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, null=True, blank=True, related_name="reservations")
+    #: Whether the request came from the public page («/book-table/<key>/»): staff confirm it and give it a table.
+    online = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="table_reservations")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["starts_at", "pk"]
+        indexes = [models.Index(fields=["table", "starts_at"], name="restaurant_res_table_start"),
+                   models.Index(fields=["entity", "starts_at"], name="restaurant_res_entity_start")]
+        constraints = [models.CheckConstraint(condition=Q(party_size__gte=1) & Q(duration_minutes__gte=1), name="restaurant_reservation_sizes")]
+
+    def __str__(self):
+        return self.number
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            self.entity_id = self.table.entity_id if self.table_id else _main_entity().pk
+        super().save(*args, **kwargs)
+
+    @property
+    def ends_at(self):
+        from datetime import timedelta
+
+        return self.starts_at + timedelta(minutes=self.duration_minutes)
+
+    @property
+    def is_live(self):
+        return self.status in LIVE_RESERVATION_STATUSES
+
+
+class ReservationPage(models.Model):
+    """R8 (HG-118): a branch's public table-booking page («/book-table/<public_key>/»): the S3 booking key's pattern, one per
+    entity. ``public_key`` is random and unique; «غيّر الرابط» makes a new one, which retires the old link at once.
+    ``accepting`` is off until the owner switches the page on, so no branch publishes a page by itself."""
+
+    entity = models.OneToOneField("entities.Entity", on_delete=models.CASCADE, related_name="reservation_page")
+    public_key = models.CharField(max_length=40, unique=True, default=new_qr_key)
+    accepting = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.entity_id}:{'on' if self.accepting else 'off'}"
