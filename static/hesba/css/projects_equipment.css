@@ -1,0 +1,24 @@
+/* Contracting C6 (HG-129): the equipment register and a project's equipment hours. Tokens only: no colour literals.
+   Logical properties, so an Arabic page mirrors and an English one does not. On a phone (390 px) every block is one
+   column and the tables scroll inside their own wrapper (or read as cards), never the page. */
+
+.eqp-intro p{margin:var(--hs-space-1) 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.eqp-note{margin:var(--hs-space-1) 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading);overflow-wrap:anywhere}
+.eqp-muted{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.eqp-actions{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.eqp-group{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-2);padding:var(--hs-space-3);margin-block-end:var(--hs-space-3);min-width:0;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.eqp-group p{margin:0;overflow-wrap:anywhere}
+.eqp-group__name strong{color:var(--hs-navy)}
+.eqp-group__sum{color:var(--hs-ink);font-size:var(--hs-text-sm)}
+.eqp-group .op-primary{width:100%}
+.eqp-profit{display:grid;gap:var(--hs-space-2);margin:var(--hs-space-3) 0 0;min-width:0}
+.eqp-profit div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--hs-space-2);padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.eqp-profit dt{margin:0;color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.eqp-profit dd{margin:0;color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.eqp-log-form .op-primary{width:100%}
+@media (min-width:720px){
+  .eqp-group{grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;align-items:center}
+  .eqp-group .op-primary{width:auto}
+  .eqp-log-form .op-primary{width:auto}
+  .eqp-profit{grid-template-columns:repeat(3,minmax(0,1fr))}
+}

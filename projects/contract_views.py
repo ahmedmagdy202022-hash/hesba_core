@@ -35,7 +35,9 @@ COLLECT, BUY, BUY_VIEW = "sales.receive_customer_payment", "purchases.create_pur
 WORDS = {
     "ar": {
         "tab_overview": "نظرة عامة", "tab_boq": "المقايسة", "tab_certificates": "المستخلصات", "tab_payments": "الدفعات وضمان الأعمال",
-        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير", "tab_schedule": "الجدول الزمني", "tab_purchase_requests": "طلبات الشراء",
+        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير", "tab_schedule": "الجدول الزمني", "tab_purchase_requests": "طلبات الشراء", "tab_equipment": "المعدات",
+        "eq_memo": "تحميل معدات ملك", "eq_profit_before": "الربح قبل التحميل", "eq_profit_after": "الربح بعد التحميل",
+        "eq_memo_note": "تحميل داخلي للعلم بس: مش في الدفاتر ولا في ربح الشركة (إهلاك المعدة محسوب فيهم).", "eq_open": "افتح تاب المعدات",
         "original_short": "الأصلية", "variations_short": "أوامر التغيير", "variation_chip": "أمر تغيير {n}",
         "boq_locked_note": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة، فتعديل الكميات والفئات وإضافة البنود ومسحها بيتم بأمر تغيير.",
         "new_variation": "أمر تغيير جديد", "words_only": "الكمية والفئة ثابتين هنا، وتعديلهم بأمر تغيير.",
@@ -82,7 +84,9 @@ WORDS = {
     },
     "en": {
         "tab_overview": "Overview", "tab_boq": "Bill of quantities", "tab_certificates": "Certificates", "tab_payments": "Payments & retention",
-        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders", "tab_schedule": "Schedule", "tab_purchase_requests": "Purchase requests",
+        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders", "tab_schedule": "Schedule", "tab_purchase_requests": "Purchase requests", "tab_equipment": "Equipment",
+        "eq_memo": "Owned-equipment charge", "eq_profit_before": "Profit before the charge", "eq_profit_after": "Profit after the charge",
+        "eq_memo_note": "An internal charge for information only: not in the books or the company's profit (the machine's depreciation already is).", "eq_open": "Open the equipment tab",
         "original_short": "Original", "variations_short": "Variation orders", "variation_chip": "Variation order {n}",
         "boq_locked_note": "This project has certificates or approved variation orders, so quantities, rates, new items and deletions go through a variation order.",
         "new_variation": "New variation order", "words_only": "The quantity and the rate are fixed here; a variation order changes them.",
