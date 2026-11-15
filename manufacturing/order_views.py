@@ -15,9 +15,10 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import actuals, make_to_order, orders, workcentres
+from . import actuals, make_to_order, orders, schedule, workcentres
 from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
+from .schedule_views import schedule_context
 from .views import COST, PRODUCE, VIEW, _lang, _pick
 from entities import scope as entity_scope
 
@@ -153,8 +154,9 @@ def board(request):
             if column not in index and stage[0] not in index:
                 index[column] = {"key": column, "label": _stage_name(stage, lang), "orders": []}
                 columns.insert(len(columns) - 1, index[column])
+    late = schedule.late_orders(active, today)  # F6b (HG-134): past its due date, or its last planned end is after it
     for order in active:
-        order.late = bool(order.due_date and order.due_date < today)
+        order.late, order.late_reason = order.pk in late, late.get(order.pk, "")
         if order.status == OrderStatus.PLANNED:
             index["planned"]["orders"].append(order)
         elif order.stage_index >= len(order.stages):
@@ -244,6 +246,8 @@ def order_detail(request, pk):
         material_rows.append({"issue": issue, "label": choice_label(issue, "kind", lang), "operation": operation, "sign": actuals.sign(operation),
                               "value": operation.quantity * operation.unit_cost})
     lines = [{"line": line, "label": choice_label(line, "kind", lang)} for line in order.cost_lines.select_related("employee", "work_centre")] if can_cost else []
+    late_reason = schedule.late_orders([order], timezone.localdate()).get(order.pk, "")  # F6b (HG-134)
+    plan_context = schedule_context(request, order, lang, late_reason)
     routing = workcentres.plan_rows(order, lang)  # F6a (HG-133)
     recorded = {log.stage_key: log.minutes for log in order.stage_logs.all()}
     for row in routing:
@@ -263,7 +267,7 @@ def order_detail(request, pk):
         short=bool(plan and any(row["short"] for row in plan["rows"])),
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
         ready=order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages),
-        open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=bool(order.due_date and order.due_date < timezone.localdate() and order.status != OrderStatus.DONE)))
+        open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=late_reason != "", late_reason=late_reason, **plan_context))
 
 
 @require_permission(PRODUCE)

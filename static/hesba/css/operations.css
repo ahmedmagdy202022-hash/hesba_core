@@ -312,3 +312,29 @@ input.mfg-mrp-input{max-width:8rem}
 .edu-pay-list__what{font-size:var(--hs-text-sm)}
 .edu-pay-note{margin:0 0 var(--hs-space-3)}
 .edu-bulk{margin-top:var(--hs-space-4)}
+/* Manufacturing F6b (HG-134): the production schedule (a grid of centres by day; a day list at phone width) and the order's plan. */
+.sch-wrap{overflow:auto;border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);margin-bottom:18px}
+.sch-grid{border-collapse:separate;border-spacing:0;min-width:100%}
+.sch-grid th,.sch-grid td{padding:8px 10px;border-bottom:1px solid var(--hs-line);border-inline-start:1px solid var(--hs-line);vertical-align:top;min-width:132px;text-align:start}
+.sch-grid th{font-size:13px;color:var(--op-muted);background:var(--hs-ground);white-space:nowrap}
+.sch-grid th:first-child,.sch-grid td:first-child{position:sticky;inset-inline-start:0;min-width:120px;background:var(--hs-ground);border-inline-start:0;font-weight:700;color:var(--op-navy);z-index:1}
+.sch-grid td.is-over{background:var(--hs-danger-wash)}
+.sch-grid td.is-holiday{background:var(--hs-neutral-wash)}
+.sch-bar{display:block;position:relative;margin-bottom:6px;padding:6px 8px 9px;border:1px solid var(--op-border);border-inline-start:4px solid var(--hs-teal);border-radius:8px;background:var(--hs-surface);color:var(--op-text);text-decoration:none;font-size:13px;line-height:1.35}
+.sch-bar.is-late{border-inline-start-color:var(--op-danger)}
+.sch-bar small{display:block;color:var(--op-muted)}
+.sch-fill{position:absolute;inset-inline-start:0;bottom:0;height:3px;border-radius:0 0 8px 8px;background:var(--hs-teal)}
+.sch-bar.is-late .sch-fill{background:var(--op-danger)}
+.sch-load{font-size:12px;color:var(--op-muted)}
+.sch-load.is-over{color:var(--op-danger);font-weight:700}
+.sch-days{display:none;margin-bottom:18px}
+.sch-days section{border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);padding:12px;margin-bottom:10px}
+.sch-days h3{margin:0 0 8px;color:var(--op-navy);font-size:15px}
+.sch-days ul{list-style:none;margin:0;padding:0}
+.sch-line{margin-bottom:8px}
+.sch-line strong{display:block;color:var(--op-navy);font-size:13px;margin-bottom:4px}
+.sch-nav{display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap}
+.sch-move{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sch-move input{min-height:44px;max-width:150px}
+.sch-rank{width:80px}
+@media(max-width:700px){.sch-wrap{display:none}.sch-days{display:block}.sch-move input{max-width:none;flex:1 1 120px}}
