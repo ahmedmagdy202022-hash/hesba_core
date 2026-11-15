@@ -4,6 +4,7 @@
 <div class="op-field"><label for="rc-output">{{ words.output }}</label><input id="rc-output" name="output_quantity" value="{{ form.output_quantity|default:'1'|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div>
 <div class="op-field"><label for="rc-name">{{ words.name }}</label><input id="rc-name" name="name" value="{{ form.name|default:'' }}" maxlength="255"></div>
 <div class="op-field"><label for="rc-notes">{{ words.notes }}</label><input id="rc-notes" name="notes" value="{{ form.notes|default:'' }}" maxlength="255"></div>
+{% if lots_on %}<div class="op-field"><label for="rc-shelf">{{ words.shelf_life }}</label><input id="rc-shelf" name="shelf_life_days" value="{{ form.shelf_life_days|default:''|stringformat:'s' }}" inputmode="numeric" dir="ltr" data-shelf-life><small class="op-muted">{{ words.shelf_hint }}</small></div>{% endif %}
 <label class="op-field"><span><input type="checkbox" name="active"{% if form.active %} checked{% endif %}> {{ words.active }}</span></label>
 </div>
 <h2>{{ words.components }}</h2><p class="op-muted">{{ words.stock_only }}</p>

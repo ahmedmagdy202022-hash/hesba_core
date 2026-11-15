@@ -14,7 +14,7 @@ READING = frozenset({
     "list", "index", "items", "customers", "suppliers", "categories", "movements", "stock", "warehouses", "warehouse_levels",
     "warehouse_detail", "payments", "operations", "cashboxes", "trial_balance", "summary", "statements", "statement",
     "claims", "aging", "group", "packages", "hours", "visits", "students", "patients", "history", "agenda", "dues", "where",
-    "insights", "daily", "reps", "profit", "sales", "purchases", "inventory", "commissions", "portfolio", "board_report",
+    "insights", "daily", "reps", "profit", "sales", "purchases", "inventory", "commissions", "portfolio", "board_report", "trace",
 })
 #: Screens that look like readers by name but are forms or tills.
 NEVER = frozenset({"create", "new", "edit", "pos", "post", "cancel"})

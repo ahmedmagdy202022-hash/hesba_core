@@ -24,6 +24,8 @@ class Batch(models.Model):
     received_on = models.DateField()
     # Set for a batch that came in on a purchase: it counts once that invoice is posted.
     purchase_line = models.OneToOneField("purchases.PurchaseLine", on_delete=models.CASCADE, null=True, blank=True, related_name="batch")
+    # Manufacturing F3 (HG-131): set for the lot of a production run's product; it counts while that run is posted.
+    production_run = models.OneToOneField("manufacturing.ProductionRun", on_delete=models.CASCADE, null=True, blank=True, related_name="product_lot")
     note = models.CharField(max_length=255, blank=True)
     active = models.BooleanField(default=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
