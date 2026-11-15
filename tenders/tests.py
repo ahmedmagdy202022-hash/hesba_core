@@ -438,9 +438,19 @@ class PrintTests(TenderSetup):
         refused = self.client.post(reverse("tenders:item", args=[tender.pk, self.concrete.pk]), {"action": "add_cost", "heading": "other", "unit_cost": "5"}, follow=True)
         self.assertContains(refused, "صلاحية تقرير الأرباح")
         self.assertEqual(TenderCost.objects.count(), 5)
-        # A holder of the profit report without the tender office gets 403 too.
-        self.client.force_login(person(RoleCode.ACCOUNTANT, "print_accountant"))
+        # A holder of the profit report without the tender office (a custom role: the accountant's rights plus the profit
+        # report) gets 403 too, from the analysis' own check after the decorator lets it through.
+        from permissions.role_services import create_role, role_codes
+        from permissions.services import user_has_permission
+
+        codes = role_codes(make_seeded_role(RoleCode.ACCOUNTANT)) + ["reports.view_profit_report"]
+        analyst = make_user(username="print_analyst")
+        make_user_profile(user=analyst, role=create_role(name_ar="محاسب بأرباح", name_en="Accountant with profit", codes=codes, actor=self.owner))
+        self.assertTrue(user_has_permission(analyst, "reports.view_profit_report"))
+        self.assertFalse(user_has_permission(analyst, "sales.create_sales_invoice"))
+        self.client.force_login(analyst)
         self.assertEqual(self.client.get(reverse("tenders:analysis_print", args=[tender.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("tenders:detail", args=[tender.pk])).status_code, 403)
 
 
 class PermissionAndEntityTests(TenderSetup):
