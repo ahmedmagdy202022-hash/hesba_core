@@ -228,6 +228,25 @@ class HappyHourTests(OfferSetup):
             self.assertEqual(self.pay(part).total_amount, D("10.00"))
             self.assertEqual(self.pay(order).total_amount, D("130.00"))  # its own tea: 10.00, the burger 120.00
 
+    def test_a_part_put_back_keeps_its_tea_apart_from_one_ordered_after_the_hour(self):
+        # review finding: putting a part back joined its happy-hour tea with a later identical tea, which then took the later time
+        self.vat(False)
+        self.happy_hour()
+        with clock(18, 30):
+            order = services.open_order(self.owner, table=self.a_t1, guests=2)
+            tea = services.add_item(order, self.tea20, self.owner, 1)
+            services.add_item(order, self.burger, self.owner, 1, options=[self.medium.pk])
+        with clock(18, 40):
+            part = services.split_order(order, {str(tea.pk): "1"}, self.owner)
+        with clock(19, 10):
+            services.add_item(order, self.tea20, self.owner, 1)
+        with clock(19, 20):
+            services.put_back(part, self.owner)
+        teas = list(order.lines.filter(item=self.tea20).order_by("created_at").values_list("quantity", "created_at"))
+        self.assertEqual(teas, [(D("1.000"), at(18, 30)), (D("1.000"), at(19, 10))])
+        with clock(19, 30):
+            self.assertEqual(self.pay(order).total_amount, D("150.00"))  # 10.00 + 20.00 + the burger 120.00
+
     def test_the_board_and_the_page_show_the_bill_after_the_offer(self):
         self.vat(False)
         self.happy_hour()
