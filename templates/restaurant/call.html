@@ -1,0 +1,90 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b"><link rel="stylesheet" href="{% static 'hesba/css/restaurant_call.css' %}?v=r7-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ cw.back }}</a><h1>{{ cw.title }}</h1><p>{{ cw.intro }}</p></div>{% if can_tables %}<a class="op-secondary" href="{% url 'restaurant:zones' %}?lang={{ lang }}" data-zones-link>{{ cw.zones_link }}</a>{% endif %}</section>
+<form class="op-form rc-search" method="get" action="{% url 'restaurant:call' %}" data-call-search>
+<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid">
+{% if grouped %}<div class="op-field"><label for="rc-entity">{{ cw.branch }}</label><select id="rc-entity" name="entity" data-order-branch-pick><option value="">{{ cw.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}"{% if entity and entity.pk == branch.pk %} selected{% endif %}>{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="rc-phone">{{ cw.phone }}</label><input id="rc-phone" name="phone" type="tel" inputmode="tel" dir="ltr" autocomplete="off" autofocus value="{{ phone }}" data-call-phone></div>
+</div>
+{% if error %}<div class="op-message op-message-error" role="alert" data-call-error>{{ error }}</div>{% endif %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cw.find }}</button></div>
+</form>
+{% if grouped and not entity and searched %}<p class="op-message" data-pick-branch>{{ cw.pick_branch }}</p>{% endif %}
+
+{% if customer %}
+<section class="rc-card" data-caller="{{ customer.pk }}" aria-labelledby="rc-who">
+<div class="rc-who"><h2 id="rc-who" data-caller-name>{{ customer.name }}</h2><p dir="ltr" class="rc-phone">{{ customer.phone|default:cw.no_phone }}</p></div>
+{% if balance is not None %}<p class="rc-balance" data-caller-balance="{{ balance|stringformat:".2f" }}"><span>{{ cw.balance }}</span> <strong>{% if balance > 0 %}{{ cw.owes }} {{ balance_abs|money }}{% elif balance < 0 %}{{ cw.credit }} {{ balance_abs|money }}{% else %}{{ cw.settled }}{% endif %}</strong></p>{% endif %}
+</section>
+
+<section class="rc-section" aria-labelledby="rc-addresses" data-addresses>
+<h2 id="rc-addresses">{{ cw.addresses }}</h2>
+{% if not can_open %}<p class="op-message" data-pick-branch>{{ cw.pick_branch }}</p>{% endif %}
+{% for row in rows %}
+<article class="rc-address{% if row.address.is_default %} rc-address--default{% endif %}" data-address="{{ row.address.pk }}"{% if row.address.is_default %} data-address-default{% endif %}>
+<header><strong>{{ row.address.label|default:row.text|truncatechars:30 }}</strong>{% if row.address.is_default %}<span class="rc-badge">{{ cw.default }}</span>{% endif %}</header>
+<p class="rc-text">{{ row.text }}</p>
+{% if row.zone %}<p class="rc-zone" data-address-zone><span>{{ cw.zone }}: {{ row.zone_label }}</span>{% if row.zone_ok %} · <span>{{ cw.fee }} <bdi dir="ltr">{{ row.fee }}</bdi></span>{% if row.zone.minutes %} · <span>{{ cw.usual }} <bdi dir="ltr">{{ row.zone.minutes }}</bdi> {{ cw.min }}</span>{% endif %}{% endif %}</p>{% endif %}
+{% if can_open %}<form method="post" class="rc-open" data-open-delivery>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="open"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="address" value="{{ row.address.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
+<label class="rc-fee"><span>{{ cw.fee }}</span><input name="delivery_fee" inputmode="decimal" dir="ltr" value="{{ row.fee }}" autocomplete="off" data-delivery-fee></label>
+<button class="op-primary" type="submit">{{ cw.start }}</button></form>{% endif %}
+<div class="rc-tools">
+{% if not row.address.is_default %}<form method="post" data-make-default-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="default"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="address" value="{{ row.address.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}<button class="op-secondary" type="submit">{{ cw.make_default }}</button></form>{% endif %}
+<form method="post" data-address-remove-form data-confirm="{{ cw.remove_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="address" value="{{ row.address.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}<button class="op-secondary" type="submit">{{ cw.remove }}</button></form>
+</div>
+</article>
+{% empty %}<p class="op-muted" data-no-addresses>{{ cw.no_addresses }}</p>{% endfor %}
+<form method="post" class="op-form" data-address-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_address"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
+<h3>{{ cw.add_address }}</h3>
+{% if card_address %}<p class="op-muted" data-card-address>{{ cw.card_address }}</p>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="ad-label">{{ cw.label }}</label><input id="ad-label" name="label" maxlength="60" autocomplete="off"></div>
+<div class="op-field"><label for="ad-address">{{ cw.address }}</label><input id="ad-address" name="address" maxlength="255" required value="{{ card_address }}" autocomplete="off"></div>
+<div class="op-field"><label for="ad-area">{{ cw.area }}</label><input id="ad-area" name="area" maxlength="80" autocomplete="off"></div>
+<div class="op-field"><label for="ad-landmark">{{ cw.landmark }}</label><input id="ad-landmark" name="landmark" maxlength="120" autocomplete="off"></div>
+<div class="op-field"><label for="ad-zone">{{ cw.zone }}</label><select id="ad-zone" name="zone"><option value="">{{ cw.no_zone }}</option>{% for zone in zone_choices %}<option value="{{ zone.pk }}">{{ zone.label }}</option>{% endfor %}</select></div>
+</div>
+{% if rows %}<label class="rc-check"><input type="checkbox" name="is_default"> {{ cw.make_default_new }}</label>{% endif %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cw.save }}</button></div></form>
+</section>
+
+<section class="rc-section" aria-labelledby="rc-orders" data-last-orders>
+<h2 id="rc-orders">{{ cw.last_orders }}</h2>
+{% for row in orders %}
+<article class="rc-order" data-past-order="{{ row.order.number }}">
+<header><strong dir="ltr">{{ row.order.number }}</strong><span dir="ltr">{{ row.order.opened_at|date:"Y-m-d" }}</span><span>{{ row.total|money }}</span></header>
+<p class="rc-text">{{ row.summary }}</p>
+{% if rows and can_open %}<form method="post" class="rc-open" data-repeat-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="repeat"><input type="hidden" name="customer" value="{{ customer.pk }}"><input type="hidden" name="order" value="{{ row.order.pk }}"><input type="hidden" name="phone" value="{{ phone }}">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
+<label class="rc-fee"><span>{{ cw.repeat_to }}</span><select name="address">{% for one in rows %}<option value="{{ one.address.pk }}">{{ one.address.label|default:one.text|truncatechars:30 }}</option>{% endfor %}</select></label>
+<button class="op-primary" type="submit">{{ cw.repeat }}</button></form>{% endif %}
+</article>
+{% empty %}<p class="op-muted">{{ cw.no_orders }}</p>{% endfor %}
+{% if orders and not rows %}<p class="op-muted" data-repeat-needs-address>{{ cw.need_address }}</p>{% elif orders %}<p class="op-muted">{{ cw.repeat_hint }}</p>{% endif %}
+</section>
+
+{% elif searched %}
+<section class="rc-card" data-no-caller>
+{% if can_add_customer %}
+<h2>{{ cw.new_title }}</h2><p class="op-muted">{{ cw.new_hint }}</p>
+<form method="post" class="op-form" data-new-caller-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="new_customer">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="nc-name">{{ cw.name }}</label><input id="nc-name" name="name" required maxlength="255" autocomplete="off" data-new-caller-name></div>
+<div class="op-field"><label for="nc-phone">{{ cw.phone }}</label><input id="nc-phone" name="phone" type="tel" inputmode="tel" dir="ltr" required value="{{ typed|default:phone }}" autocomplete="off"></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cw.add_customer }}</button></div></form>
+{% else %}
+<h2>{{ cw.no_card }}</h2><p class="op-muted">{{ cw.not_found }} {{ cw.no_card_hint }}</p>
+{% if can_open %}<form method="post" class="op-form" data-typed-delivery-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="open_typed">{% if entity %}<input type="hidden" name="entity" value="{{ entity.pk }}">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="td-phone">{{ cw.phone }}</label><input id="td-phone" name="phone" type="tel" inputmode="tel" dir="ltr" required value="{{ typed|default:phone }}" autocomplete="off"></div>
+<div class="op-field"><label for="td-address">{{ cw.address }}</label><input id="td-address" name="address" required maxlength="255" autocomplete="off"></div>
+<div class="op-field"><label for="td-fee">{{ cw.fee }}</label><input id="td-fee" name="delivery_fee" inputmode="decimal" dir="ltr" value="0" autocomplete="off" data-delivery-fee></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cw.open_delivery }}</button></div></form>{% else %}<p class="op-message" data-pick-branch>{{ cw.pick_branch }}</p>{% endif %}
+{% endif %}
+</section>
+{% endif %}
+{% endblock %}

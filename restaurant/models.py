@@ -411,3 +411,64 @@ class TableRequest(models.Model):
         if self.entity_id is None:
             self.entity_id = self.table.entity_id
         super().save(*args, **kwargs)
+
+
+class DeliveryZone(models.Model):
+    """Restaurants R7 (HG-116): a delivery area with the fee its customers pay («المعادي» 20.00) and how long it usually takes.
+
+    Belongs to one entity (branch), like a table: its name is unique within that branch (a zone with no entity belongs to the
+    main one, filled in ``save()``), and a branch's screens only ever list that branch's zones. A zone that was ever used is
+    switched off, never deleted (``CustomerAddress.zone`` protects it). The fee only pre-fills the delivery order's own fee:
+    it rides on the existing ``DELIVERY-FEE`` invoice line and no posting changes."""
+
+    name_ar = models.CharField(max_length=80)
+    name_en = models.CharField(max_length=80, blank=True)
+    fee = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    minutes = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Usual delivery time, for the caller.")
+    active = models.BooleanField(default=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="delivery_zones")
+
+    class Meta:
+        ordering = ["name_ar", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["entity", "name_ar"], name="restaurant_zone_name_per_entity"),
+            models.CheckConstraint(condition=Q(fee__gte=0), name="restaurant_zone_fee_not_negative"),
+        ]
+
+    def __str__(self):
+        return self.name_ar
+
+    def label(self, lang="ar"):
+        return self.name_en if lang == "en" and self.name_en else self.name_ar
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            self.entity = _main_entity()
+        super().save(*args, **kwargs)
+
+
+class CustomerAddress(models.Model):
+    """Restaurants R7 (HG-116): one of a customer's saved delivery addresses («البيت», «الشغل»). ``Customer.address`` stays the
+    card's single free-text line; these are what the call screen offers, default first.
+
+    A customer has at most one default (a partial unique constraint; the service clears the old one under a lock). An address
+    that is switched off is never the default and is never offered."""
+
+    customer = models.ForeignKey("master_data.Customer", on_delete=models.PROTECT, related_name="delivery_addresses")
+    label = models.CharField(max_length=60, blank=True)
+    address = models.CharField(max_length=255)
+    area = models.CharField(max_length=80, blank=True)
+    landmark = models.CharField(max_length=120, blank=True)
+    zone = models.ForeignKey(DeliveryZone, on_delete=models.PROTECT, null=True, blank=True, related_name="addresses")
+    is_default = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_default", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["customer"], condition=Q(is_default=True), name="restaurant_one_default_address"),
+        ]
+
+    def __str__(self):
+        return f"{self.customer_id}:{self.label or self.address[:20]}"
