@@ -201,6 +201,8 @@ class Subcontract(models.Model):
     scope = models.CharField(max_length=255)
     value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     retention_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Contracting C11 (HG-128): the share of each bill's gross that pays back the advance paid to the subcontractor.
+    advance_recovery_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -232,6 +234,8 @@ class SubcontractBill(models.Model):
     gross = models.DecimalField(max_digits=14, decimal_places=2)
     retention_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     retention_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # Contracting C11 (HG-128): the advance this bill pays back (deducted on top of its invoice, like retention).
+    recovery_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     description = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -239,6 +243,65 @@ class SubcontractBill(models.Model):
     class Meta:
         ordering = ["number"]
         constraints = [models.UniqueConstraint(fields=["subcontract", "number"], name="projects_subcontract_bill_number_unique")]
+
+
+# ---- Contracting C11 (HG-128): the subcontract's own bill of quantities, bills by quantities, and the advance paid to
+# the subcontractor. None of these rows holds money: a bill is still an ordinary draft purchase invoice (one line per
+# subcontract line) and a payment is an ordinary supplier payment; the rows keep the subcontract's arithmetic.
+
+
+class SubcontractLine(models.Model):
+    """One item of the work given to the subcontractor: how much, at what rate, and the client's item it covers (if any)."""
+
+    subcontract = models.ForeignKey(Subcontract, on_delete=models.PROTECT, related_name="lines")
+    line_number = models.PositiveIntegerField()
+    description = models.CharField(max_length=255)
+    unit = models.CharField(max_length=30, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    boq_line = models.ForeignKey(BoqLine, on_delete=models.PROTECT, null=True, blank=True, related_name="subcontract_lines")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["line_number"]
+        constraints = [models.UniqueConstraint(fields=["subcontract", "line_number"], name="projects_subcontract_line_number_unique")]
+
+    def __str__(self):
+        return f"{self.line_number} - {self.description}"
+
+
+class SubcontractBillLine(models.Model):
+    bill = models.ForeignKey(SubcontractBill, on_delete=models.CASCADE, related_name="lines")
+    subcontract_line = models.ForeignKey(SubcontractLine, on_delete=models.PROTECT, related_name="bill_lines")
+    # The purchase line it was billed on, so a purchase return on that line gives the quantity back.
+    purchase_line = models.OneToOneField("purchases.PurchaseLine", on_delete=models.PROTECT, related_name="subcontract_bill_line")
+    previous_quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        ordering = ["subcontract_line__line_number"]
+
+
+class SubcontractPaymentKind(models.TextChoices):
+    ADVANCE = "advance", "Advance"
+    PAYMENT = "payment", "Payment"
+
+
+class SubcontractPayment(models.Model):
+    """A supplier payment made for this subcontract: the subcontractor's advance (paid back from each bill) or a payment
+    against the bills."""
+
+    subcontract = models.ForeignKey(Subcontract, on_delete=models.PROTECT, related_name="payments")
+    payment = models.OneToOneField("purchases.SupplierPayment", on_delete=models.PROTECT, related_name="subcontract_payment")
+    kind = models.CharField(max_length=20, choices=SubcontractPaymentKind.choices, default=SubcontractPaymentKind.PAYMENT)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
 
 
 class SubcontractRelease(models.Model):

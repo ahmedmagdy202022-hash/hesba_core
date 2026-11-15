@@ -44,6 +44,10 @@ MESSAGES = {
         "bill_link": "دي فاتورة مستخلص مقاول باطن؛ اسحبها من شاشة مقاولي الباطن.",
         "reversed": "الإفراج ده اتلغى بالفعل.", "date": "التاريخ مش صحيح.",
         "entity": "مستخلصات مقاول الباطن ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده.",
+        "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.",
+        "below_lines": "قيمة العقد لازم متقلش عن مجموع بنود مقاول الباطن ({total}).",
+        "supplier_locked": "مقاول الباطن ده عليه مستخلصات؛ مينفعش يتغيّر لمورد تاني.",
+        "lines_needed": "مقاول الباطن ده ليه بنود: اعمل المستخلص بالكميات من صفحته.",
     },
     "en": {
         "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Type the value as a number, 0 or more.", "rate": "The rate must be between 0 and 100.",
@@ -54,6 +58,10 @@ MESSAGES = {
         "bill_link": "This is a subcontractor bill; withdraw it from the subcontractors screen.",
         "reversed": "This release is already reversed.", "date": "Invalid date.",
         "entity": "This subcontractor's bills are made from another entity; work in that entity.",
+        "rates_total": "Retention and advance recovery together cannot exceed 100%.",
+        "below_lines": "The value cannot be below the total of the subcontract's lines ({total}).",
+        "supplier_locked": "This subcontract has bills; its subcontractor cannot change.",
+        "lines_needed": "This subcontract has lines: bill it by quantities from its page.",
     },
 }
 
@@ -104,6 +112,23 @@ def save_subcontract(project, user, data, subcontract=None, lang="ar"):
         raise ValidationError(words["scope"])
     values = {"supplier": data["supplier"], "scope": scope, "value": _money(data.get("value"), words, "value", allow_zero=True),
               "retention_rate": _rate(data.get("retention_rate"), words)}
+    if subcontract is not None:
+        subcontract = Subcontract.objects.select_for_update().get(pk=subcontract.pk, project=project)
+        _reach(subcontract, words)  # Codex #435: another entity's subcontract keeps its value and rates
+        if subcontract.supplier_id != values["supplier"].pk and subcontract.bills.exists():
+            raise ValidationError(words["supplier_locked"])  # its bills and payments are on that supplier's account
+    # C11 (HG-128): the advance recovery rate is optional on the form; left out, it stays as it was (0 for a new subcontract).
+    if data.get("advance_recovery_rate") not in (None, ""):
+        values["advance_recovery_rate"] = _rate(data.get("advance_recovery_rate"), words)
+    recovery = values.get("advance_recovery_rate", subcontract.advance_recovery_rate if subcontract else ZERO)
+    if values["retention_rate"] + Decimal(recovery) > HUNDRED:
+        raise ValidationError(words["rates_total"])  # the deductions can never be more than the bill
+    if subcontract is not None:
+        from .subcontracting import lines_total
+
+        total = lines_total(subcontract)
+        if subcontract.lines.exists() and values["value"] < total:
+            raise ValidationError(words["below_lines"].format(total=total))
     created = subcontract is None
     subcontract = subcontract or Subcontract(project=project, created_by=user)
     for key, value in values.items():
@@ -111,7 +136,8 @@ def save_subcontract(project, user, data, subcontract=None, lang="ar"):
     subcontract.save()
     _audit(project, user, "create_subcontract" if created else "change_subcontract",
            {"subcontract": subcontract.pk, "supplier": values["supplier"].supplier_code, "scope": scope, "value": str(values["value"]),
-            "retention_rate": str(values["retention_rate"])}, AuditEventType.CREATE if created else AuditEventType.UPDATE)
+            "retention_rate": str(values["retention_rate"]), "advance_recovery_rate": str(subcontract.advance_recovery_rate)},
+           AuditEventType.CREATE if created else AuditEventType.UPDATE)
     return subcontract
 
 
@@ -121,12 +147,13 @@ def live_bills(subcontract):
 
 @transaction.atomic
 def bill_subcontract(subcontract, user, *, amount, description, bill_date=None, lang="ar"):
-    """A draft purchase invoice for the subcontractor's work, linked to the project as a cost."""
+    """A draft purchase invoice for the subcontractor's work, linked to the project as a cost.
 
-    from master_data.models import Location
-    from purchases.models import PurchaseInvoice
-    from taxes.services import create_purchase_draft_with_tax
-    from entities import scope as entity_scope
+    C11 (HG-128): a subcontract with lines is billed by quantities (``subcontracting.bill_by_quantities``); the
+    lump sum stays for one without lines. Both cap the billed gross at the subcontract's value (when one is typed)
+    and recover the advance at the subcontract's rate (0 unless set, so an old lump-sum bill is unchanged)."""
+
+    from .subcontracting import check_value
 
     words = MESSAGES[lang]
     subcontract = Subcontract.objects.select_related("project", "supplier").get(pk=subcontract.pk)
@@ -135,13 +162,36 @@ def bill_subcontract(subcontract, user, *, amount, description, bill_date=None, 
     label = (description or "").strip()[:255]
     if not label:
         raise ValidationError(words["description"])
-    from .contract import entity_locations, entity_of
-
     subcontract = Subcontract.objects.select_for_update().select_related("project", "supplier").get(pk=subcontract.pk)
+    if subcontract.lines.exists():
+        raise ValidationError(words["lines_needed"])
+    check_value(subcontract, gross, lang)
+    day = bill_date or timezone.localdate()
+    bill = new_bill(subcontract, user, project, words, gross=gross, label=label, day=day,
+                    lines=[{"item": subcontract_item(), "quantity": Decimal("1"), "unit_purchase_price": gross, "line_discount_amount": ZERO,
+                            "description": label}])
+    _audit(project, user, "bill_subcontract", {"subcontract": subcontract.pk, "bill": bill.number, "invoice": bill.invoice.invoice_number,
+                                               "gross": str(gross), "retention": str(bill.retention_amount), "recovery": str(bill.recovery_amount)},
+           AuditEventType.CREATE)
+    return bill
+
+
+def new_bill(subcontract, user, project, words, *, gross, label, day, lines):
+    """The draft purchase invoice (through the unchanged ``create_purchase_draft_with_tax``), its bill row with the
+    retention and the advance recovered, and its project-cost link. ``subcontract`` is already locked."""
+
+    from master_data.models import Location
+    from purchases.models import PurchaseInvoice
+    from taxes.services import create_purchase_draft_with_tax
+    from entities import scope as entity_scope
+
+    from .contract import entity_locations
+    from .subcontracting import recovery_for
+
     locations = entity_scope.locations(Location.objects).filter(active=True, is_receiving_location=True)
     established = subcontract_entity(subcontract)
     if established is not None:
-        # One entity per subcontract: the retention held from it stays in one place.
+        # One entity per subcontract: the retention held from it and its advance stay in one place.
         locations = entity_locations(locations, established)
     location = locations.order_by("-is_default", "pk").first()
     if location is None:
@@ -152,20 +202,19 @@ def bill_subcontract(subcontract, user, *, amount, description, bill_date=None, 
     while PurchaseInvoice.objects.filter(invoice_number=invoice_number).exists():
         sequence += 1
         invoice_number = f"SC-{project.code}-{sequence:02d}"
-    title = f"مستخلص مقاول باطن رقم {number} — {label}"
+    title = f"مستخلص مقاول باطن رقم {number}" + (f" — {label}" if label else "")
     invoice = create_purchase_draft_with_tax(
-        {"invoice_number": invoice_number, "invoice_date": bill_date or timezone.localdate(), "supplier": subcontract.supplier,
+        {"invoice_number": invoice_number, "invoice_date": day, "supplier": subcontract.supplier,
          "receiving_location": location, "cashbox": None, "discount_amount": ZERO, "tax_amount": ZERO, "paid_now": ZERO,
          "notes": f"مشروع {project.code}: {title}"[:255]},
-        [{"item": subcontract_item(), "quantity": Decimal("1"), "unit_purchase_price": gross, "line_discount_amount": ZERO, "description": label}],
-        user,
+        lines, user,
     )
     retention = money_round(gross * Decimal(subcontract.retention_rate) / HUNDRED)
+    recovery = recovery_for(subcontract, gross, retention, invoice.invoice_date)
     bill = SubcontractBill.objects.create(subcontract=subcontract, number=number, bill_date=invoice.invoice_date, invoice=invoice, gross=gross,
-                                          retention_rate=subcontract.retention_rate, retention_amount=retention, description=label, created_by=user)
+                                          retention_rate=subcontract.retention_rate, retention_amount=retention, recovery_amount=recovery,
+                                          description=label, created_by=user)
     ProjectPurchase.objects.create(project=project, invoice=invoice, heading=CostHeading.SUBCONTRACT, created_by=user)
-    _audit(project, user, "bill_subcontract", {"subcontract": subcontract.pk, "bill": number, "invoice": invoice_number, "gross": str(gross),
-                                               "retention": str(retention)}, AuditEventType.CREATE)
     return bill
 
 
@@ -214,7 +263,9 @@ def effective_bill(bill):
 
 
 def bill_net_payable(bill):
-    return money_round(Decimal(bill.invoice.total_amount) - bill.retention_amount)
+    """The bill's invoice total less the retention held and the advance it recovers (C11): VAT is on the full gross."""
+
+    return money_round(Decimal(bill.invoice.total_amount) - bill.retention_amount - bill.recovery_amount)
 
 
 def subcontract_entity(subcontract):
@@ -223,7 +274,16 @@ def subcontract_entity(subcontract):
     from .contract import entity_of
 
     first = subcontract.bills.select_related("invoice__receiving_location").order_by("number").first()  # cancelled ones too: for good
-    return entity_of(first.invoice.receiving_location) if first else None
+    if first is not None:
+        return entity_of(first.invoice.receiving_location)
+    # C11 (HG-128): before any bill, the first payment made for the subcontract (an advance) fixes it, so the advance
+    # and the bills that recover it are booked in one entity.
+    payment = subcontract.payments.select_related("payment__cashbox").order_by("pk").first()
+    if payment is not None:
+        from entities.services import main_entity
+
+        return payment.payment.cashbox.entity_id or main_entity().pk
+    return None
 
 
 def in_reach(subcontract):
@@ -277,6 +337,9 @@ def ensure_consistent(subcontract, lang="en"):
         raise ValidationError(CONSISTENCY[lang])
     if lowest_held(retention_events(subcontract)) < 0:
         raise ValidationError(HISTORY[lang])  # released once on a date a back-dated cancellation would erase: return instead
+    from .subcontracting import check
+
+    check(subcontract, lang)  # C11 (HG-128): the advance recovered and the quantities billed stay possible too
 
 
 @transaction.atomic

@@ -120,6 +120,11 @@
   {% if parts %}<section class="rs-parts" data-parts aria-labelledby="rs-parts-title"><h3 id="rs-parts-title">{{ words.parts }}</h3><ul>
   {% for part in parts %}<li class="rs-part" data-part="{{ part.number }}"><a href="{% url 'restaurant:order' part.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ part.number }}</bdi></a>{% if part.status == 'paid' %}<span class="rs-tag rs-tag--ready">{{ words.part_paid_tag }}</span>{% if part.invoice %}<small data-part-paid="{{ part.invoice.invoice_number }}"><bdi dir="ltr">{{ part.invoice.invoice_number }}</bdi></small>{% endif %}{% else %}<span class="rs-tag rs-tag--new">{{ words.part_open_tag }}</span>{% endif %}<span class="rs-part__amount">{{ part.bill|money }}</span></li>
   {% endfor %}</ul></section>{% endif %}
+  {% if table_pay %}<section class="rs-parts" data-table-pay="{{ table_pay.kind }}" aria-labelledby="tp-title">{# R5b (HG-121) #}<h3 id="tp-title">{{ tpw.title }} · <span data-table-pay-label>{{ table_pay.label }}</span></h3>
+  <p>{{ table_pay.text }}</p>{% if table_pay.note %}<p class="op-muted" dir="ltr" data-table-pay-note>{{ table_pay.note }}</p>{% endif %}
+  <p class="rs-total"><span>{{ tpw.amount }}</span><bdi dir="ltr" data-table-pay-amount>{{ table_pay.link.amount|money }}</bdi></p>
+  {% if table_pay.kind == "waiting" %}<p class="op-muted">{{ tpw.until }} <bdi dir="ltr">{{ table_pay.until }}</bdi></p>{% if table_pay.can_cancel %}<form method="post" data-confirm="{{ tpw.cancel_confirm }}" data-cancel-pay-link>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel_pay_link"><button class="op-secondary" type="submit">{{ tpw.cancel }}</button></form>{% endif %}{% endif %}
+  </section>{% endif %}
   {% if is_open and can_take %}
   <div class="rs-actions">
     {% if pending %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="send"><button class="op-primary" type="submit" data-send-kitchen>{{ words.send }}</button></form>{% endif %}

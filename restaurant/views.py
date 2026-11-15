@@ -451,6 +451,13 @@ def order_detail(request, pk):
                 else:
                     platforms.collected(order, request.user, lang)
                 messages.success(request, _platform_words(lang)["handed_ok" if action == "platform_hand_over" else "collected_ok"].format(name=order.customer.name))
+            elif action == "cancel_pay_link":  # R5b (HG-121): unlock an order the guest is paying from the table
+                from . import pay_at_table
+
+                if not user_has_permission(request.user, pay_at_table.RECEIVE):
+                    raise PermissionDenied("Cancelling a table's payment link needs sales.receive_customer_payment.")
+                pay_at_table.cancel(order, request.user, lang)
+                messages.success(request, TABLE_PAY_WORDS[lang]["cancelled"])
             elif action == "cancel":
                 services.cancel_order(order, request.user, request.POST.get("reason", ""), lang)
                 messages.success(request, words["cancelled"])
@@ -534,7 +541,58 @@ def order_detail(request, pk):
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables, platform_box=platform_box,
         can_collect=user_has_permission(request.user, "sales.receive_customer_payment"),
         **requests_context(asked, lang, _takes_orders(request.user)), requests_order=order.pk,
+        table_pay=_table_pay(order, request.user, lang), tpw=TABLE_PAY_WORDS[lang],
     ))
+
+
+#: R5b (HG-121): the order page's «الدفع من الطاولة» box and the tables page's online-payments user.
+TABLE_PAY_WORDS = {
+    "ar": {
+        "title": "الدفع من الطاولة", "amount": "مبلغ الرابط", "until": "الرابط شغال لحد",
+        "waiting": "الضيف بيدفع الحساب من الطاولة دلوقتي، والطلب مقفول: مفيش إضافة ولا تعديل ولا إلغاء ولا تقسيم ولا دمج ولا نقل ولا دفع لحد ما الدفع يخلص أو تلغي الرابط.",
+        "paid": "الحساب اتدفع من الطاولة واترحّل في حساب «بوابة الدفع».",
+        "review": "الضيف دفع {amount} أونلاين ومفيش حاجة اترحّلت، والطلب مفتوح. راجع العملية في شاشة بوابة الدفع، ولو الفلوس وصلت حاسب الطاولة بنفسك في حساب «بوابة الدفع».",
+        "ended": "رابط الدفع من الطاولة انتهى أو اتلغى، والطلب مفتوح عادي.",
+        "cancel": "الغي رابط الدفع", "cancel_confirm": "لو الضيف دفع بعد الإلغاء، الدفعة مش هتترحّل وهتحتاج مراجعة. تكمّل؟",
+        "cancelled": "اتلغى رابط الدفع، والطلب اتفتح تاني.", "states": {"waiting": "مستني الدفع", "paid": "اتدفع", "review": "محتاج مراجعة", "ended": "انتهى"},
+        "setting_title": "الدفع من الطاولة", "setting_user": "مستخدم الدفع أونلاين", "setting_none": "مفيش (الدفع من الطاولة مقفول)",
+        "setting_intro": "الضيف بيدفع حساب الطاولة من صفحة الـ QR على صفحة شركة الدفع، والحساب بيترحّل باسم المستخدم ده في حساب «بوابة الدفع». من غير مستخدم، زرار «ادفع» مش بيظهر.",
+        "setting_rights": "اعمل له دور فيه صلاحيتين بس: «البيع» و«تجهيز الأطباق الناقصة من خاماتها عند الحساب».",
+        "setting_save": "احفظ", "setting_saved": "اتحفظ مستخدم الدفع أونلاين.",
+    },
+    "en": {
+        "title": "Paying from the table", "amount": "Link amount", "until": "Link live until",
+        "waiting": "The guest is paying the bill from the table now, so the order is locked: nothing can be added, changed, voided, split, merged, moved or paid until the payment finishes or you cancel the link.",
+        "paid": "The bill was paid from the table and posted into the “بوابة الدفع” account.",
+        "review": "The guest paid {amount} online and nothing was posted; the order is open. Check the transaction on the payment gateway screen and, if the money arrived, settle the table yourself into the “بوابة الدفع” account.",
+        "ended": "The table's payment link expired or was cancelled; the order is open as usual.",
+        "cancel": "Cancel the payment link", "cancel_confirm": "If the guest pays after this, the payment is not posted and needs a review. Continue?",
+        "cancelled": "The payment link was cancelled and the order is open again.", "states": {"waiting": "Waiting for payment", "paid": "Paid", "review": "Needs review", "ended": "Ended"},
+        "setting_title": "Paying from the table", "setting_user": "Online payments user", "setting_none": "None (paying from the table is off)",
+        "setting_intro": "The guest pays the table's bill from the QR page on the payment company's page, and the bill is posted as this user into the “بوابة الدفع” account. With no user chosen, “Pay” does not show.",
+        "setting_rights": "Give it a role with two permissions only: selling, and making missing plates from their ingredients at payment.",
+        "setting_save": "Save", "setting_saved": "The online payments user was saved.",
+    },
+}
+
+
+def _table_pay(order, user, lang):
+    """R5b (HG-121): the order's latest table pay link for the order page, or None when it never had one."""
+
+    from settings_core.templatetags.hesba_format import money
+
+    from . import pay_at_table
+
+    found = pay_at_table.state(order)
+    if found is None:
+        return None
+    link, kind = found["link"], found["kind"]
+    words = TABLE_PAY_WORDS[lang]
+    paid = link.paid_amount if link.paid_amount is not None else link.amount
+    note = link.transactions.filter(needs_review=True).values_list("note", flat=True).first() or ""
+    return {"link": link, "kind": kind, "label": words["states"][kind], "text": words[kind].format(amount=money(paid)), "note": note if kind == "review" else "",
+            "until": timezone.localtime(link.expires_at).strftime("%H:%M"),
+            "can_cancel": kind == "waiting" and order.status == OrderStatus.OPEN and user_has_permission(user, pay_at_table.RECEIVE)}
 
 
 CHARGE_WORDS = {
@@ -906,6 +964,18 @@ def tables(request):
     editing = get_object_or_404(branches.tables(), pk=int(raw)) if raw.isdigit() else None  # R12: another branch's table is a 404
     grouped = branches.group_mode()
     charges_error, posted = "", None
+    if request.method == "POST" and request.POST.get("action") == "online_pay":  # R5b (HG-121): its own form; never a table save
+        from . import pay_at_table
+
+        if not (user_has_permission(request.user, TABLES) and user_has_permission(request.user, pay_at_table.RECEIVE)):
+            raise PermissionDenied("Choosing the online payments user needs master_data.manage_items and sales.receive_customer_payment.")
+        try:
+            pay_at_table.save_online_user(request.POST.get("online_user", ""), request.user, lang)
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        else:
+            messages.success(request, TABLE_PAY_WORDS[lang]["setting_saved"])
+        return redirect(f"{reverse('restaurant:tables')}?lang={lang}#online-pay")
     if request.method == "POST" and request.POST.get("action") == "charges":  # R3 (HG-113): its own form; never a table save
         charges_error = _save_charges(request, lang)
         if not charges_error:
@@ -933,7 +1003,22 @@ def tables(request):
     chosen = str(form.get("entity") or "")
     return render(request, "restaurant/tables.html", _base(request, rows=branches.tables(DiningTable.objects.select_related("entity")), form=form, editing=editing,
                                                          error=error, branch_choices=branches.choices(request.user, lang) if grouped else [], chosen_branch=chosen,
-                                                         charges_error=charges_error, qw=_qr_words(lang), **_charges_form(lang, posted)))
+                                                         charges_error=charges_error, qw=_qr_words(lang), **_charges_form(lang, posted),
+                                                         online_pay=_online_pay_form(request.user, lang)))
+
+
+def _online_pay_form(user, lang):
+    """R5b (HG-121): the tables page's «الدفع من الطاولة» section, shown while the online-payment capability is on."""
+
+    from payments import services as payments
+
+    from . import pay_at_table
+
+    if not payments.enabled():
+        return None
+    chosen = pay_at_table.online_user()
+    return {"words": TABLE_PAY_WORDS[lang], "chosen": chosen, "users": pay_at_table.eligible_users(),
+            "can_change": user_has_permission(user, TABLES) and user_has_permission(user, pay_at_table.RECEIVE)}
 
 
 def _qr_words(lang):

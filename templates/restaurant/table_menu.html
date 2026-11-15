@@ -1,7 +1,7 @@
 {% extends "printing/share_base.html" %}
 {% load static hesba_format %}
 {% block title %}{{ words.title }} · {{ company.name }}{% endblock %}
-{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/table_menu.css' %}?v=r5a-1">{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/table_menu.css' %}?v=r5b-1">{% endblock %}
 {% block sub %}<div class="cl-shopsub" data-table-name>{% if entity_name %}{{ entity_name }} · {% endif %}{{ table_label }}</div>{% endblock %}
 {% block content %}<main class="tm-main" data-table-menu>
 {# R5a (HG-115): the public menu. No order, bill, staff or other table is read here: the menu, the notices, and the status of this browser's own requests. #}
@@ -13,6 +13,16 @@
 <a class="tm-refresh" href="?lang={{ lang }}#status" data-refresh-status>{{ words.refresh }}</a>
 </section>{% endif %}
 {% if error %}<div class="cl-msg cl-msg--danger" role="alert" data-menu-error>{{ error }}</div>{% endif %}
+{% if pay_box %}<section class="tm-pay" id="pay" aria-labelledby="tm-pay-title" data-pay-box data-pay-state="{{ pay_box.state }}">{# R5b (HG-121): this table's bill, only while paying from the table is offered #}
+<h2 id="tm-pay-title">{{ pw.title }}</h2>
+<ul class="tm-pay__rows">{% for row in pay_box.rows %}<li data-pay-row><span>{{ row.name }}{% if row.quantity != 1 %} <bdi dir="ltr">× {{ row.quantity|qty }}</bdi>{% endif %}</span><bdi dir="ltr">{{ row.amount|money }}</bdi></li>{% endfor %}</ul>
+<p class="tm-pay__total"><span>{{ pw.total }}{% if pay_box.vat %} <small>({{ pw.vat }})</small>{% endif %}</span><strong data-pay-total><bdi dir="ltr">{{ pay_box.total|money }}</bdi></strong></p>
+{% if pay_box.state == "ready" or pay_box.state == "waiting" %}{% if pay_box.state == "waiting" %}<p class="tm-pay__note" data-pay-waiting>{{ pw.waiting }}</p>{% endif %}
+<form method="post" data-pay-form>{% csrf_token %}<input type="hidden" name="action" value="pay"><button class="tm-btn tm-btn--primary" type="submit" data-pay-button>{% if pay_box.state == "waiting" %}{{ pw.resume }}{% else %}{{ pw.pay }}{% endif %}</button></form>
+<p class="tm-pay__note">{{ pw.secure }}</p>
+{% elif pay_box.state == "review" %}<p class="tm-pay__note" data-pay-review>{{ pw.review }}</p>
+{% else %}<p class="tm-pay__note" data-pay-blocked>{{ pay_box.reason }}</p>{% endif %}
+</section>{% endif %}
 <div class="tm-quick">
 <form method="post" data-quick="call_waiter">{% csrf_token %}<input type="hidden" name="action" value="call"><button class="tm-btn" type="submit" data-call-waiter>{{ words.call }}</button></form>
 <form method="post" data-quick="bill">{% csrf_token %}<input type="hidden" name="action" value="bill"><button class="tm-btn" type="submit" data-ask-bill>{{ words.bill }}</button></form>
@@ -27,6 +37,6 @@
 <label class="tm-field tm-field--note">{{ words.order_note }}<textarea name="note" maxlength="120" rows="2">{{ note }}</textarea></label>
 <div class="tm-bar"><button class="tm-btn tm-btn--primary" type="submit" name="action" value="order" data-tm-order data-label="{{ words.order }}" data-label-n="{{ words.order_n }}">{{ words.order }}</button></div>
 </form>{% else %}<p class="cl-msg" data-menu-empty>{{ words.none }}</p>{% endif %}
-<script src="{% static 'hesba/js/table_menu.js' %}?v=r5a-1" defer></script>
+<script src="{% static 'hesba/js/table_menu.js' %}?v=r5b-1" defer></script>
 </main>{% endblock %}
 {% block foot_note %}<p>{{ words.foot }}</p>{% endblock %}

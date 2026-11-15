@@ -33,4 +33,14 @@
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ chw.save }}</button></div></form>
 {% else %}<p data-charges-view>{{ chw.percent }}: <bdi dir="ltr">{{ charges_form.percent|default:chw.off }}</bdi> · {{ chw.minimum }}: <bdi dir="ltr">{{ charges_form.minimum|default:chw.off }}</bdi></p>{% endif %}
 </section>
+{% if online_pay %}{% with t=online_pay.words %}<section class="op-form" id="online-pay" aria-labelledby="op-pay-title" data-online-pay>{# R5b (HG-121) #}
+<h2 id="op-pay-title">{{ t.setting_title }}</h2>
+<p class="op-muted">{{ t.setting_intro }}</p>
+{% if online_pay.can_change %}<form method="post" data-online-pay-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="online_pay">
+<div class="op-form-grid"><div class="op-field"><label for="op-pay-user">{{ t.setting_user }}</label><select id="op-pay-user" name="online_user"><option value="">{{ t.setting_none }}</option>{% for user in online_pay.users %}<option value="{{ user.pk }}"{% if online_pay.chosen and online_pay.chosen.pk == user.pk %} selected{% endif %}>{{ user.get_full_name|default:user.username }}</option>{% endfor %}</select></div></div>
+<p class="op-muted">{{ t.setting_rights }}</p>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ t.setting_save }}</button></div></form>
+{% else %}<p data-online-pay-view>{{ t.setting_user }}: {% if online_pay.chosen %}{{ online_pay.chosen.get_full_name|default:online_pay.chosen.username }}{% else %}{{ t.setting_none }}{% endif %}</p>{% endif %}
+</section>{% endwith %}{% endif %}
+</section>
 {% endblock %}

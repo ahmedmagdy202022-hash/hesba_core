@@ -101,6 +101,8 @@ PROJECT_ACCOUNTS = (
     ("5103", "تكلفة المشاريع", "Project costs", X, "project_cost", True, False),
     ("1111", "محتجزات ضمان أعمال لدى أصحاب المشاريع", "Retention receivable", A, "retention_receivable", True, False),
     ("2106", "محتجزات ضمان أعمال لمقاولي الباطن", "Retention payable", L, "retention_payable", True, False),
+    # Contracting C11 (HG-128): money paid ahead to a subcontractor, until their bills recover it.
+    ("1112", "دفعات مقدمة لمقاولي الباطن", "Subcontractor advances", A, "subcontractor_advances", True, False),
 )
 ADD["contracting"] = PROJECT_ACCOUNTS
 
