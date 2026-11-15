@@ -267,3 +267,262 @@ class WinTests(TenderSetup):
         withdrawn.refresh_from_db()
         self.assertEqual(withdrawn.status, TenderStatus.WITHDRAWN)
         self.assertEqual(Project.objects.count(), 0)
+
+
+class ScreenTests(TenderSetup):
+    def url(self, name, *args):
+        return reverse(f"tenders:{name}", args=args)
+
+    def test_building_the_reference_tender_from_the_screens_then_winning_it(self):
+        before = counts()
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(self.url("list")).status_code, 200)
+        made = self.client.post(self.url("new"), {"lang": "ar", "name": "عمارة النيل السكنية", "customer": str(self.customer.pk), "due_on": "2026-12-20",
+                                                  "overhead_percent": "10", "profit_percent": "12"})
+        tender = Tender.objects.get()
+        self.assertRedirects(made, self.url("detail", tender.pk) + "?lang=ar", fetch_redirect_response=False)
+        detail = self.url("detail", tender.pk)
+        self.client.post(detail, {"lang": "ar", "action": "add_item", "code": "1", "description": "خرسانة مسلحة", "unit": "م³", "quantity": "400"})
+        self.client.post(detail, {"lang": "ar", "action": "add_item", "code": "2", "description": "مباني طوب", "unit": "م²", "quantity": "2,000"})
+        concrete, masonry = tender.items.all()
+        for item, costs in ((concrete, (("materials", "900"), ("labour", "200"), ("equipment", "100"))), (masonry, (("materials", "150"), ("labour", "40")))):
+            for heading, cost in costs:
+                self.client.post(self.url("item", tender.pk, item.pk), {"lang": "ar", "action": "add_cost", "heading": heading, "unit_cost": cost})
+        page = self.client.get(detail)
+        self.assertContains(page, '<bdi data-figure="total">1,059,520.00</bdi>', html=False)
+        self.assertContains(page, '<bdi data-item-rate="1">1,478.40</bdi>', html=False)
+        self.assertContains(page, '<bdi data-item-overhead="1">1,320.00</bdi>', html=False)
+        self.assertContains(page, '<bdi data-item-total="2">468,160.00</bdi>', html=False)
+        self.assertContains(page, '<bdi data-heading-amount="materials">660,000.00</bdi>', html=False)
+        self.assertContains(page, "data-print-analysis")
+        item_page = self.client.get(self.url("item", tender.pk, concrete.pk))
+        self.assertContains(item_page, '<bdi data-figure="direct">1,200.00</bdi>', html=False)
+        self.assertContains(item_page, "عمالة")
+        self.client.post(detail, {"lang": "ar", "action": "submit"})
+        tender.refresh_from_db()
+        self.assertEqual(tender.status, TenderStatus.SUBMITTED)
+        won = self.client.post(detail, {"lang": "ar", "action": "win", "customer": str(self.customer.pk)}, follow=True)
+        tender.refresh_from_db()
+        self.assertEqual(tender.status, TenderStatus.WON)
+        self.assertContains(won, f"اتعمل المشروع {tender.project.code}")
+        self.assertContains(won, "data-won-note")
+        self.assertContains(won, reverse("projects:detail", args=[tender.project_id]))
+        self.assertNotContains(won, "data-add-item")
+        self.assertNotContains(won, 'data-action="win"')
+        self.assertNotContains(won, "data-edit-tender")
+        self.assertEqual(contract.boq_total(tender.project), D("1059520.00"))
+        self.assertEqual(counts(), before)
+        # Read-only from every screen: posts change nothing.
+        self.assertRedirects(self.client.get(self.url("edit", tender.pk)), detail + "?lang=ar", fetch_redirect_response=False)
+        self.client.post(self.url("edit", tender.pk), {"name": "تعديل", "customer": str(self.customer.pk)})
+        self.client.post(detail, {"action": "add_item", "description": "بند", "quantity": "1"})
+        self.client.post(self.url("item", tender.pk, concrete.pk), {"action": "save_item", "description": "خرسانة", "quantity": "999"})
+        self.client.post(self.url("item", tender.pk, concrete.pk), {"action": "add_cost", "heading": "other", "unit_cost": "1"})
+        self.client.post(self.url("item", tender.pk, concrete.pk), {"action": "delete_cost", "cost": str(concrete.costs.first().pk)})
+        self.client.post(self.url("item", tender.pk, masonry.pk), {"action": "delete_item"})
+        self.client.post(detail, {"action": "lost", "reason": "x"})
+        tender.refresh_from_db()
+        self.assertEqual((tender.name, tender.status, tender.items.count(), TenderCost.objects.count()), ("عمارة النيل السكنية", TenderStatus.WON, 2, 5))
+        self.assertEqual(Project.objects.count(), 1)
+        item_page = self.client.get(self.url("item", tender.pk, concrete.pk))
+        self.assertNotContains(item_page, "data-add-cost")
+        self.assertNotContains(item_page, "data-delete-item")
+
+    def test_a_refusal_shows_in_words_and_keeps_what_was_typed(self):
+        self.client.force_login(self.owner)
+        page = self.client.post(self.url("new"), {"lang": "ar", "name": "عطاء مدرسة", "overhead_percent": "10"})
+        self.assertContains(page, "data-tender-error")
+        self.assertContains(page, "اسم الجهة")
+        self.assertContains(page, 'value="عطاء مدرسة"')
+        tender = self.reference()
+        refused = self.client.post(self.url("detail", tender.pk), {"lang": "en", "action": "add_item", "description": "Item", "quantity": "-3"}, follow=True)
+        self.assertContains(refused, "The quantity must be a number above zero.")
+        self.assertEqual(tender.items.count(), 2)
+        lost = self.client.post(self.url("detail", tender.pk), {"lang": "ar", "action": "lost", "reason": ""}, follow=True)
+        self.assertContains(lost, "اكتب السبب")
+        self.client.post(self.url("detail", tender.pk), {"lang": "ar", "action": "lost", "reason": "منافس أرخص"})
+        tender.refresh_from_db()
+        self.assertEqual(tender.status, TenderStatus.LOST)
+        page = self.client.get(self.url("detail", tender.pk))
+        self.assertContains(page, "data-closed-note")
+        self.assertContains(page, "منافس أرخص")
+        listing = self.client.get(self.url("list") + "?status=lost")
+        self.assertContains(listing, f'data-tender="{tender.pk}"')
+        self.assertNotContains(self.client.get(self.url("list") + "?status=studying"), f'data-tender="{tender.pk}"')
+
+    def test_editing_and_removing_from_the_item_page(self):
+        tender = self.reference()
+        self.client.force_login(self.owner)
+        url = self.url("item", tender.pk, self.concrete.pk)
+        labour = self.concrete.costs.get(heading="labour")
+        self.client.post(url, {"lang": "ar", "action": "save_cost", "cost": str(labour.pk), "heading": "labour", "description": "نجار ومسلّح", "unit_cost": "250"})
+        self.assertEqual(services.analysis(tender)["rows"][0]["rate"], D("1540.00"))  # 1,250.00 × 1.1 × 1.12
+        self.client.post(url, {"lang": "ar", "action": "delete_cost", "cost": str(labour.pk)})
+        self.assertEqual(services.analysis(tender)["rows"][0]["direct"], D("1000.00"))
+        self.client.post(url, {"lang": "ar", "action": "save_item", "code": "1", "description": "خرسانة مسلحة", "unit": "م³", "quantity": "500"})
+        self.concrete.refresh_from_db()
+        self.assertEqual(self.concrete.quantity, D("500.000"))
+        other = self.client.post(url, {"lang": "ar", "action": "delete_cost", "cost": str(self.masonry.costs.first().pk)})
+        self.assertEqual(other.status_code, 404)  # another item's cost line
+        self.client.post(url, {"lang": "ar", "action": "delete_item"})
+        self.assertFalse(TenderItem.objects.filter(pk=self.concrete.pk).exists())
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.get(self.url("item", tender.pk, 999999)).status_code, 404)
+
+    def test_english_and_arabic(self):
+        tender = self.reference()
+        self.client.force_login(self.owner)
+        english = self.client.get(self.url("detail", tender.pk) + "?lang=en")
+        self.assertContains(english, 'dir="ltr"')
+        for words in ("Bill of quantities", "Unit rate", "Direct unit cost", "Cost by heading", "Materials", "Won", "Lost", "Withdrawn", "Tender total"):
+            self.assertContains(english, words)
+        self.assertNotContains(english, "اترسّت علينا")
+        arabic = self.client.get(self.url("detail", tender.pk))
+        self.assertContains(arabic, 'dir="rtl"')
+        for words in ("بنود المقايسة", "سعر الوحدة", "التكلفة المباشرة للوحدة", "التكلفة حسب البند", "خامات", "اترسّت علينا", "مارسيتش علينا", "انسحبنا"):
+            self.assertContains(arabic, words)
+        self.assertNotContains(arabic, "Unit rate")
+        self.assertContains(self.client.get(self.url("list") + "?lang=en"), "Under study")
+        self.assertContains(self.client.get(self.url("list")), "تحت الدراسة")
+        self.assertContains(self.client.get(self.url("item", tender.pk, self.concrete.pk) + "?lang=en"), "Unit price analysis")
+        self.assertContains(self.client.get(self.url("new") + "?lang=en"), "Inviting party")
+
+
+class PrintTests(TenderSetup):
+    def test_the_submission_print_shows_no_cost(self):
+        tender = self.reference()
+        self.client.force_login(self.owner)
+        sheet = self.client.get(reverse("tenders:boq_print", args=[tender.pk]))
+        self.assertEqual(sheet.status_code, 200)
+        html = sheet.content.decode()
+        self.assertIn('data-kind="tender_boq"', html)
+        for figure in ("1,478.40", "591,360.00", "234.08", "468,160.00", "1,059,520.00", "شركة النيل للتطوير"):
+            self.assertIn(figure, html)
+        for cost in ("900.00", "1,200.00", "1,320.00", "190.00", "209.00", "660,000.00", "160,000.00", "40,000.00", "86,000.00", "113,520.00",
+                     "خامات", "عمالة", "معدات", "12%", "10%", "المصاريف العامة", "الربح", "التكلفة"):
+            self.assertNotIn(cost, html, cost)
+        english = self.client.get(reverse("tenders:boq_print", args=[tender.pk]) + "?lang=en").content.decode()
+        self.assertIn("Priced bill of quantities", english)
+        for cost in ("Materials", "Labour", "Overhead", "Profit", "1,200.00"):
+            self.assertNotIn(cost, english, cost)
+
+    def test_the_internal_analysis_shows_costs_and_needs_the_profit_report(self):
+        tender = self.reference()
+        self.client.force_login(self.owner)
+        sheet = self.client.get(reverse("tenders:analysis_print", args=[tender.pk]))
+        self.assertEqual(sheet.status_code, 200)
+        for figure in ("900.00", "1,200.00", "1,320.00", "1,478.40", "209.00", "234.08", "660,000.00", "160,000.00", "40,000.00", "860,000.00",
+                       "86,000.00", "113,520.00", "1,059,520.00", "داخلي"):
+            self.assertContains(sheet, figure)
+        manager = person(RoleCode.MANAGER, "print_manager")  # manages tenders, no profit report
+        self.client.force_login(manager)
+        self.assertEqual(self.client.get(reverse("tenders:analysis_print", args=[tender.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse("tenders:boq_print", args=[tender.pk])).status_code, 200)
+        page = self.client.get(reverse("tenders:detail", args=[tender.pk]))
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "data-print-analysis")
+        self.assertNotContains(page, "data-item-costs")
+        self.assertNotContains(page, "data-by-heading")
+        self.assertNotContains(page, "1,200.00")
+        self.assertNotContains(page, "12%")
+        self.assertContains(page, "data-costs-hidden")
+        self.assertContains(page, "1,478.40")  # the rates and totals are the tender's price, not its cost
+        item_page = self.client.get(reverse("tenders:item", args=[tender.pk, self.concrete.pk]))
+        self.assertNotContains(item_page, "data-costs>")
+        self.assertContains(item_page, "data-costs-hidden")
+        self.assertNotContains(item_page, "data-add-cost")
+        self.assertNotContains(item_page, "1,200.00")
+        form = self.client.get(reverse("tenders:edit", args=[tender.pk]))
+        self.assertNotContains(form, 'name="overhead_percent"')
+        self.assertNotContains(form, 'name="profit_percent"')
+        refused = self.client.post(reverse("tenders:item", args=[tender.pk, self.concrete.pk]), {"action": "add_cost", "heading": "other", "unit_cost": "5"}, follow=True)
+        self.assertContains(refused, "صلاحية تقرير الأرباح")
+        self.assertEqual(TenderCost.objects.count(), 5)
+        # A holder of the profit report without the tender office gets 403 too.
+        self.client.force_login(person(RoleCode.ACCOUNTANT, "print_accountant"))
+        self.assertEqual(self.client.get(reverse("tenders:analysis_print", args=[tender.pk])).status_code, 403)
+
+
+class PermissionAndEntityTests(TenderSetup):
+    def test_the_office_opens_tenders_and_others_get_403(self):
+        tender = self.reference()
+        urls = (reverse("tenders:list"), reverse("tenders:new"), reverse("tenders:detail", args=[tender.pk]), reverse("tenders:edit", args=[tender.pk]),
+                reverse("tenders:item", args=[tender.pk, self.concrete.pk]), reverse("tenders:boq_print", args=[tender.pk]))
+        for role, name in ((RoleCode.OWNER, "pp_owner"), (RoleCode.MANAGER, "pp_manager"), (RoleCode.CASHIER, "pp_cashier")):
+            self.client.force_login(person(role, name))
+            for url in urls:
+                self.assertEqual(self.client.get(url).status_code, 200, (role, url))
+        for role, name in ((RoleCode.SITE_ENGINEER, "pp_engineer"), (RoleCode.ACCOUNTANT, "pp_accountant"), (RoleCode.STOCK_KEEPER, "pp_keeper")):
+            self.client.force_login(person(role, name))
+            for url in urls:
+                self.assertEqual(self.client.get(url).status_code, 403, (role, url))
+            self.assertEqual(self.client.post(reverse("tenders:detail", args=[tender.pk]), {"action": "win", "customer": str(self.customer.pk)}).status_code, 403)
+            self.assertEqual(self.client.post(reverse("tenders:item", args=[tender.pk, self.concrete.pk]), {"action": "delete_item"}).status_code, 403)
+        tender.refresh_from_db()
+        self.assertEqual((tender.status, tender.items.count()), (TenderStatus.STUDYING, 2))
+
+    def test_the_menu_item_sits_next_to_projects_for_the_office_only(self):
+        from reports.navigation import nav_items
+        from settings_core.setup_services import enabled_modules
+
+        keys = [item["key"] for item in nav_items(self.owner, "ar", enabled_modules())]
+        self.assertIn("tenders", keys)
+        self.assertEqual(keys.index("tenders"), keys.index("projects") + 1)
+        engineer = [item["key"] for item in nav_items(person(RoleCode.SITE_ENGINEER, "nav_engineer"), "ar", enabled_modules())]
+        self.assertIn("projects", engineer)
+        self.assertNotIn("tenders", engineer)
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("tenders:list")), 'href="#hs-i-tenders"')
+
+    def test_another_entitys_tender_is_a_404(self):
+        from entities.current import SESSION_KEY
+        from entities.models import Entity
+        from entities.services import main_entity
+
+        other = Entity.objects.create(code="E2", name_ar="شركة تانية")
+        mine = self.reference()
+        far = Tender.objects.create(name="عطاء الشركة التانية", prospect_name="جهة", entity=other, created_by=self.owner)
+        far_item = TenderItem.objects.create(tender=far, line_number=1, description="بند", quantity=D("1"))
+        self.client.force_login(self.owner)
+        session = self.client.session
+        session[SESSION_KEY] = main_entity().pk
+        session.save()
+        for url in (reverse("tenders:detail", args=[far.pk]), reverse("tenders:edit", args=[far.pk]), reverse("tenders:item", args=[far.pk, far_item.pk]),
+                    reverse("tenders:boq_print", args=[far.pk]), reverse("tenders:analysis_print", args=[far.pk])):
+            self.assertEqual(self.client.get(url).status_code, 404, url)
+        self.assertEqual(self.client.post(reverse("tenders:detail", args=[far.pk]), {"action": "lost", "reason": "x"}).status_code, 404)
+        self.assertEqual(self.client.post(reverse("tenders:item", args=[far.pk, far_item.pk]), {"action": "delete_item"}).status_code, 404)
+        self.assertEqual(self.client.get(reverse("tenders:item", args=[mine.pk, far_item.pk])).status_code, 404)  # another tender's item
+        far.refresh_from_db()
+        self.assertEqual((far.status, far.items.count()), (TenderStatus.STUDYING, 1))
+        listing = self.client.get(reverse("tenders:list"))
+        self.assertContains(listing, f'data-tender="{mine.pk}"')
+        self.assertNotContains(listing, f'data-tender="{far.pk}"')
+        # A tender made while working in an entity belongs to it.
+        session = self.client.session
+        session[SESSION_KEY] = other.pk
+        session.save()
+        self.client.post(reverse("tenders:new"), {"name": "عطاء جديد", "prospect_name": "جهة"})
+        self.assertEqual(Tender.objects.get(name="عطاء جديد").entity, other)
+
+
+class ScannerTests(TestCase):
+    ROOT = pathlib.Path(settings.BASE_DIR)
+    TEMPLATES = sorted((ROOT / "templates/tenders").glob("*.html"))
+
+    def test_tokens_only_in_the_stylesheet(self):
+        css = (self.ROOT / "static/hesba/css/tenders.css").read_text(encoding="utf-8")
+        self.assertIsNone(re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsl\(", css))
+        self.assertIn("var(--hs-", css)
+
+    def test_templates_carry_no_raw_labels_or_banned_words(self):
+        self.assertTrue(self.TEMPLATES)
+        sources = [(path.name, path.read_text(encoding="utf-8")) for path in self.TEMPLATES]
+        sources.append(("views.py", (self.ROOT / "tenders/views.py").read_text(encoding="utf-8")))
+        sources.append(("services.py", (self.ROOT / "tenders/services.py").read_text(encoding="utf-8")))
+        for name, text in sources:
+            with self.subTest(name=name):
+                self.assertIsNone(re.search(r"<td[^>]*data-label=", text))
+                self.assertNotIn("_display", text)
+                for word in ("ورشة", "الأسطى", "بتاع", "دوس", "لينك"):
+                    self.assertNotIn(word, text)

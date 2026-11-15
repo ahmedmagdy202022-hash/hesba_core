@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/tenders.css' %}?v=c8-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% if tender %}{% url 'tenders:detail' tender.pk %}{% else %}{% url 'tenders:list' %}{% endif %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if tender %}{{ tender.name }}{% else %}{{ words.back }}{% endif %}</a><h1>{% if tender %}{{ words.edit }}{% else %}{{ words.new }}{% endif %}</h1></div></section>
+<form class="op-form" method="post" data-tender-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+{% if error %}<div class="op-message op-message-error" role="alert" data-tender-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="td-name">{{ words.name }}</label><input id="td-name" name="name" value="{{ form.name|default:'' }}" maxlength="255" required></div>
+<div class="op-field"><label for="td-due">{{ words.due_on }}</label><input id="td-due" name="due_on" type="date" value="{{ form.due_on|default:'' }}"></div>
+<div class="op-field"><label for="td-customer">{{ words.customer }}</label><select id="td-customer" name="customer"><option value="">{{ words.no_customer }}</option>{% for customer in customers %}<option value="{{ customer.pk }}"{% if form.customer == customer.pk|stringformat:"s" %} selected{% endif %}>{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="td-prospect">{{ words.prospect }}</label><input id="td-prospect" name="prospect_name" value="{{ form.prospect_name|default:'' }}" maxlength="255"></div>
+{% if can_costs %}<div class="op-field"><label for="td-overhead">{{ words.overhead }}</label><input id="td-overhead" name="overhead_percent" value="{{ form.overhead_percent|default:'' }}" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="td-profit">{{ words.profit }}</label><input id="td-profit" name="profit_percent" value="{{ form.profit_percent|default:'' }}" inputmode="decimal" dir="ltr"></div>{% endif %}
+<div class="op-field td-wide"><label for="td-notes">{{ words.notes }}</label><textarea id="td-notes" name="notes" maxlength="2000">{{ form.notes|default:'' }}</textarea></div>
+</div>
+{% if not can_costs %}<p class="op-muted" data-costs-hidden>{{ words.costs_hidden }}</p>{% endif %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>
+</form>
+{% endblock %}

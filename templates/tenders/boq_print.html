@@ -1,0 +1,46 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ words.p_boq_title }} — {{ t.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
+<link rel="stylesheet" href="{% static 'hesba/css/tenders.css' %}?v=c8-1">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{# Contracting C8 (HG-126): the priced bill of quantities for submission. Items, quantities, unit rates and totals only: no cost, heading or markup. #}
+<nav class="pr-toolbar" aria-label="{{ words.p_print }}">
+  <a class="pr-button pr-button--ghost" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ words.p_back }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ words.p_print }}</button>
+  <p class="pr-toolbar__hint">{{ words.p_hint }}</p>
+</nav>
+<article class="pr-sheet" data-kind="tender_boq">
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title" data-print-heading>{{ words.p_boq_title }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ words.name }}</dt><dd>{{ t.name }}</dd></div>
+        {% if due %}<div><dt>{{ words.due_on }}</dt><dd>{{ due }}</dd></div>{% endif %}
+        <div><dt>{{ words.p_date }}</dt><dd>{{ printed }}</dd></div>
+      </dl>
+    </div>
+  </header>
+  <section class="pr-party"><span class="pr-party__label">{{ words.p_to }}</span><strong class="pr-party__name">{{ party }}</strong></section>
+  <table class="pr-lines" data-print-lines>
+    <thead><tr><th class="pr-col-no">{{ words.p_no }}</th><th>{{ words.code }}</th><th>{{ words.description }}</th><th>{{ words.unit }}</th><th class="pr-num">{{ words.qty }}</th><th class="pr-num">{{ words.rate }}</th><th class="pr-num">{{ words.amount }}</th></tr></thead>
+    <tbody>{% for row in figures.rows %}<tr data-print-item="{{ row.item.line_number }}"><td class="pr-col-no">{{ row.item.line_number }}</td><td><bdi>{{ row.item.code }}</bdi></td><td class="pr-item">{{ row.item.description }}</td><td><bdi>{{ row.item.unit }}</bdi></td><td class="pr-num">{{ row.item.quantity|qty }}</td><td class="pr-num">{{ row.rate|money }}</td><td class="pr-num">{{ row.total|money }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <section class="pr-totals"><dl><div class="pr-totals__grand"><dt>{{ words.total }}</dt><dd data-print-total>{{ figures.total|money }} <small>{{ company.currency }}</small></dd></div></dl></section>
+  <section class="pr-signatures"><div>{{ words.p_signature }}</div></section>
+  <footer class="pr-foot">{% if company.show_hesba_brand %}<p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}</footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/tenders.css' %}?v=c8-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C8 (HG-126): one tender, its items with their price analysis, the summary and the decision. Costs and markups only with reports.view_profit_report. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'tenders:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a>
+<h1>{{ t.name }}</h1><p>{{ party }}{% if t.due_on %} · {{ words.due_on }}: {{ t.due_on|day_text:lang }}{% endif %}</p></div>
+<div class="op-form-actions">{% if is_open %}<a class="op-secondary" href="{% url 'tenders:edit' t.pk %}?lang={{ lang }}" data-edit-tender>{{ words.edit }}</a>{% endif %}<span class="op-status op-status-{{ status.tone }}" data-tender-status="{{ t.status }}">{{ status.label }}</span></div></section>
+{% if won_note %}<p class="td-note td-note--won" data-won-note>{{ won_note }} <a href="{% url 'projects:detail' t.project_id %}?lang={{ lang }}" data-open-project>{{ words.open_project }}</a></p>{% endif %}
+{% if closed_note %}<p class="td-note" data-closed-note>{{ closed_note }}</p>{% endif %}
+
+<section class="op-summary-grid op-summary-grid--compact td-figures" data-tender-figures>
+<article><small>{{ words.total }}</small><strong><bdi data-figure="total">{{ figures.total|money }}</bdi></strong></article>
+<article><small>{{ words.items_n }}</small><strong data-figure="items">{{ rows|length }}</strong>{% if figures.unpriced %}<small class="td-warn" data-figure="unpriced">{{ words.unpriced }}: {{ figures.unpriced|length }}</small>{% endif %}</article>
+{% if can_costs %}<article><small>{{ words.direct_total }}</small><strong><bdi data-figure="direct">{{ figures.direct|money }}</bdi></strong></article>
+<article><small>{{ words.overhead_amount }} (<bdi dir="ltr">{{ t.overhead_percent|floatformat:"-2" }}%</bdi>)</small><strong><bdi data-figure="overhead">{{ figures.overhead|money }}</bdi></strong></article>
+<article><small>{{ words.profit_amount }} (<bdi dir="ltr">{{ t.profit_percent|floatformat:"-2" }}%</bdi>)</small><strong><bdi data-figure="profit">{{ figures.profit|money }}</bdi></strong></article>{% endif %}
+</section>
+{% if not can_costs %}<p class="op-muted" data-costs-hidden>{{ words.costs_hidden }}</p>{% endif %}
+
+<h2 class="td-h2">{{ words.items }}</h2>
+<div class="td-items" data-tender-items>
+{% for row in rows %}{% with item=row.item %}<article class="td-item{% if row.direct <= 0 %} is-unpriced{% endif %}" data-item="{{ item.line_number }}">
+<header class="td-item__head"><span class="td-item__no"><bdi dir="ltr">{{ item.code|default:item.line_number }}</bdi></span><h3>{{ item.description }}</h3>{% if row.direct <= 0 %}<span class="td-chip" data-unpriced>{{ words.unpriced }}</span>{% endif %}</header>
+<dl class="td-item__figures">
+<div><dt>{{ words.qty }}</dt><dd><bdi>{{ item.quantity|qty }}</bdi> <bdi>{{ item.unit }}</bdi></dd></div>
+<div><dt>{{ words.rate }}</dt><dd><bdi data-item-rate="{{ item.line_number }}">{{ row.rate|money }}</bdi></dd></div>
+<div><dt>{{ words.amount }}</dt><dd><strong><bdi data-item-total="{{ item.line_number }}">{{ row.total|money }}</bdi></strong></dd></div>
+</dl>
+{% if can_costs %}<ul class="td-costs" data-item-costs="{{ item.line_number }}">{% for c in row.cost_rows %}<li><span>{{ c.heading }}{% if c.c.description %} · {{ c.c.description }}{% endif %}</span><bdi data-cost-amount>{{ c.c.unit_cost|money }}</bdi></li>{% empty %}<li class="td-costs__none">{{ words.no_costs }}</li>{% endfor %}
+{% if row.costs %}<li class="td-costs__sum"><span>{{ words.direct }}</span><bdi data-item-direct="{{ item.line_number }}">{{ row.direct|money }}</bdi></li>
+<li class="td-costs__sum"><span>{{ words.after_overhead }}</span><bdi data-item-overhead="{{ item.line_number }}">{{ row.with_overhead|money }}</bdi></li>{% endif %}</ul>{% endif %}
+<a class="td-item__link" href="{% url 'tenders:item' t.pk item.pk %}?lang={{ lang }}" data-item-link="{{ item.line_number }}">{% if is_open %}{{ words.edit_item }}{% else %}{{ words.open }}{% endif %}</a>
+</article>{% endwith %}
+{% empty %}<p class="op-empty td-empty">{{ words.no_items }}</p>{% endfor %}
+</div>
+
+{% if is_open %}<form class="op-form td-form" method="post" data-add-item novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_item"><h2>{{ words.add_item }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="ti-code">{{ words.code }}</label><input id="ti-code" name="code" maxlength="20" dir="ltr"></div>
+<div class="op-field"><label for="ti-desc">{{ words.description }}</label><input id="ti-desc" name="description" maxlength="255" required></div>
+<div class="op-field"><label for="ti-unit">{{ words.unit }}</label><input id="ti-unit" name="unit" maxlength="30" list="ti-units"><datalist id="ti-units"><option value="م³"><option value="م²"><option value="م.ط"><option value="طن"><option value="عدد"><option value="مقطوعية"></datalist></div>
+<div class="op-field"><label for="ti-qty">{{ words.qty }}</label><input id="ti-qty" name="quantity" inputmode="decimal" dir="ltr" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add_item }}</button></div></form>{% endif %}
+
+{% if can_costs and figures.headings %}<section class="td-card" data-by-heading><h2>{{ words.by_heading }}</h2>
+<ul>{% for h in figures.headings %}<li data-heading="{{ h.heading }}"><span>{{ h.label }}</span><span class="td-card__share"><bdi dir="ltr">{{ h.share }}%</bdi></span><strong><bdi data-heading-amount="{{ h.heading }}">{{ h.amount|money }}</bdi></strong></li>{% endfor %}
+<li class="td-card__total"><span>{{ words.direct_total }}</span><span></span><strong><bdi>{{ figures.direct|money }}</bdi></strong></li></ul></section>{% endif %}
+
+{% if rows %}<nav class="td-prints" aria-label="{{ words.p_print }}"><a class="op-secondary" href="{% url 'tenders:boq_print' t.pk %}?lang={{ lang }}" data-print-boq>{{ words.print_boq }}</a>{% if can_costs %}<a class="op-secondary" href="{% url 'tenders:analysis_print' t.pk %}?lang={{ lang }}" data-print-analysis>{{ words.print_analysis }}</a>{% endif %}</nav>{% endif %}
+
+{% if is_open %}<h2 class="td-h2">{{ words.actions }}</h2>
+<div class="td-actions">
+{% if is_studying %}<form class="op-form" method="post" data-action="submit">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="submit"><h3>{{ words.submit }}</h3><p class="op-muted">{{ words.submit_hint }}</p>
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ words.submit }}</button></div></form>{% endif %}
+<form class="op-form td-win" method="post" data-action="win">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="win"><h3>{{ words.win }}</h3><p class="op-muted">{{ words.win_hint }}</p>
+<div class="op-field"><label for="tw-customer">{{ words.win_customer }}</label><select id="tw-customer" name="customer" required>{% if not t.customer_id %}<option value="">{{ words.choose }}</option>{% endif %}{% for customer in customers %}<option value="{{ customer.pk }}"{% if t.customer_id == customer.pk %} selected{% endif %}>{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.win }}</button></div></form>
+<form class="op-form" method="post" data-action="lost">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="lost"><h3>{{ words.lose }}</h3><p class="op-muted">{{ words.close_hint }}</p>
+<div class="op-field"><label for="tl-reason">{{ words.reason }}</label><input id="tl-reason" name="reason" maxlength="255" required></div>
+<div class="op-form-actions"><button class="op-danger" type="submit">{{ words.lose }}</button></div></form>
+<form class="op-form" method="post" data-action="withdrawn">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="withdrawn"><h3>{{ words.withdraw }}</h3><p class="op-muted">{{ words.close_hint }}</p>
+<div class="op-field"><label for="tx-reason">{{ words.reason }}</label><input id="tx-reason" name="reason" maxlength="255" required></div>
+<div class="op-form-actions"><button class="op-danger" type="submit">{{ words.withdraw }}</button></div></form>
+</div>{% endif %}
+{% endblock %}
