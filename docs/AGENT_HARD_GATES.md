@@ -4259,3 +4259,96 @@ HG-100 is reserved by another open task and is not in this tree: the gap is on p
   8. Who manages the brands? (**Who edits the tables and the menu**, `master_data.manage_items`; the invoices' view right sees them.)
   9. The default brand? (**The first brand is the default; it cannot be switched off while another is active.**)
   10. Can an order's brand be changed after opening? (**No.**)
+
+## HG-118 — Restaurants R8: table reservations: a `TableReservation` per party with one clash rule per table, «وصل» through the existing open-table service, cancel and no-show under the S5 deposit policy, a public request page `/book-table/<key>/`, and the held deposit settling the table bill with S5's own `attach` and `apply` (`TableReservation`, `ReservationPage`; migration `restaurant/0012_reservations`)
+
+- **Status:** implemented on `claude/restaurants-r8-reservations`, stacked on `claude/restaurants-r11-brands` (HG-117), `claude/restaurants-r7-call-centre` (HG-116), `claude/restaurants-r5a-qr-menu` (HG-115) and `claude/restaurants-r6-offers-on-bill` (HG-114), under Ahmed's delegation, **awaiting his review before merge**. T2: two new tables and one screen, with one guarded money path. That path calls existing services only. **No new permission**, no change to the permission core. `sales/*` (posting, `sales/pos.py` `checkout`, `sales/tenders.py`), `settlements`, `deposits`, `taxes`, the journal, the cashbox and ledger code are **not edited**. Files outside `restaurant/`: `config/urls.py` (one public route), a new stylesheet `static/hesba/css/restaurant_reservations.css` and the templates under `templates/restaurant/`; see «Files». Roadmap: `docs/MARKET_PARITY_ROADMAP.md`, restaurants item 24 from ناقص to **موجود** (90.4%). Plan: «R8 – Table reservations»; where it and the code disagree, the code was followed (see «Where the plan and the code differ»).
+- **The table, and why not `appointments.Appointment`:** an appointment belongs to an employee and a service, and its clash check is per employee. A table needs a seat count and a clash check **per table**. `TableReservation` has `number` (`RES-YYYYMMDD-NNN`, unique, retried on a clash), `entity` (NOT NULL, filled in `save()` from the table, else the main entity, as `DeliveryZone` and `Brand` do), `customer` (nullable, `PROTECT`), `name`, `phone`, `party_size`, `starts_at`, `duration_minutes` (default 90), `table` (nullable until one is given, `PROTECT`), `notes`, `status` (exactly `booked`, `confirmed`, `seated`, `cancelled`, `no_show`), `order` (set at «وصل», `PROTECT`), `online` (made from the public page), `created_by` and timestamps. Two indexes: (table, starts_at) and (entity, starts_at). A check constraint keeps the party and the duration at 1 or more. `number`, `entity`, `starts_at` and `status` are the names `deposits.services` reads by `getattr`. With them, `take`, `is_late`, `policy`, `forfeit`, `refund`, `held_for` and `latest_for` work on a reservation **unchanged**. `ReservationPage` holds one row per entity: `public_key` (random, unique), `accepting` (**off** by default) and `updated_at`.
+- **The rules** (`restaurant/reservations.py`):
+  1. **No overlap on one table.** Two live reservations (booked, confirmed or seated) on the same table may not overlap. A reservation holds its table over the window [starts_at, starts_at + duration). One that **starts exactly when another ends**, or ends exactly when another starts, is allowed. The check runs on create, edit, assigning a table and seat. It runs **under the table's row lock**, the lock `open_order` and `save_table` take. The database narrows the rows to those starting within the longest booking (720 minutes). The exact overlap test runs in Python, so it is the same on SQLite and PostgreSQL. A PostgreSQL-only test proves that a second overlapping booking made at the same moment waits on the lock and is then refused. A cancelled reservation or a no-show frees the time.
+  2. **The seats warning.** A party bigger than the table's seats is refused with a warning naming the party and the seats (`code="seats"`). The screen then shows «كمّل رغم العدد»; ticked, the reservation is saved and audited with `over_seats: true`. The same rule applies at «وصل».
+  3. **«وصل» (seat).** It locks the reservation and the table and checks the clash and seats rules. It **refuses when the table already has an open order**; `open_order` would otherwise join that order silently. Then it calls the existing `services.open_order(table=, guests=party_size, customer=, phone=, notes="حجز RES-…")`. There is no new order path. The reservation becomes `seated` with the order linked. A table can be given or changed at this step.
+  4. **Confirm** (booked → confirmed), **cancel** and **no-show** are status changes, audited (`confirm_reservation`, `cancel_reservation`, `no_show_reservation`, with the reason). A seated, cancelled or no-show reservation is never edited again. While a deposit is held, the customer cannot be changed.
+  5. **Branches (R12).** A reservation belongs to one branch. The screen and every action are scoped to the working entity, so another branch's reservation is a **404** and its table is refused. Across the whole group a new reservation names its branch.
+- **The screen «الحجوزات»** (`restaurant:reservations`). It is linked on the board's toolbar next to the kitchen screen, shown to everyone who sees the board.
+  - **Day view:** cards by time, day by day. Each card shows the time and the end time, the name, the party, the table and its seats, the phone, the customer, the status and a «من الموبايل» tag for public requests.
+  - **Day controls:** the previous and next day, today, and a date picker.
+  - **Actions:** the new/edit form, confirm, «وصل» (with the table and «كمّل رغم العدد»), cancel (with a reason) and «ما حضرش».
+  - **Deposit:** the deposit row, take, forfeit and refund.
+  - **Public page set-up:** the public page's switch, its address and «غيّر الرابط».
+  - **Layout:** one column at 390 px, 44 px targets, `--hs-*` tokens only (checked by a test) and the shared `op-*` components.
+  - **Permissions** (existing codes only, the way R7 and R11 did it):
+    - **viewing** follows the board (`sales.view_sales_invoices` or `restaurant.take_orders`);
+    - **making, editing, confirming, seating, cancelling, no-show** follow whoever can open orders (`sales.create_sales_invoice` or `restaurant.take_orders`), so a waiter seats guests;
+    - **a deposit** follows the deposits' own codes: take and refund with `sales.receive_customer_payment`, forfeit with `sales.create_sales_invoice`. A waiter never sees the deposit buttons;
+    - **the public page's switch and key** follow the floor's set-up (`master_data.manage_items`), as R5a's QR cards do;
+    - **a stock keeper gets 403** on the page and on every action.
+- **The public request page `/book-table/<key>/`** (`restaurant/views_reservations.py`, `templates/restaurant/book_table.html`). It follows R5a and S3:
+  - `login_not_required` in the URLconf, `csrf_protect` and `never_cache`;
+  - the R5a helpers imported, not copied (`_private`: `no-store`, `noindex, nofollow`, `Referrer-Policy: same-origin`; `_throttled`; `_address`);
+  - throttles of 120 views a minute per address (counted before the key is read) and S3's booking limits: 10 requests an hour per address and 5 per phone. A branch is also capped at 200 an hour, whoever sends them;
+  - a honeypot field, and a time that must lie ahead, within 60 days.
+
+  The guest gives name, phone, party, day, time and notes. The page makes a **`booked` request with no table and no customer** (`online`, `created_by` empty) and answers 303 to a generic «طلبك وصل» page that echoes nothing. No booking, table, staff member or customer is ever shown. A key that is unknown, over-long or rotated, a page that is off, the tables module off or an inactive branch all answer **one 404 page**, with the private headers. The key is per entity, like S3's booking key. `ReservationPage` is made on the first switch-on; «غيّر الرابط» retires the old link at once.
+- **The deposit (only while the «العربون» capability is on):**
+  - **take:** `deposits.services.take(reservation, customer, cashbox, amount, user)` as it is. The reservation needs a named customer, and the walk-in is refused (by `take` itself, and the reservation stores no walk-in). The cashbox must be one of the reservation's branch's. A deposit of 200.00 takes the customer's account to −200.00 and the till to +200.00.
+  - **cancel and no-show** run the S5 policy in one transaction, in the steps of `appointments.services.cancel_with_deposit_policy`: lock, read the held deposit, set the status, then the policy. **Late** (inside `deposits.cancel_hours`, default 24, or any no-show) → the existing `forfeit`. It posts a «رسوم إلغاء» invoice settled by the deposit: **200.00 = 175.44 + 24.56 with VAT 14%, 200.00 without**, and the customer owes nothing. **Early** → the existing `refund` through HG-068's gate. Someone without the right leaves the deposit held as the customer's credit. Forfeit and refund buttons then show on the cancelled card for whoever may.
+  - **Applying it at the bill. Built, with existing services only; no Hard Gate needed.** What was studied:
+    - S5 applies a deposit by `attach(target, draft)`. `apply(invoice)` then runs from the posting AuditLog's `_on_audit` and settles up to `remaining_due − applied_to(invoice)`.
+    - The restaurant bill (`services.pay` → `_settle_and_post` → `sales.pos.checkout`) drafts and posts in one call, so there is no draft to attach before posting.
+    - `apply` works on any posted invoice.
+    - `sales.tenders.split` only refuses tenders that add up to *more* than the cash due.
+
+    What `services.pay` now does, inside its existing transaction:
+    1. It finds the **seated** reservation of this order (or of an order merged into it) whose held deposit belongs to the **customer the bill is paid in the name of**.
+    2. It works out the total `checkout` will post, by `checkout`'s own formula (`_checkout_total`: each row rounded, VAT per line from `compute_lines`, the discount after tax).
+    3. It asks the drawer only for `total − gift − deposit`. A one-cashbox bill caps `tendered` there and works out the change itself. Split tenders must add up to that, and the restaurant's own split check becomes `tenders + gift + deposit = total`.
+    4. After `checkout` returns, it calls `deposits.attach(reservation, invoice)` and then `deposits.apply(invoice)`. The `_on_audit` hook has already fired as a no-op, because the deposit was not yet attached, so nothing is applied twice.
+    5. It checks that the posted total equals the predicted one and that exactly the expected amount was settled. **Anything else undoes the whole payment.**
+
+    **Figures:**
+    - Four plates at 112.00, VAT on: **510.72**. The 200.00 deposit settles it (one `InvoiceSettlement`, source `deposit`), `paid_now` is **310.72**, and change is given on 400.00. VAT off: **448.00 → 248.00**.
+    - In both cases the customer's balance is 0.00, the till holds 200.00 + the cash part, receivables are 0 and the trial balance is balanced.
+    - Paid two ways: 200.00 + 110.72 + the deposit. Tenders that ignore the deposit are refused and nothing is kept.
+    - Paid in **another customer's name**: the deposit stays held and the bill is paid in full.
+    - A deposit **bigger than the bill** settles it, and the rest stays the customer's credit (S5's rule).
+    - **Cancelling the posted bill** releases the deposit back to the reservation through S5's existing hook.
+
+    The bill box shows «عربون الحجز RES-… −200.00» and «المطلوب بعد العربون 310.72», prefills the tendered amount with it, and sets the split box's due to it.
+- **Reminders:** **not built** (no messaging migration), as the plan said. Follow-up: a reminder to the guest the day before, through the existing messaging outbox, when the owner wants it.
+- **Defaults the owner should see** (built in brackets; change on request):
+  1. How long a reservation holds its table? (**90 minutes**, editable per reservation from 15 to 720; the public page always books 90.)
+  2. A party bigger than the table? (**Refused with a warning; the user can go on with «كمّل رغم العدد», audited.**)
+  3. The public page? (**Off** until someone who manages the floor switches it on; one per branch; a request arrives `booked` with no table and staff confirm it; up to 60 days ahead.)
+  4. Who seats guests? (**Whoever can open orders**, the waiter included.) Who takes or settles a deposit? (**The deposit rights**: the cashier and up, not the waiter.)
+  5. The deposit policy? (**S5's single setting**, default 24 hours: a later cancel or any no-show forfeits; earlier refunds.)
+  6. Applying the deposit at the bill? (**Automatic**, when the bill is paid in the reservation's customer's name; paid in another name it stays held as credit.)
+  7. A split *part* of the bill (R2a)? (**It does not use the deposit**; only the table's own bill does.)
+- **Where the plan and the code differ (the code was followed):**
+  1. The plan named one table. A second small one, `ReservationPage` (one per entity: key and switch), follows the S3 booking key's pattern. R5a's key lives on a table, and a per-entity key cannot go on `entities.Entity` without changing that app's schema.
+  2. The plan said «the S3 public booking throttle». The R5a copies of S3's helpers are imported, with S3's limits (10 per address and 5 per phone an hour) plus a per-branch cap.
+  3. The plan left open whether applying the deposit at the bill needs a protected change. It does not: `attach` and `apply` run after `checkout` on the posted invoice, in the same transaction, and the drawer is asked only for the rest.
+  4. The plan's «a party bigger than the seats warns» is built as a refusal that the user overrides, so the warning cannot be missed on a phone.
+- **Protected items touched:** none beyond the two new tables and the migration. `restaurant/services.py` `pay()` gains the deposit step described above; with no seated reservation holding a deposit it is the payment it always was (one extra query). Not touched: purchase and sales posting, `checkout`, tenders, settlements, deposits, inventory and cashbox movement, ledgers, report calculations, average cost, closing, the permission core, `taxes`.
+- **Files:** `restaurant/models.py` (`ReservationStatus`, `TableReservation`, `ReservationPage`), `restaurant/migrations/0012_reservations.py` (depends on `0011_brands`), `restaurant/reservations.py` (new), `restaurant/views_reservations.py` (new), `restaurant/services.py` (`pay` uses the deposit; `_checkout_total`, `deposit_due`), `restaurant/views.py` (the board link's words, the bill box's deposit), `restaurant/urls.py`, `templates/restaurant/reservations.html` (new), `templates/restaurant/book_table.html` (new), `templates/restaurant/board.html`, `templates/restaurant/order.html`, `restaurant/tests_reservations.py` (new). **Outside `restaurant/` and its templates:** `config/urls.py` (the public route `book_table`) and `static/hesba/css/restaurant_reservations.css` (new, tokens only). Docs: this entry and `docs/MARKET_PARITY_ROADMAP.md`.
+- **Existing tests edited:** none. The route-auth and crawl matrices pass unedited (the public route has a parameter, which those inventories skip).
+- **Tests (new), `restaurant/tests_reservations.py` (59; 58 on SQLite, plus 1 PostgreSQL-only):**
+  - overlap (8: overlaps refused, touching allowed, another table or day and an edit of itself, a cancelled or no-show frees the time, a table given later and at «وصل» is checked, a seated one still holds its table, English, bad input);
+  - the seats warning (3: refused then saved with the override and audited, the screen's box, at «وصل»);
+  - seat (5: the order with guests 4 and the customer through `open_order`, **refused while the table has an open order**, a table needed and given at seat, from the screen to the order, confirm and a closed reservation that cannot change);
+  - cancel and no-show (2);
+  - permissions (5: **stock keeper 403** on the page and every action, waiter/cashier/manager/owner see and change, the public switch needs the floor's set-up, the board link, the deposit buttons follow the deposit rights);
+  - branches (3: another branch's is not listed and is a 404 on every action, another branch's table refused, the whole group names the branch);
+  - the screen (4: by time and by day, Arabic and English, an edit audited, tokens only);
+  - the public page (9: a `booked` request with no table and no customer, nothing shown back, **a bad, rotated or switched-off key is 404**, off by default, the address throttle, the phone throttle, honeypot/past/far/no phone, English, the address in the set-up);
+  - the deposit (9: **200.00 → −200.00 and +200.00**, from the screen, **walk-in refused**, another branch's cashbox and the feature off, the customer frozen, **late no-show 175.44 + 24.56 = 200.00** with the books balanced, **VAT off 200.00**, a late cancel forfeits and **an early cancel refunds**, a waiter's cancel leaves it held for whoever may forfeit it);
+  - at the bill (8: **510.72 → 200.00 deposit + 310.72 cash**, **448.00 → 248.00**, the bill box and paying from the screen, two ways, tenders that ignore the deposit refused with nothing kept, another customer's name, a deposit bigger than the bill, cancelling the bill releases it);
+  - no reservations (2: the order page, the check, the board, the report and the bill exactly as before; a deposit on a booking not yet seated never touches a bill);
+  - PostgreSQL row lock (1).
+- **Risks and what is left open:**
+  1. **The predicted total** mirrors `checkout`'s formula. Should `checkout` ever change how it totals, a bill with a deposit is refused with «العربون ما اتخصمش…» and nothing is kept. It is never booked wrong.
+  2. **Changing the customer in the bill box** away from the reservation's customer leaves the deposit held. The tendered amount was prefilled with the reduced amount, so a named customer would then owe the difference on account. The box says so in one line.
+  3. **A merged table:** the deposit follows the receiving order one level deep; a deeper chain of merges leaves it held.
+  4. **A split part** paid first never uses the deposit; the table's own bill uses what remains due, and a deposit bigger than that stays as credit.
+  5. Seating early or late does not move `starts_at`; the clash check keeps the booked window.
+  6. **The public page re-shows the guest's own typed fields on a refused request** (as S3 does); nothing else is echoed.
