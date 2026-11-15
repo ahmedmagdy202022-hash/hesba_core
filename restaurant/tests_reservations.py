@@ -16,6 +16,7 @@ so four plates are 448.00 before VAT and **510.72** with it.
   448.00 → 248.00. Nour owes nothing after it, and the books balance.
 """
 
+import re
 import threading
 from datetime import datetime, timedelta
 from decimal import Decimal as D
@@ -457,7 +458,8 @@ class PublicPageTests(ReservationSetup):
         self.book(name="ضيف سري", phone="01009998888")
         self.send()
         for response in (self.client.get(self.url), self.client.get(self.url, {"sent": "1"})):
-            body = response.content.decode()
+            # the random CSRF token can spell "T1" by chance (it did on CI), so it is taken out before looking for the table
+            body = re.sub(r'name="csrfmiddlewaretoken" value="[^"]*"', "", response.content.decode())
             for secret in ("ضيف سري", "01009998888", "ضيف الموبايل", "01223334444", "نور حسن", "RES-", "T1"):
                 self.assertNotIn(secret, body)
         self.assertContains(self.client.get(self.url, {"sent": "1"}), "data-book-table-sent")
