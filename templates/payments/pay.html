@@ -3,7 +3,7 @@
 {% block sub %}<div class="cl-shopsub">{% if lang == 'en' %}Pay your invoice online{% else %}ادفع فاتورتك أونلاين{% endif %}</div>{% endblock %}
 {% block content %}<main class="cl-main" data-pay-page data-status="{{ link.status }}">
 
-{% if link.status == 'paid' or link.status == 'mismatch' %}<div class="cl-msg cl-msg--ok" data-banner="paid">{% if lang == 'en' %}This link was paid. Thank you.{% else %}الرابط ده اتدفع. شكرًا لحضرتك.{% endif %}</div>
+{% if link.status == 'paid' or link.status == 'mismatch' or link.status == 'review' %}<div class="cl-msg cl-msg--ok" data-banner="paid">{% if lang == 'en' %}This link was paid. Thank you.{% else %}الرابط ده اتدفع. شكرًا لحضرتك.{% endif %}</div>
 {% elif not feature_on %}<div class="cl-msg" data-banner="off">{% if lang == 'en' %}Online payment is not available now. Contact us.{% else %}الدفع أونلاين مش متاح دلوقتي. تواصل معانا.{% endif %}</div>
 {% elif link.status == 'failed' %}<div class="cl-msg cl-msg--danger" role="alert" data-banner="failed">{% if lang == 'en' %}The payment did not go through. Ask us for a new link.{% else %}الدفع ما تمّش. اطلب مننا رابط جديد.{% endif %}</div>
 {% elif expired %}<div class="cl-msg" data-banner="expired">{% if lang == 'en' %}This link has expired. Ask us for a new one.{% else %}الرابط ده انتهى. اطلب مننا رابط جديد.{% endif %}</div>
@@ -11,7 +11,7 @@
 
 <section class="cl-card" aria-labelledby="cl-pay-t">
   <div class="cl-orderhead">
-    <div><div class="cl-eyebrow" id="cl-pay-t">{% if lang == 'en' %}Invoice{% else %}فاتورة رقم{% endif %}</div><div class="cl-number"><bdi>{{ invoice_number }}</bdi></div></div>
+    <div><div class="cl-eyebrow" id="cl-pay-t">{% if is_order %}{% if lang == 'en' %}Order{% else %}طلب رقم{% endif %}{% else %}{% if lang == 'en' %}Invoice{% else %}فاتورة رقم{% endif %}{% endif %}</div><div class="cl-number"><bdi>{{ invoice_number }}</bdi></div></div>
     <span class="cl-badge" data-link-status>{{ status_label }}</span>
   </div>
   <div class="cl-totals">
