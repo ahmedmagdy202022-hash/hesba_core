@@ -263,6 +263,14 @@ class RulesTests(EquipmentSetup):
         self.log(self.loader, "1", 0)
         with self.assertRaisesMessage(ValidationError, "نوعها يتغيّر"):
             equipment.save_equipment(self.owner, {"name": "لودر 950", "kind": "owned", "hour_rate": "450"}, self.loader)
+        # Codex #436: its hours were worked for this supplier at its rate, so the supplier stays once it has hours.
+        other = make_supplier(supplier_code="S-OTHER", name="مورد تاني")
+        with self.assertRaisesMessage(ValidationError, "موردها يتغيّر"):
+            equipment.save_equipment(self.owner, {"name": "لودر 950", "kind": "hired", "hour_rate": "450", "supplier": other}, self.loader)
+        self.loader.refresh_from_db()
+        self.assertEqual(self.loader.supplier, self.supplier)
+        renamed = equipment.save_equipment(self.owner, {"name": "لودر كات", "kind": "hired", "hour_rate": "460", "supplier": self.supplier}, self.loader)
+        self.assertEqual((renamed.name, renamed.hour_rate), ("لودر كات", D("460.00")))  # its own supplier: still editable
 
     def test_the_hours_rules(self):
         for bad in ("0", "-2", "abc", "24.5", ""):

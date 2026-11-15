@@ -298,7 +298,13 @@ def preview(order, lines=None, lang="ar", config=None, offer=None):
         rows.append({"kind": "addon" if addon else "food", "code": line.item.item_code, "item": line.item, "quantity": line.quantity,
                      "unit_sale_price": line.unit_price, "line_discount_amount": line.line_discount,
                      "description": modifiers.bill_description(line, by_pk[line.parent_id]) if addon else _row_description(line, lang), "line": line})
-    promotion, offer_off = offers.promote(rows, offer if offer is not None else offers.Offer(), lang)
+    from . import platforms
+
+    if platforms.of_order(order) is not None:  # R14 (HG-120): a platform order takes no offer of ours, as ``pay`` posts it
+        offer = None
+    elif offer is None:
+        offer = offers.Offer()
+    promotion, offer_off = offers.promote(rows, offer, lang)
     fee = order.delivery_fee if order.kind == OrderKind.DELIVERY and order.delivery_fee > 0 else ZERO
     if fee:
         rows.append({"kind": "fee", "code": FEE_ITEM_CODE, "item": Item.objects.filter(item_code=FEE_ITEM_CODE).first(), "quantity": Decimal("1"),
