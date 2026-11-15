@@ -5453,7 +5453,7 @@ The product now enters stock at what the order really used (issues + extras − 
 
 ### Files
 
-- `manufacturing/`: `models.py`, `migrations/0008_schedule.py`, `schedule.py` (new), `schedule_views.py` (new), `orders.py`, `workcentres.py`, `views.py`, `order_views.py`, `urls.py`, `tests_schedule.py` (new).
+- `manufacturing/`: `models.py`, `migrations/0008_schedule.py`, `schedule.py` (new), `schedule_views.py` (new), `orders.py`, `workcentres.py`, `workcentre_views.py` (two texts only: the load hint now says planned day first, and the «من غير تاريخ استحقاق» label adds «ولا ترتيب»; no existing test pins either), `views.py`, `order_views.py`, `urls.py`, `tests_schedule.py` (new).
 - `templates/manufacturing/`: `schedule.html` (new), `_plan.html` (new), `order.html`, `home.html`.
 - Outside `manufacturing/` and `templates/`: `static/hesba/css/operations.css` (one block), `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 14, 65.0% to 70.0%).
 
