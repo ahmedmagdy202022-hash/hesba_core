@@ -46,7 +46,8 @@ def setup(request):
     error = ""
     grouped = branches.group_mode()
     editing = None
-    raw = str(request.GET.get("edit") or request.POST.get("pk") or "")
+    # a POST acts on the row it names (a row's delete form keeps the page's ``?edit=``); ``edit`` only opens the form on a GET
+    raw = str((request.POST.get("pk") if request.method == "POST" else request.GET.get("edit")) or "")
     if raw.isdigit():
         editing = get_object_or_404(brands.scoped(), pk=int(raw))  # R12: another branch's brand is a 404
     form = {"sort": "0", "active": True, "categories": []}

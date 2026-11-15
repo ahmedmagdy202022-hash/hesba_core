@@ -544,10 +544,15 @@ def move_table(order, table, user, lang="ar"):
         return order
     if Order.objects.filter(table=table, status=OrderStatus.OPEN).exists():
         raise ValidationError(words["busy"].format(table=table.name))
-    before = order.table.name if order.table else ""
+    previous = order.table
+    before = previous.name if previous else ""
     order.table = table
     order.save(update_fields=["table"])
     _audit(order, user, "move_order", {"table": table.name}, {"table": before})
+    if previous is not None:  # R5a (HG-115): what the party asked for from the old table's QR page goes with them
+        from . import qr
+
+        qr.follow_move(previous, table, user)
     return order
 
 
@@ -1033,10 +1038,13 @@ def _addons_of(line):
 
 
 def _origin(order, line):
-    """The live line of ``order`` that ``line`` was split from: the same dish, price, note, choices, ticket, ready state and add-ons."""
+    """The live line of ``order`` that ``line`` was split from: the same dish, price, note, choices, ticket, ready state and add-ons.
+
+    R6 (HG-114): and the same order time (a split copy keeps it), so a part's happy-hour tea never joins an identical tea ordered later."""
 
     candidates = order.lines.filter(item_id=line.item_id, unit_price=line.unit_price, note=line.note, options=line.options, ticket_id=line.ticket_id,
-                                    voided=False, parent__isnull=True, bundle__isnull=True, ready_at__isnull=line.ready_at is None).order_by("pk")
+                                    voided=False, parent__isnull=True, bundle__isnull=True, ready_at__isnull=line.ready_at is None,
+                                    created_at=line.created_at).order_by("pk")
     signature = _addons_of(line)
     return next((candidate for candidate in candidates if _addons_of(candidate) == signature), None)
 

@@ -578,6 +578,20 @@ class StaleRequestTests(QrSetup):
         made.refresh_from_db()
         self.assertEqual(made.status, RequestStatus.DECLINED)
 
+    def test_a_waiting_request_follows_its_party_when_the_order_moves_table(self):
+        first = services.open_order(self.owner, table=self.a_t1)
+        services.add_item(first, self.tea, self.owner, 1)
+        made = self.request({f"q-{self.koshary.pk}": 1})  # at T1, by the party sitting there
+        other_table = services.save_table({"name": "T2", "seats": 4}, self.owner, entity=self.main)
+        services.move_table(first, other_table, self.owner)  # the party moves to T2; their order is still open
+        made.refresh_from_db()
+        self.assertEqual((made.table_id, made.status), (other_table.pk, RequestStatus.NEW))
+        self.assertEqual(qr.waiting(self.a_t1), [])
+        next_party = services.open_order(self.owner, table=self.a_t1)  # someone else sits at T1
+        qr.accept(made, self.waiter)
+        self.assertEqual(next_party.lines.count(), 0)  # the koshary never lands on the new party's bill
+        self.assertEqual(first.lines.filter(item=self.koshary).count(), 1)
+
     def test_a_part_of_a_bill_paid_at_the_table_does_not_stale_a_request(self):
         order = self.burgers()
         made = self.request({f"q-{self.tea.pk}": 1})
