@@ -11,7 +11,6 @@ production cost) and again on a restaurant bakery's chart with the module on, wh
 cost both fall back to the cost of sales (``tests_f11.BakeryChart``).
 """
 
-import unittest
 from decimal import Decimal as D
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -348,14 +347,14 @@ class CancelOnARestaurantChartTests(RestaurantChart, CancelTests):
 
 
 class ResidueTests(ActualsSetup):
-    # Proved first: on the manufacturing chart both fail until the projector books the residue (HG-132).
+    # Proved first: on the manufacturing chart both failed until the projector booked the residue (HG-132): the order's
+    # work in progress ended at -0.03 with 5102 at -1,000.00, the plain run's at +0.01.
     def setUp(self):
         super().setUp()
         stock_in(self.flour, self.plant, 400, "20.00", movement_date=TODAY)     # flour 600 kg, average 20.00; raw 12,850.00
         self.big = make_item(item_code="FG-BIG", item_name="منتج كبير", is_stock_tracked=True)
         self.big_recipe = services.save_recipe({"product": self.big, "output_quantity": "780"}, [(self.flour, "600")], self.owner)
 
-    @unittest.expectedFailure
     def test_an_orders_residue_goes_to_absorbed_cost(self):
         # 12,000.00 of materials + 1,000.00 of labour over 780 units = 16.6667 each, worth 13,000.03 in stock.
         order = self.walk(self.start(recipe=self.big_recipe, quantity="780", labor="1000"))
@@ -368,7 +367,6 @@ class ResidueTests(ActualsSetup):
         services.cancel_run(run, self.owner, reason="غلطة")
         self.books(finished="0.00", raw="12850.00")
 
-    @unittest.expectedFailure
     def test_a_plain_runs_residue_goes_to_absorbed_cost(self):
         # 12,000.00 over 780 units = 15.3846 each, worth 11,999.99: a piastre short of what work in progress received.
         run = services.produce(self.big_recipe, self.owner, batches="1", location=self.plant)
@@ -381,12 +379,6 @@ class ResidueTests(ActualsSetup):
 
 class ResidueOnARestaurantChartTests(RestaurantChart, ResidueTests):
     """Both fallbacks land in 5101 here, so the rule changes no balance on this chart."""
-
-    def test_an_orders_residue_goes_to_absorbed_cost(self):
-        ResidueTests.test_an_orders_residue_goes_to_absorbed_cost(self)
-
-    def test_a_plain_runs_residue_goes_to_absorbed_cost(self):
-        ResidueTests.test_a_plain_runs_residue_goes_to_absorbed_cost(self)
 
 
 # ---------------------------------------------------------------------------------------------------------------
