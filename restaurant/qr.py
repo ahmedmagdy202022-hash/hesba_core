@@ -245,6 +245,20 @@ def _decline_stale(request, user):
             _audit(found, user, "decline_table_request", {"reason": "table_closed", "auto": user is None})
 
 
+def follow_move(old_table, new_table, user):
+    """R5a (HG-115): the open order moved from ``old_table`` to ``new_table`` (``services.move_table``, inside its transaction and
+    locks): the requests still waiting at the old table were sent by that party, so they move with it. Otherwise a later party
+    at the old table could accept them onto its own bill. Returns how many moved."""
+
+    DiningTable.objects.select_for_update().get(pk=old_table.pk)  # the lock ``create_request`` takes: no request slips in mid-move
+    moving = list(TableRequest.objects.select_for_update(of=("self",)).filter(table=old_table, status=RequestStatus.NEW))
+    for request in moving:
+        request.table = new_table
+        request.save(update_fields=["table"])
+        _audit(request, user, "move_table_request", {"from": old_table.name, "to": new_table.name})
+    return len(moving)
+
+
 def sweep(requests):
     """Decline, automatically, the waiting requests whose table's order was closed after they were made. Returns the ones still new."""
 
