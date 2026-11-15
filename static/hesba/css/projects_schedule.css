@@ -34,7 +34,7 @@
 .sch-row.is-waiting .sch-bar{border-style:dashed}
 .sch-row.is-done .sch-bar{background:var(--hs-success-wash);border-color:var(--hs-success)}
 .sch-row.is-done .sch-bar__done{background:var(--hs-success)}
-.sch-today{position:absolute;inset-block:0;inset-inline-start:calc(var(--sch-label) + (100% - var(--sch-label)) * var(--sch-at));z-index:3;inline-size:2px;background:var(--hs-navy);pointer-events:none}
+.sch-today{position:absolute;inset-block:0;inset-inline-start:calc(var(--sch-label) + (100% - var(--sch-label)) * var(--sch-at));z-index:1;inline-size:2px;background:var(--hs-navy);pointer-events:none}
 .sch-today span{position:absolute;inset-block-start:2px;inset-inline-start:4px;padding:0 var(--hs-space-1);border-radius:var(--hs-radius-sm);background:var(--hs-navy);color:var(--hs-on-navy);font-size:var(--hs-text-xs);white-space:nowrap}
 .sch-legend{display:flex;flex-wrap:wrap;gap:var(--hs-space-2) var(--hs-space-4);margin:var(--hs-space-3) 0 0;padding:0;list-style:none;color:var(--hs-muted);font-size:var(--hs-text-xs)}
 .sch-legend i{display:inline-block;inline-size:14px;block-size:8px;margin-inline-end:var(--hs-space-1);border-radius:var(--hs-radius-pill);background:var(--hs-teal);vertical-align:middle}

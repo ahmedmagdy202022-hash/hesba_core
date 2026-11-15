@@ -221,6 +221,13 @@ class BoqProgressTests(ReferenceContract):
         post_sales_invoice(draft.invoice_id, self.owner)
         self.assertEqual(schedule.task_figures(ProjectTask.objects.get(pk=self.concrete.pk))[0], D("37.5"))
 
+    def test_a_posted_sales_return_takes_its_quantity_back(self):
+        from sales.services import create_sales_return
+
+        first = self.certify(a="150")
+        create_sales_return("SR-C3", DAY, first.invoice_id, [{"source_line": first.invoice.lines.get(), "quantity": D("50")}], "خطأ في الكميات", self.owner)
+        self.assertEqual(schedule.task_figures(ProjectTask.objects.get(pk=self.concrete.pk))[0], D("25"))  # 100 of 400 m³
+
     def test_the_percent_is_not_typed_on_a_linked_task(self):
         with self.assertRaisesMessage(ValidationError, "بتتحسب من المستخلصات"):
             schedule.set_progress(self.project, self.concrete, self.owner, "80")
