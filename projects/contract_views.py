@@ -22,7 +22,8 @@ from settings_core.ui_messages import translate
 
 from . import contract, costs, variations
 from .models import (
-    BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPurchase, RetentionRelease, Subcontract, SubcontractBill, SubcontractRelease,
+    BudgetLine, Certificate, CostHeading, Project, ProjectPayment, ProjectPaymentKind, ProjectPurchase, RetentionRelease, Subcontract, SubcontractBill,
+    SubcontractRelease,
 )
 from .views import MANAGE, PROFIT, PROJECT_SCREENS, VIEW, _base, _date, _lang, _pick
 
@@ -58,6 +59,13 @@ WORDS = {
         "payments_intro": "التحصيلات من صاحب المشروع بتتسجل كتحصيل عادي على حسابه وبتتعلّم للمشروع ده. الدفعة المقدمة بتتخصم من المستخلصات.",
         "receive": "استلام من صاحب المشروع", "kind": "النوع", "cashbox": "الخزنة", "receive_btn": "سجّل الاستلام", "received": "اتسجل {number}.",
         "link_payment": "اربط تحصيل متسجل", "link": "اربط", "unlink": "فك الربط", "linked": "اتربط.", "unlinked": "اتفك الربط.",
+        "under_collection": "شيكات تحت التحصيل", "receive_cheque": "استلام شيك من صاحب المشروع",
+        "cheque_hint": "الشيك بيقلل حساب صاحب المشروع يوم ما تستلمه، ويفضل تحت التحصيل لحد ما يتصرف. لو رجع مرتد، المبلغ بيرجع مستحق على المشروع لوحده.",
+        "cheque_number": "رقم الشيك", "cheque_bank": "بنك الشيك", "due_date": "تاريخ الاستحقاق", "received_on": "تاريخ الاستلام",
+        "receive_cheque_btn": "سجّل الشيك", "cheque_received": "اتسجل الشيك {number} تحت التحصيل.", "cheque_word": "شيك",
+        "cheques_title": "شيكات المشروع", "no_cheques": "مفيش شيكات على المشروع لسه.", "due_soon": "مستحقة قريب",
+        "due_soon_note": "شيكات بتستحق خلال {days} أيام أو فات ميعادها: {count}. اودعها في البنك.",
+        "cheques_hint": "الإيداع والتحصيل والارتداد بيتسجلوا من شاشة الشيكات.", "open_cheques": "افتح شاشة الشيكات", "due_on": "يستحق",
         "retention_title": "ضمان الأعمال", "release": "إفراج عن ضمان الأعمال", "release_btn": "سجّل الإفراج", "released": "اتسجل الإفراج.", "reverse_release": "إلغاء الإفراج", "release_reversed": "اتلغى الإفراج.", "reversed_on": "اتلغى في",
         "release_hint": "عند الاستلام: الإفراج بينقل المبلغ من المحتجز لمستحق على صاحب المشروع، والتحصيل نفسه بيتسجل بعد كده عادي.",
         "notes": "ملاحظات", "held_total": "المحتجز", "released_total": "اتفرج عنه",
@@ -96,6 +104,13 @@ WORDS = {
         "payments_intro": "Money from the owner is an ordinary collection on their account, marked for this project. The advance is recovered from certificates.",
         "receive": "Receive from the owner", "kind": "Kind", "cashbox": "Cashbox", "receive_btn": "Record it", "received": "{number} recorded.",
         "link_payment": "Link a recorded collection", "link": "Link", "unlink": "Unlink", "linked": "Linked.", "unlinked": "Unlinked.",
+        "under_collection": "Cheques under collection", "receive_cheque": "Receive a cheque from the owner",
+        "cheque_hint": "A cheque lowers the owner's account the day you receive it and stays under collection until it clears. If it bounces, the amount is due on the project again by itself.",
+        "cheque_number": "Cheque number", "cheque_bank": "Cheque's bank", "due_date": "Due date", "received_on": "Received on",
+        "receive_cheque_btn": "Record the cheque", "cheque_received": "Cheque {number} recorded, under collection.", "cheque_word": "Cheque",
+        "cheques_title": "The project's cheques", "no_cheques": "No cheques on this project yet.", "due_soon": "Due soon",
+        "due_soon_note": "Cheques due within {days} days or overdue: {count}. Deposit them.",
+        "cheques_hint": "Deposits, clearing and bounces are recorded on the cheques screen.", "open_cheques": "Open the cheques screen", "due_on": "Due",
         "retention_title": "Retention", "release": "Release retention", "release_btn": "Record the release", "released": "Release recorded.", "reverse_release": "Reverse the release", "release_reversed": "Release reversed.", "reversed_on": "Reversed on",
         "release_hint": "At handover: a release moves the amount from held to due from the owner; the collection itself is recorded as usual afterwards.",
         "notes": "Notes", "held_total": "Held", "released_total": "Released",
@@ -296,7 +311,7 @@ def payments(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     project = _project(pk)
-    error = ""
+    error, cheque_form = "", {}
     if request.method == "POST":
         action = request.POST.get("action", "")
         try:
@@ -307,6 +322,14 @@ def payments(request, pk):
                                                    amount=request.POST.get("amount"),
                                                    payment_date=_date(request.POST.get("payment_date")), lang=lang)
                 messages.success(request, words["received"].format(number=payment.payment_number))
+            elif action == "cheque":
+                _need(request, COLLECT)
+                if not _cheques_on():
+                    raise Http404
+                cheque_form = request.POST
+                cheque = contract.receive_cheque(project, request.user, data=request.POST, kind=request.POST.get("kind") or ProjectPaymentKind.COLLECTION,
+                                                 lang=lang)
+                messages.success(request, words["cheque_received"].format(number=cheque.number))
             elif action == "link":
                 _need(request, COLLECT)
                 payment = _scoped(entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT), request.POST.get("payment"))
@@ -340,10 +363,12 @@ def payments(request, pk):
             error = _error(exc, lang)
         else:
             return _back(project, "projects:payments", lang)
-    links = entity_scope.scope(project.payments.select_related("payment", "payment__cashbox"), "payment__" + entity_scope.CUSTOMER_PAYMENT)
+    links = entity_scope.scope(project.payments.select_related("payment", "payment__cashbox", "payment__cheque"), "payment__" + entity_scope.CUSTOMER_PAYMENT)
     return render(request, "projects/payments.html", _context(
         request, project, "payments", error=error, today=timezone.localdate().isoformat(),
-        links=[{"link": link, "kind_label": choice_label(link, "kind", lang), "status_label": choice_label(link.payment, "status", lang)} for link in links],
+        links=[{"link": link, "kind_label": choice_label(link, "kind", lang), "status_label": choice_label(link.payment, "status", lang),
+                "cheque_label": _cheque_label(link.payment, lang)} for link in links],
+        **_project_cheques(request, project, lang), cheque_form=cheque_form,
         kinds=localized_choices(ProjectPayment, "kind", lang),
         cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
         free_payments=entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
@@ -353,6 +378,34 @@ def payments(request, pk):
             Q(instalment_link__isnull=True) | Q(instalment_link__plan__invoice__project_link__project=project)).order_by("-payment_date")[:50],
         releases=project.retention_releases.all() if contract.in_reach(project) else [],
     ))
+
+
+def _cheques_on():
+    """Cheques live with the cashboxes module: closed, the project takes no cheque."""
+
+    from settings_core.module_gate import closed_module
+
+    return closed_module(reverse("cheques:register")) is None
+
+
+def _cheque_label(payment, lang):
+    cheque = getattr(payment, "cheque", None)
+    return f"{WORDS[lang]['cheque_word']} · {choice_label(cheque, 'status', lang)}" if cheque is not None else ""
+
+
+def _project_cheques(request, project, lang):
+    """C9 (HG-122): the cheques the owner gave for this project (this entity's), and those of them due soon."""
+
+    from cheques import services as cheques
+    from cheques.models import ChequeDirection
+
+    on_project = {"direction": ChequeDirection.IN, "customer_payment__project_payment__project": project}
+    rows = cheques.scoped().filter(**on_project).select_related("bank").order_by("due_date", "pk")
+    soon = list(cheques.due_soon().filter(**on_project).order_by("due_date", "pk"))
+    soon_ids = {cheque.pk for cheque in soon}
+    return {"cheques": [{"cheque": cheque, "status_label": choice_label(cheque, "status", lang), "soon": cheque.pk in soon_ids} for cheque in rows],
+            "cheques_due_soon": soon, "cheques_due_note": WORDS[lang]["due_soon_note"].format(days=cheques.DUE_SOON_DAYS, count=len(soon)),
+            "cheques_on": _cheques_on(), "can_open_cheques": cheques.can_view(request.user)}
 
 
 # ---- subcontractors and service purchases ----
