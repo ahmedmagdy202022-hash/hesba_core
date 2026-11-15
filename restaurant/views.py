@@ -213,6 +213,17 @@ def board(request):
         if not _takes_orders(request.user):
             raise PermissionDenied("Taking orders needs sales.create_sales_invoice or restaurant.take_orders.")
         kind = request.POST.get("kind", OrderKind.DINE_IN)
+        if kind == "platform":  # R14 (HG-120): «طلب منصة», a delivery order for the platform with its number, in the platform's branch
+            from . import platforms
+
+            chosen = next((one for one in platforms.active() if str(one.customer.pk) == str(request.POST.get("platform") or "")), None)
+            try:
+                order = platforms.open_order(request.user, chosen, request.POST.get("number"), address=request.POST.get("address", ""),
+                                             phone=request.POST.get("phone", ""), brand=request.POST.get("brand") or None, lang=lang)
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+                return redirect(f"{reverse('restaurant:board')}?lang={lang}")
+            return redirect(_order_url(order, lang))
         entity = None
         if kind != OrderKind.DINE_IN and branches.group_mode():  # R12: across the group, a takeaway or a delivery names its branch
             entity = branches.pick(request.user, request.POST.get("entity"))
@@ -252,10 +263,65 @@ def board(request):
                                          "ready_label": words["ready_n"].format(n=ready[order.pk]),
                                          "branch": order.entity.display(lang) if grouped else ""} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
+        platform_choices=_platform_choices(), pfw=_platform_words(lang),
         branch_groups=groups, branch_choices=branches.choices(request.user, lang) if grouped else [],
         **brand_pickers(request.user, lang, grouped),
         **requests_context(waiting, lang, _takes_orders(request.user)),
     ))
+
+
+def _platform_words(lang):
+    from .views_platforms import PLATFORM_ORDER_WORDS
+
+    return PLATFORM_ORDER_WORDS[lang]
+
+
+def _platform_choices():
+    """R14 (HG-120): the board's «طلب منصة» picker: the platforms an order can be opened for in the branch being worked in."""
+
+    from entities.current import current_entity
+
+    from . import platforms
+
+    working = current_entity()
+    found = platforms.active()
+    if working is None:
+        return found
+    return [one for one in found if platforms._entity_pk(one.courier.cashbox.entity_id) == working.pk]
+
+
+def _platform_box(order, lang):
+    """R14 (HG-120): a platform order's own panel: its platform and number, and once paid its steps through T14's shipment
+    (posted on the account → with the platform's rider → collected → settled), read from ``shipping``. None for any other order."""
+
+    from shipping.models import ShipmentStatus
+
+    from . import platforms
+
+    platform = platforms.of_order(order)
+    if platform is None:
+        return None
+    box = {"platform": platform, "name": platform.name, "number": platforms.number_of(order), "percent": f"{platform.commission.normalize():f}",
+           "shipment": None, "step": "open", "fee": None, "words": _platform_words(lang)}
+    if order.status != OrderStatus.PAID or not order.invoice_id:
+        return _platform_text(box)
+    found = platforms.shipment(order)
+    box["fee"] = found.fee if found is not None else platform.commission_on(order.invoice.total_amount)
+    box["shipment"] = found
+    steps = {None: "posted", ShipmentStatus.WITH_COURIER: "handed", ShipmentStatus.DELIVERED: "collected", ShipmentStatus.SETTLED: "settled"}
+    box["step"] = steps.get(found.status if found is not None else None, "other")
+    if box["step"] == "other":
+        box["state"] = choice_label(found, "status", lang)
+    order_of_steps = ["posted", "handed", "collected", "settled"]
+    reached = order_of_steps.index(box["step"]) if box["step"] in order_of_steps else 0
+    box["track"] = [{"key": key, "label": box["words"][key], "done": index < reached, "now": index == reached} for index, key in enumerate(order_of_steps)]
+    return _platform_text(box)
+
+
+def _platform_text(box):
+    values = {"name": box["name"], "percent": box["percent"], "fee": f"{box['fee']:,.2f}" if box["fee"] is not None else "", "state": box.get("state", "")}
+    box["text"] = {key: value.format(**values) for key, value in box["words"].items()}
+    return box
 
 
 def brand_pickers(user, lang, grouped):
@@ -267,6 +333,21 @@ def brand_pickers(user, lang, grouped):
     rows = [{"label": entity.display(lang), "brands": [{"pk": one.pk, "label": one.label(lang), "default": one.is_default} for one in found]}
             for entity, found in brands.choices(entities)]
     return {"brand_groups": rows, "brand_grouped": grouped}
+
+
+def _price_of(order):
+    """R14 (HG-120): ``price_of(item)`` for the order page's menu when the order's customer has an active price list (the price
+    ``services.add_item`` will give the line), else None (the menu price, as before)."""
+
+    if not order.customer_id:
+        return None
+    from pricing.services import customer_list, list_prices
+
+    book = customer_list(order.customer)
+    if book is None:
+        return None
+    prices = list_prices(book)
+    return lambda item: prices[item.pk] if item.pk in prices else money_round(item.default_sale_price)
 
 
 def _raw_ingredient_ids():
@@ -362,6 +443,14 @@ def order_detail(request, pk):
                 services.dispatch(order, _pick(Employee, request.POST.get("driver"), active=True), request.user,
                                   delivery_fee=request.POST.get("delivery_fee"), lang=lang)
                 messages.success(request, words["dispatched"])
+            elif action in ("platform_hand_over", "platform_collected"):  # R14 (HG-120): T14's ship and deliver, unchanged
+                from . import platforms
+
+                if action == "platform_hand_over":
+                    platforms.hand_over(order, request.user, lang)
+                else:
+                    platforms.collected(order, request.user, lang)
+                messages.success(request, _platform_words(lang)["handed_ok" if action == "platform_hand_over" else "collected_ok"].format(name=order.customer.name))
             elif action == "cancel":
                 services.cancel_order(order, request.user, request.POST.get("reason", ""), lang)
                 messages.success(request, words["cancelled"])
@@ -384,6 +473,8 @@ def order_detail(request, pk):
                     return redirect(f"/print/sales/{invoice.pk}/?lang={lang}&format=receipt&autoprint=1")
                 if order.split_from_id:  # R2a: a part paid, back to the rest of its table's bill
                     return redirect(_order_url(order.split_from, lang))
+                if _is_platform_order(order):  # R14 (HG-120): back to the order, where it is handed to the platform's rider
+                    return redirect(_order_url(order, lang))
                 return redirect(f"{reverse('restaurant:board')}?lang={lang}")
         except ValidationError as exc:
             messages.error(request, _error(exc, lang))
@@ -396,7 +487,8 @@ def order_detail(request, pk):
     raw_ids = _raw_ingredient_ids()
     lines = list(order.lines.select_related("item", "ticket", "combo__item"))
     taking = order.status == OrderStatus.OPEN and _takes_orders(request.user)
-    choice_sheets = sheets(items, lang) if taking else []  # R1a
+    price_of = _price_of(order)  # R14 (HG-120): the menu shows what a dish costs on this order (its customer's list)
+    choice_sheets = sheets(items, lang, price_of) if taking else []  # R1a
     combo_choice_sheets = combo_sheets(items, lang) if taking else []  # R1b
     on_sheet = {sheet["combo"].item_id: sheet["combo"].pk for sheet in combo_choice_sheets}
     for item in items:  # R1b: a combo's tile opens its sheet (the same objects the menu's tiles show)
@@ -406,13 +498,17 @@ def order_detail(request, pk):
     hidden = set(Combo.objects.values_list("item_id", flat=True)) - set(on_sheet)  # a combo with nothing to choose now is not a dish
     if hidden:
         items = [item for item in items if item.pk not in hidden]
+    for item in items:
+        item.shown_price = price_of(item) if price_of else item.default_sale_price
     cashboxes = branches.cashboxes(order)  # R12: the order's branch's, whatever entity the biller works in
     shift = open_shift_for(request.user)
     shift_box = shift.cashbox if shift and cashboxes.filter(pk=shift.cashbox_id).exists() else None
     default_cashbox = shift_box or cashboxes.filter(is_default=True).first() or cashboxes.first()
     free_tables = DiningTable.objects.filter(active=True, entity_id=order.entity_id).exclude(orders__status=OrderStatus.OPEN)
     families = combos.blocks(modifiers.grouped(lines))  # R1b: each combo taken is one block of its components
-    offer_box = _offer_box(request, order, lines, lang) if order.status == OrderStatus.OPEN else None  # R6 (HG-114)
+    platform_box = _platform_box(order, lang)  # R14 (HG-120)
+    # R6 (HG-114); R14: a platform order takes no offer, coupon, points or gift card of ours (it is posted on credit to the platform)
+    offer_box = _offer_box(request, order, lines, lang) if order.status == OrderStatus.OPEN and platform_box is None else None
     from . import qr
     from .views_qr import requests_context
 
@@ -426,7 +522,7 @@ def order_detail(request, pk):
         families=families, sheets=choice_sheets, **_split_merge_context(order, families, request.user, lang),
         sheet_items={sheet["item"].pk for sheet in choice_sheets}, mw=MODIFIER_WORDS[lang],
         combo_sheets=combo_choice_sheets, cw=COMBO_WORDS[lang],
-        **dict(zip(("menu", "size_sheets"), menu_entries(items, {sheet["item"].pk for sheet in choice_sheets}, lang))),
+        **dict(zip(("menu", "size_sheets"), menu_entries(items, {sheet["item"].pk for sheet in choice_sheets}, lang, price_of))),
         drivers=Employee.objects.filter(active=True) if order.kind == OrderKind.DELIVERY else [], dw=DELIVERY_WORDS[lang],
         status_label=choice_label(order, "status", lang), is_open=order.status == OrderStatus.OPEN,
         pending=any(not line.ticket_id and not line.voided for line in lines), tickets=order.tickets.select_related("station"),
@@ -435,7 +531,8 @@ def order_detail(request, pk):
         bill_total=deposit_box["due"] if deposit_box else due_total, deposit_box=deposit_box, deposit_words=DEPOSIT_BILL_WORDS[lang],
         branch_label=order.entity.display(lang) if is_multi_entity() else "", brand_label=brands.label(order, lang),
         shift_missing=shift_missing(request.user),
-        customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
+        customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables, platform_box=platform_box,
+        can_collect=user_has_permission(request.user, "sales.receive_customer_payment"),
         **requests_context(asked, lang, _takes_orders(request.user)), requests_order=order.pk,
     ))
 
@@ -757,7 +854,13 @@ def _split_merge_context(order, families, user, lang):
 
 
 #: What only someone who sells may do on an order: take the money, send it out with a driver (it carries a fee), cancel it.
-SELLING_ACTIONS = frozenset({"pay", "dispatch", "cancel"})
+SELLING_ACTIONS = frozenset({"pay", "dispatch", "cancel", "platform_hand_over", "platform_collected"})  # R14: a platform order's own steps too
+
+
+def _is_platform_order(order):
+    from . import platforms
+
+    return platforms.of_order(order) is not None
 
 
 @require_any_permission(*FLOOR)
@@ -1110,4 +1213,5 @@ def report(request):
     return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note, others=others,
                                                          deliveries=insights.deliveries(first, last), dw=DELIVERY_WORDS[lang],
                                                          today=timezone.localdate(), waste=waste_rows, waste_total=waste_total, show_brands=show_brands,
+                                                         pfw=_platform_words(lang),
                                                          can_cost=user_has_permission(request.user, COST_VIEW), **data))

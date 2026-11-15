@@ -23,6 +23,9 @@ being worked in (HG-034):
 - R11 (HG-117): ``brands`` is the same orders and the same net sales split by the brand of the order a bill belongs to (a part counts under
   its parent's brand, as it counts in its parent's order). An order opened with no brand (before any was set up) is a row of its own with
   ``brand`` None: it is never moved to the default brand, so history is not relabelled. The overall totals are the sum of the rows.
+- R14 (HG-120): ``platforms`` is the period's orders of each delivery platform (an order paid in the name of a customer set up as a
+  platform): its orders, net sales and average as above, and the commission recorded on its shipments when they were handed to the
+  platform's rider (a parcel that came back counts none). A platform order is a delivery order too, so it is also in ``kinds``.
 
 Waste is what was taken out of stock by an adjustment in the period, with its
 reason, at movement cost.
@@ -133,7 +136,10 @@ def period_report(first, last):
 
     from sales.models import SalesReturn
 
+    from . import platforms as platform_setup
+
     orders = list(_paid(first, last))
+    named = {one.customer.pk: one for one in platform_setup.platforms()}
     returned = dict(SalesReturn.objects.filter(source_invoice__in=[order.invoice_id for order in orders], status="posted")
                     .values("source_invoice").annotate(total=Sum("total_amount")).values_list("source_invoice", "total"))
 
@@ -155,7 +161,7 @@ def period_report(first, last):
             standing.add(order.pk)
     days = (last - first).days + 1
     hours = OrderedDict((hour, {"hour": hour, "orders": 0, "sales": ZERO}) for hour in range(24))
-    dishes, tables, waiters, kinds, by_brand = {}, {}, {}, {}, {}
+    dishes, tables, waiters, kinds, by_brand, by_platform = {}, {}, {}, {}, {}, {}
     total, guests, minutes, combo_discount = ZERO, 0, [], ZERO
     for order in orders:
         sales = net_sales(order.invoice)
@@ -193,6 +199,11 @@ def period_report(first, last):
         brand = by_brand.setdefault(root.brand_id, {"brand": root.brand, "orders": 0, "sales": ZERO})  # R11: the bill's brand, a part's being its parent's
         brand["orders"] += 1 if stands else 0
         brand["sales"] += sales
+        if order.customer_id in named:  # R14: a delivery platform's order (a platform order is never split: it is a delivery)
+            platform = by_platform.setdefault(order.customer_id, {"platform": named[order.customer_id], "orders": 0, "sales": ZERO, "invoices": []})
+            platform["orders"] += 1 if stands else 0
+            platform["sales"] += sales
+            platform["invoices"].append(order.invoice_id)
         # R2a: a part's sales belong to its bill's waiter (after a merge, the receiving order's), with the bill's one order
         waiter = waiters.setdefault(root.waiter_id, {"waiter": root.waiter, "orders": 0, "sales": ZERO})
         waiter["orders"] += 1 if stands else 0
@@ -201,7 +212,15 @@ def period_report(first, last):
         row["per_day"] = round(row["orders"] / days, 1)
         row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else row["sales"]
         row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"])) if row["minutes"] else None
-    for row in list(waiters.values()) + list(kinds.values()) + list(by_brand.values()):
+    if by_platform:
+        from shipping.models import Shipment, ShipmentStatus
+
+        fees = dict(Shipment.objects.filter(invoice_id__in=[pk for row in by_platform.values() for pk in row["invoices"]])
+                    .exclude(status=ShipmentStatus.RETURNED).values("invoice__customer").annotate(total=Sum("fee")).values_list("invoice__customer", "total"))
+        for customer_pk, row in by_platform.items():
+            row["commission"] = money_round(fees.get(customer_pk) or ZERO)
+            del row["invoices"]
+    for row in list(waiters.values()) + list(kinds.values()) + list(by_brand.values()) + list(by_platform.values()):
         row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else ZERO
     busy = [row for row in hours.values() if row["orders"] or row["sales"]]
     count = len(standing)
@@ -216,6 +235,7 @@ def period_report(first, last):
         "tables": sorted(tables.values(), key=lambda row: (-row["orders"], row["table"].sort_order, row["table"].name)),
         "waiters": sorted(waiters.values(), key=lambda row: -row["sales"]),
         "kinds": sorted(kinds.values(), key=lambda row: -row["orders"]),
+        "platforms": sorted(by_platform.values(), key=lambda row: (-row["sales"], row["platform"].name)),
         "brands": sorted(by_brand.values(), key=lambda row: (row["brand"] is None, -row["sales"], row["brand"].name_ar if row["brand"] else "")),
         "totals": {"orders": count, "sales": money_round(total), "average": money_round(total / count) if count else ZERO,
                    "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None, "combo_discount": money_round(combo_discount),
