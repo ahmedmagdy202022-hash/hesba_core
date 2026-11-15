@@ -68,6 +68,8 @@ MESSAGES = {
         "merge_pick": "اختار الطاولة اللي هتتدمج.", "merge_self": "مينفعش تدمج الطاولة في نفسها.",
         "merge_kind": "الدمج لطلبات الصالة المفتوحة بس.", "merge_closed": "طلب الطاولة التانية اتقفل؛ مينفعش يتدمج.",
         "merge_part": "الجزء من حساب مينفعش يتدمج؛ ادمج حساب الطاولة نفسه.",
+        # R14 (HG-120): the customer's price list
+        "other_prices": "أسعار الطلب ده من قائمة أسعار {name}؛ ادفعه باسم {name}، أو افتح طلب جديد للعميل التاني.",
     },
     "en": {
         "table_name": "Enter the table name or number.", "table_taken": "A table with this name exists.", "seats": "Seats must be 1 to 99.",
@@ -96,6 +98,7 @@ MESSAGES = {
         "merge_pick": "Choose the table to merge.", "merge_self": "A table cannot be merged into itself.",
         "merge_kind": "Only open dine-in orders can be merged.", "merge_closed": "The other table's order is closed; it cannot be merged.",
         "merge_part": "A part of a bill cannot be merged; merge the table's bill itself.",
+        "other_prices": "This order's prices come from {name}'s price list; pay it in {name}'s name, or open a new order for the other customer.",
     },
 }
 
@@ -213,7 +216,10 @@ def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=N
         guests = max(1, min(int(guests or 1), 99))
     except (TypeError, ValueError):
         guests = 1
-    fee = _fee(delivery_fee, words) if kind == OrderKind.DELIVERY else Decimal("0")
+    from . import platforms
+
+    # R14 (HG-120): the platform's rider picks a platform order up, so it carries no delivery fee of ours
+    fee = _fee(delivery_fee, words) if kind == OrderKind.DELIVERY and platforms.for_customer(customer) is None else Decimal("0")
     for _attempt in range(5):
         try:
             with transaction.atomic():
@@ -272,21 +278,50 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
     quantity = _quantity(quantity, words)
     note = (note or "").strip()[:120]
     chosen = modifiers.choose(item, options, lang)
+    price = menu_price(item, order.customer)  # R14 (HG-120): the customer's price list (a platform's), else the menu's
     if not chosen:
         line = (order.lines.filter(item=item, note=note, ticket__isnull=True, voided=False, parent__isnull=True, options="", children__isnull=True,
                                    bundle__isnull=True,  # R1b: never into a combo's component
-                                   unit_price=money_round(item.default_sale_price))  # R10: never into a line at another price (a pre-order's agreed one)
+                                   unit_price=price)  # R10: never into a line at another price (a pre-order's agreed one); R14: the price this line would get
                 .order_by("pk").first())
         if line:
             line.quantity = _quantity(line.quantity + quantity, words)
             line.save(update_fields=["quantity"])
             return line
-    line = OrderLine.objects.create(order=order, item=item, quantity=quantity, unit_price=money_round(item.default_sale_price), note=note,
+    line = OrderLine.objects.create(order=order, item=item, quantity=quantity, unit_price=price, note=note,
                                     options=modifiers.free_text(chosen, lang))
     for option in modifiers.priced(chosen):  # never merged: each plate keeps its own add-ons
-        OrderLine.objects.create(order=order, item=option.item, quantity=quantity, unit_price=money_round(option.item.default_sale_price), parent=line,
+        OrderLine.objects.create(order=order, item=option.item, quantity=quantity, unit_price=menu_price(option.item, order.customer), parent=line,
                                  options=option.label(lang)[:255])
     return line
+
+
+def menu_price(item, customer):
+    """R14 (HG-120): what a dish (or a priced add-on) costs on an order for ``customer``: the price on the customer's active price
+    list (``pricing.price_for``: its own price for the item, else the list's percentage on the menu price), and the menu price
+    (``Item.default_sale_price``) for an order with no customer, a customer with no list, or with «قوائم الأسعار» off. A
+    combo keeps its own prices (``add_combo``), and an agreed line its agreed price (``add_agreed_line``)."""
+
+    from pricing.services import price_for
+
+    return price_for(item, customer)
+
+
+def _price_list_pk(customer):
+    from pricing.services import customer_list
+
+    found = customer_list(customer) if customer is not None else None
+    return found.pk if found is not None else None
+
+
+def _same_prices(order, customer, words):
+    """R14 (HG-120): an order opened for a named customer is priced from that customer's list, so it is paid in the name of a
+    customer on the same list (the same customer, or one on no list when the order's has none). Another list is refused rather
+    than repriced: an agreed line (R10) carries no mark, so repricing could overwrite it. An order opened with no customer is
+    paid in any name, as before."""
+
+    if order.customer_id and customer.pk != order.customer_id and _price_list_pk(customer) != _price_list_pk(order.customer):
+        raise ValidationError(words["other_prices"].format(name=order.customer.name))
 
 
 @transaction.atomic
@@ -534,6 +569,11 @@ def dispatch(order, driver, user, *, delivery_fee=None, lang="ar"):
     order = _locked_open(order, words)
     if order.kind != OrderKind.DELIVERY:
         raise ValidationError(words["not_delivery"])
+    from . import platforms
+
+    platform = platforms.of_order(order)
+    if platform is not None:  # R14 (HG-120): the platform's rider picks it up; no driver or fee of ours
+        raise ValidationError(platforms.words(lang)["dispatch"].format(name=platform.name))
     if driver is None:
         raise ValidationError(words["driver"])
     before = {"driver": order.driver_id, "fee": str(order.delivery_fee), "dispatched_at": order.dispatched_at.isoformat() if order.dispatched_at else ""}
@@ -705,7 +745,7 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
 
     from sales.pos import walk_in_customer
 
-    from . import kitchen, offers, reservations
+    from . import kitchen, offers, platforms, reservations
 
     words = MESSAGES[lang]
     if tenders is not None:
@@ -713,8 +753,11 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     order, lines, location = _payable(order, cashbox, words)
     kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
-    coupon = str(coupon or "").strip()
-    rows, promotion, promotion_off = _bill(order, lines, lang, offers.Offer(coupon=coupon, customer=customer))
+    _same_prices(order, customer, words)  # R14 (HG-120): the lines were priced from the order's customer's list
+    # R14 (HG-120): a platform order is posted on credit to the platform, in its name only, at its list's prices with no offer of ours
+    platform = platforms.check_payer(order, customer, tendered=tendered, tenders=tenders, gift=gift, points=points, lang=lang)
+    coupon = "" if platform is not None else str(coupon or "").strip()
+    rows, promotion, promotion_off = _bill(order, lines, lang, None if platform is not None else offers.Offer(coupon=coupon, customer=customer))
     offers.check_seen(promotion_seen, promotion_off)
     spent, points_off = offers.points_part(customer, points, rows, lang)
     if spent:

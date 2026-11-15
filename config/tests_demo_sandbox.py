@@ -259,8 +259,10 @@ class EndToEndTests(SimpleTestCase):
                 "DEMO_SANDBOX_DIR": str(Path(folder) / "boxes"),
                 "FEEDBACK_SQLITE_PATH": str(Path(folder) / "feedback.sqlite3"),
             })
+            # A guard against a hang only: the build (migrate + two demo builds) grows with every app and took ~170 s locally
+            # and over 300 s on a slow CI runner (#426). How fast a restart is stays pinned below (under 3 s).
             done = subprocess.run([sys.executable, "-c", DRIVER], cwd=settings.BASE_DIR, env=env,
-                                  capture_output=True, text=True, timeout=300)
+                                  capture_output=True, text=True, timeout=600)
         self.assertEqual(done.returncode, 0, done.stderr[-3000:])
         out = json.loads(done.stdout.rsplit("RESULT", 1)[1])
         # Just looking around makes no copy, and the read-only template serves it.
