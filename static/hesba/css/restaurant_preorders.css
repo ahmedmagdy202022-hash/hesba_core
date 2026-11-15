@@ -1,0 +1,17 @@
+/* R10 (HG-119): «طلبات مسبقة». The day view and the cards are R8's rv-* (restaurant_reservations.css); these are the lines,
+   the production list and the form's line rows. Tokens only. */
+.po-lines{display:grid;gap:var(--hs-space-1);margin:0;padding:0;list-style:none}
+.po-lines li{display:flex;justify-content:space-between;gap:var(--hs-space-2);font-size:var(--hs-text-sm)}
+.po-lines .po-total{padding-block-start:var(--hs-space-1);border-block-start:1px solid var(--hs-line);font-weight:var(--hs-weight-semibold);color:var(--hs-navy)}
+.po-notes{margin:0;padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-md);background:var(--hs-ground);overflow-wrap:anywhere}
+.po-make{display:grid;gap:var(--hs-space-3);margin:0;padding:0;list-style:none}
+.po-make>li{display:grid;gap:var(--hs-space-2);padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.po-make-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--hs-space-2) var(--hs-space-4)}
+.po-make-head strong{color:var(--hs-navy)}
+.po-rows{display:grid;gap:var(--hs-space-3);margin:var(--hs-space-4) 0 0;padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md)}
+.po-rows legend{padding:0 var(--hs-space-2);color:var(--hs-navy);font-weight:var(--hs-weight-semibold)}
+.po-rows p{margin:0}
+.po-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,2fr);gap:var(--hs-space-2);align-items:end}
+.po-row label{display:grid;gap:var(--hs-space-1);font-size:var(--hs-text-sm);color:var(--hs-muted);min-inline-size:0}
+.po-row select,.po-row input{inline-size:100%;min-block-size:var(--hs-control-height);max-inline-size:100%}
+@media (max-width:640px){.po-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding-block-end:var(--hs-space-3);border-block-end:1px solid var(--hs-line)}.po-row label:first-child,.po-row label:last-child{grid-column:1 / -1}}

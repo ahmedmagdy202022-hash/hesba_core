@@ -50,7 +50,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
-        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل", "brands_title": "البراندات", "reservations_title": "الحجوزات", "brand": "البراند", "brand_default": "الافتراضي",
+        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل", "brands_title": "البراندات", "reservations_title": "الحجوزات", "preorders_title": "طلبات مسبقة", "brand": "البراند", "brand_default": "الافتراضي",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
         "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
@@ -83,7 +83,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
-        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones", "brands_title": "Brands", "reservations_title": "Reservations", "brand": "Brand", "brand_default": "Default",
+        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones", "brands_title": "Brands", "reservations_title": "Reservations", "preorders_title": "Pre-orders", "brand": "Brand", "brand_default": "Default",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
         "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
@@ -100,10 +100,13 @@ WORDS = {
         "merge_btn": "Merge here", "merged_ok": "Table {table}'s bill is merged into this one.", "merged_into": "This order was merged into {number}.",
     },
 }
-#: R8 (HG-118): the bill box's deposit rows (only when the table's seated reservation holds a deposit).
+#: R8 (HG-118): the bill box's deposit rows (only when the table's seated reservation holds a deposit; R10: or the order's collected pre-order).
 DEPOSIT_BILL_WORDS = {
-    "ar": {"deposit": "عربون الحجز", "due": "المطلوب بعد العربون", "note": "العربون بيتخصم من الحساب لو اتدفع باسم عميل الحجز نفسه."},
-    "en": {"deposit": "Booking deposit", "due": "To pay after the deposit", "note": "The deposit comes off the bill when it is paid in the booking customer's name."},
+    "ar": {"deposit": "عربون الحجز", "due": "المطلوب بعد العربون", "note": "العربون بيتخصم من الحساب لو اتدفع باسم عميل الحجز نفسه.",
+           # R10 (HG-119): the same rows for a collected pre-order's deposit
+           "preorder_deposit": "عربون الطلب المسبق", "preorder_note": "العربون بيتخصم من الحساب لو اتدفع باسم عميل الطلب نفسه."},
+    "en": {"deposit": "Booking deposit", "due": "To pay after the deposit", "note": "The deposit comes off the bill when it is paid in the booking customer's name.",
+           "preorder_deposit": "Pre-order deposit", "preorder_note": "The deposit comes off the bill when it is paid in the pre-order customer's name."},
 }
 KIND_AR = {OrderKind.DINE_IN: "صالة", OrderKind.TAKEAWAY: "تيك أواي", OrderKind.DELIVERY: "دليفري"}
 

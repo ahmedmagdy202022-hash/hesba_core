@@ -58,7 +58,7 @@ MESSAGES = {
         "not_live": "الطلب المسبق ده حالته «{status}»؛ الخطوة دي مش متاحة.",
         "collected": "الطلب المسبق ده اتسلّم خلاص.", "customer_locked": "على الطلب عربون؛ العميل مينفعش يتغيّر.",
         "foreign": "الطلب المسبق ده مش من طلبات الفرع اللي شغال فيه.", "cashbox": "اختار خزنة من خزن فرع الطلب.",
-        "bad_status": "اختار إلغاء أو ما جاش.", "order_note": "طلب مسبق {number}",
+        "bad_status": "اختار إلغاء أو ما جاش.", "order_note": "طلب مسبق {number} للاستلام",
         "not_kitchen": "«{item}» مش بيتحضّر في المطبخ.", "branch": "الفرع ده مش من فروعك.",
         "statuses": {"booked": "محجوز", "confirmed": "مؤكد", "ready": "جاهز", "collected": "اتسلّم", "cancelled": "اتلغى", "no_show": "ما جاش"},
     },
@@ -364,7 +364,7 @@ def cancel(preorder, status, user, lang="ar", reason=""):
     result = {"preorder": preorder, "deposit": deposit, "outcome": None, "invoice": None, "detail": ""}
     if deposit is None:
         return result
-    note = (reason or "").strip() or (f"Pre-order {preorder.number} cancelled" if lang == "en" else f"إلغاء الطلب المسبق {preorder.number}")
+    note = (reason or "").strip() or (f"Pre-order {preorder.number} cancelled" if lang == "en" else f"الطلب المسبق {preorder.number} اتلغى")
     return run_policy(result, preorder, deposit, user, lang, note)
 
 

@@ -274,7 +274,8 @@ def add_item(order, item, user, quantity=1, note="", lang="ar", options=None):
     chosen = modifiers.choose(item, options, lang)
     if not chosen:
         line = (order.lines.filter(item=item, note=note, ticket__isnull=True, voided=False, parent__isnull=True, options="", children__isnull=True,
-                                   bundle__isnull=True)  # R1b: never into a combo's component
+                                   bundle__isnull=True,  # R1b: never into a combo's component
+                                   unit_price=money_round(item.default_sale_price))  # R10: never into a line at another price (a pre-order's agreed one)
                 .order_by("pk").first())
         if line:
             line.quantity = _quantity(line.quantity + quantity, words)
