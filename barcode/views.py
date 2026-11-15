@@ -48,6 +48,7 @@ WORDS = {
         "back": "رجوع",
         "pdf_hint": "لحفظها PDF اختار «حفظ كـ PDF» من نافذة الطباعة.",
         "template": "مقاس الملصق", "fields": "على الملصق", "show_name": "اسم الصنف", "show_code": "كود الصنف", "show_shop": "اسم المحل",
+        "show_batch": "رقم التشغيلة", "show_expiry": "تاريخ الصلاحية", "show_made_on": "تاريخ الإنتاج", "lot_label": "تشغيلة", "expiry_label": "صلاحية", "made_label": "إنتاج",
         "offset": "ضبط الطابعة (مم)", "offset_x": "يمين/شمال", "offset_y": "فوق/تحت", "offset_hint": "لو الطباعة مزحزحة، زوّد أو قلّل مليمترات لحد ما تيجي في النص.",
         "pdf": "تنزيل PDF", "pdf_working": "بيتجهز…", "pdf_failed": "معرفناش نعمل الملف على الجهاز ده. جرّب «حفظ كـ PDF» من نافذة الطباعة.",
         "designs": "تصميمات الملصقات", "new_design": "تصميم جديد", "designs_intro": "اعمل مقاس ملصق على قد الورق أو الرول اللي عندك: العرض والطول، وعدد الملصقات في ورقة A4، والهوامش والمسافات، وحجم الكلام.",
@@ -88,6 +89,7 @@ WORDS = {
         "back": "Back",
         "pdf_hint": "To save it as a PDF, choose “Save as PDF” in the print dialog.",
         "template": "Label size", "fields": "On the label", "show_name": "Item name", "show_code": "Item code", "show_shop": "Shop name",
+        "show_batch": "Lot number", "show_expiry": "Expiry date", "show_made_on": "Made on", "lot_label": "Lot", "expiry_label": "Exp.", "made_label": "Made",
         "offset": "Printer adjustment (mm)", "offset_x": "Sideways", "offset_y": "Up/down", "offset_hint": "If the print lands off-centre, nudge it a few millimetres.",
         "pdf": "Download PDF", "pdf_working": "Preparing…", "pdf_failed": "This device could not build the file. Use “Save as PDF” in the print dialog instead.",
         "designs": "Label designs", "new_design": "New design", "designs_intro": "Make a label to fit the paper or roll you have: width and height, how many on an A4 sheet, margins and gaps, and text sizes.",
@@ -229,6 +231,7 @@ def labels_print(request):
     if not wanted:
         messages.error(request, WORDS[lang]["nothing_selected"])
         return redirect(f"/barcode/labels/?lang={lang}")
+    run, lot_lines = _production_lot(request, lang)
     template = spec(request.GET.get("template") or request.GET.get("layout"))
     layout = template["kind"]
     show_price = request.GET.get("show_price", "1") == "1"
@@ -246,8 +249,10 @@ def labels_print(request):
         name = item.item_name + (f" · {item.size}" if item.size else "") + (f" · {item.color}" if item.color else "")
         entry = {"name": name, "price": f"{money(item.default_sale_price)} {currency}", "code": item.item_code, "text": code,
                  "modules": modules, "quiet": 11 if kind == "ean13" else 10}
+        lot = lot_lines if run is not None and item.pk == run.recipe.product_id else {}
+        entry.update(lot)  # Manufacturing F3: batch / expiry / made_on lines of the run's own product
         for _ in range(wanted[item.pk]):
-            labels_out.append({"item": item, "svg": svg})
+            labels_out.append({"item": item, "svg": svg, "lot": lot})
             pdf_labels.append(entry)
             if len(labels_out) >= MAX_LABELS:
                 break
@@ -262,6 +267,35 @@ def labels_print(request):
                            "file": f"labels-{template['key']}.pdf"},
                  template=template, shown=shown, shop_name=_shop_name(), offset_x=offset(request.GET.get("offset_x")), offset_y=offset(request.GET.get("offset_y"))),
     )
+
+
+def _production_lot(request, lang):
+    """Manufacturing F3 (HG-131): ``?run=<id>`` prints a production run's lot on the labels of its product.
+
+    Returns (run, {"batch", "expiry", "made_on"} texts). The run is read inside the working entity (another entity's is a
+    404) and needs inventory.view_stock, as the run page does; a cancelled run has no lot to print."""
+
+    raw = request.GET.get("run", "")
+    if not raw.isdigit():
+        return None, {}
+    from django.core.exceptions import PermissionDenied
+
+    from batches.models import Batch
+    from django.shortcuts import get_object_or_404
+    from entities import scope as entity_scope
+    from manufacturing.models import ProductionRun
+
+    if not user_has_permission(request.user, "inventory.view_stock"):
+        raise PermissionDenied("A run's labels need inventory.view_stock.")
+    run = get_object_or_404(entity_scope.scope(ProductionRun.objects.select_related("recipe__product"), "location__entity"), pk=int(raw))
+    words = WORDS[lang]
+    lot = Batch.objects.filter(production_run=run).first() if run.status == "posted" else None
+    lines = {"made_on": f"{words['made_label']} {run.run_date.isoformat()}"}
+    if lot is not None:
+        lines["batch"] = f"{words['lot_label']} {lot.batch_no}"
+        if lot.expiry_date:
+            lines["expiry"] = f"{words['expiry_label']} {lot.expiry_date.isoformat()}"
+    return run, lines
 
 
 # ---- LABEL-003: label designs ----

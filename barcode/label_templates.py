@@ -17,7 +17,7 @@ TEMPLATES = {
 }
 LEGACY = {"a4": "a4_24", "roll": "roll_50x25"}
 DEFAULT = "a4_24"
-FIELDS = ("name", "price", "code", "shop")
+FIELDS = ("name", "price", "code", "shop", "batch", "expiry", "made_on")  # Manufacturing F3 (HG-131): the last three are a lot label's
 MAX_OFFSET_MM = 5
 
 
@@ -48,7 +48,7 @@ def spec(key):
             "barcode_width": round(max(width - 4, 8), 1), "small": False, "custom": True, "name": design["name"],
             "name_pt": design["name_pt"], "price_pt": design["price_pt"], "small_pt": design["small_pt"],
             "barcode_pct": design["barcode_pct"], "barcode_text": design["barcode_text"],
-            "defaults": {flag: design[flag] for flag in ("show_name", "show_price", "show_code", "show_shop")},
+            "defaults": {flag: design.get(flag, False) for flag in ("show_name", "show_price", "show_code", "show_shop", "show_batch", "show_expiry", "show_made_on")},
         }
     kind, width, height, columns, rows, top, ar, en = TEMPLATES[resolve(key)]
     small = height <= 25 or width <= 40
@@ -57,7 +57,7 @@ def spec(key):
             # Text sizes the PDF uses for built-ins, matching labels.css.
             "name_pt": 6.5 if small else (7 if kind == "roll" else 10), "price_pt": 7.5 if small else (8 if kind == "roll" else 11),
             "small_pt": 7, "barcode_pct": 0, "barcode_text": True,
-            "defaults": {"show_name": True, "show_price": True, "show_code": False, "show_shop": False}}
+            "defaults": {"show_name": True, "show_price": True, "show_code": False, "show_shop": False, "show_batch": False, "show_expiry": False, "show_made_on": False}}
 
 
 def choices(lang):

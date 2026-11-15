@@ -35,6 +35,9 @@
     <label class="op-check"><input type="checkbox" name="show_name" value="1"{% if design.show_name %} checked{% endif %}> {{ words.show_name }}</label>
     <label class="op-check"><input type="checkbox" name="show_price" value="1"{% if design.show_price %} checked{% endif %}> {{ words.show_price }}</label>
     <label class="op-check"><input type="checkbox" name="show_code" value="1"{% if design.show_code %} checked{% endif %}> {{ words.show_code }}</label>
+    <label class="op-check"><input type="checkbox" name="show_batch" value="1"{% if design.show_batch %} checked{% endif %}> {{ words.show_batch }}</label>
+    <label class="op-check"><input type="checkbox" name="show_expiry" value="1"{% if design.show_expiry %} checked{% endif %}> {{ words.show_expiry }}</label>
+    <label class="op-check"><input type="checkbox" name="show_made_on" value="1"{% if design.show_made_on %} checked{% endif %}> {{ words.show_made_on }}</label>
     <label class="op-check"><input type="checkbox" name="barcode_text" value="1"{% if design.barcode_text %} checked{% endif %}> {{ words.barcode_text }}</label>
   </fieldset>
   <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button><a class="op-secondary" href="{% url 'barcode:designs' %}?lang={{ lang }}">{{ words.cancel }}</a></div>
@@ -49,6 +52,9 @@
       <p class="ld-price" data-p="show_price" dir="ltr">249.00 <small>EGP</small></p>
       <div class="ld-bars" data-bars><span class="ld-bars__lines"></span><span class="ld-bars__digits" data-p="barcode_text">2000000000015</span></div>
       <p class="ld-code" data-p="show_code">SHIRT-L</p>
+      <p class="ld-code" data-p="show_batch" dir="ltr">LOT MO-0001</p>
+      <p class="ld-code" data-p="show_expiry" dir="ltr">EXP 2027-01-31</p>
+      <p class="ld-code" data-p="show_made_on" dir="ltr">MFG 2026-11-15</p>
     </div>
   </div>
   <p class="op-muted ld-scale" data-scale dir="ltr"></p>

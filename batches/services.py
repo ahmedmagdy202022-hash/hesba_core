@@ -39,9 +39,17 @@ def batches_enabled():
 
 
 def counted_batches():
-    """Batches that are really in stock: registered by hand, or on a posted purchase."""
+    """Batches that are really in stock: registered by hand, on a posted purchase, or made by a posted production run.
 
-    return Batch.objects.filter(active=True).filter(Q(purchase_line__isnull=True) | Q(purchase_line__invoice__status="posted"))
+    Manufacturing F3 (HG-131). Before: ``purchase_line is null`` OR the purchase is posted. A lot made by a run has no
+    purchase line, so that first branch alone would count the lot of a cancelled run for ever; the first branch is now
+    "neither a purchase line nor a run", and a run's lot counts only while its run is posted."""
+
+    return Batch.objects.filter(active=True).filter(
+        (Q(purchase_line__isnull=True) & Q(production_run__isnull=True))
+        | Q(purchase_line__invoice__status="posted")
+        | Q(production_run__status="posted")
+    )
 
 
 def attach_purchase_batches(invoice, line_data, user=None):
@@ -90,7 +98,7 @@ def batch_positions(items=None, locations=None):
     those places (UI-TRACK grocery, Codex #234: one entity's card).
     """
 
-    batches = counted_batches().select_related("item", "location")
+    batches = counted_batches().select_related("item", "location", "production_run")
     if items is not None:
         batches = batches.filter(item__in=items)
     if locations is not None:
