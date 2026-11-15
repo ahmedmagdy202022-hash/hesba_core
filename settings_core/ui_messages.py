@@ -197,6 +197,10 @@ PATTERNS = (
     (r"^This operation belongs to the kitchen preparation (?P<number>\S+) of “(?P<dish>.+?)” and cannot be reversed from the transfers and adjustments screen\. "
      r"Cancel the preparation from the dish's page: its plates leave stock and all of their ingredients come back, together\.$",
      "الحركة دي تابعة لتحضير «{dish}» رقم {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ التحضير من صفحة الطبق، والأطباق بتخرج من المخزن وكل مكوّناتها بترجع مع بعض."),
+    # HG-127: a project issue that part of already came back from the site is not reversed before its return.
+    (r"^This operation is a material issue to project (?P<code>\S+) and (?P<returned>\S+) of it already came back from the site\. "
+     r"Reverse the return first, then the issue\.$",
+     "الحركة دي صرف خامات لمشروع {code}، ورجع منها {returned} من الموقع قبل كده. اعكس الارتجاع الأول، وبعدين الصرف."),
     # A0 (HG-078): the AI layer's daily cap and text size.
     (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
     # A1 (HG-079): one person's daily voicings of the summary.
