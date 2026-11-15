@@ -6,6 +6,8 @@ only, in the entity being worked in) and the contract module:
 - *billed %* is billed against the contract value;
 - *time %* is the share of the project's planned span already gone, so a
   project billing behind its calendar shows as behind;
+- Contracting C3 (HG-124): a project with tasks on its schedule is behind when
+  its schedule has an alert (``schedule.behind``) instead;
 - *retention held* is what the client keeps until handover.
 
 A progress certificate is *overdue* when its posted invoice still has money
@@ -43,9 +45,10 @@ def time_share(project, today=None):
 
 
 def portfolio(status=ProjectStatus.ACTIVE, today=None):
-    """[{project, figures, time_pct, behind, retention}] and the totals."""
+    """[{project, figures, time_pct, behind, schedule, retention}] and the totals (``schedule``: the C3 snapshot, or None without tasks)."""
 
     from .contract import position
+    from .schedule import behind
     from .services import summary
 
     today = today or timezone.localdate()
@@ -57,8 +60,9 @@ def portfolio(status=ProjectStatus.ACTIVE, today=None):
     for project in projects[:200]:
         figures = summary(project)
         share = time_share(project, today)
-        rows.append({"project": project, "figures": figures, "time_pct": share,
-                     "behind": share is not None and figures["contract"] > 0 and figures["progress"] + BEHIND_POINTS < share,
+        # Contracting C3 (HG-124): a project with a schedule is behind when its schedule has an alert; one without keeps the billing-based rule
+        late, plan = behind(project, figures, share, today)
+        rows.append({"project": project, "figures": figures, "time_pct": share, "behind": late, "schedule": plan,
                      "retention": position(project)["retention_held"]})  # in the entity being worked in, like the rest of the row
     keys = ("contract", "billed", "cost", "profit", "due")
     totals = {key: money_round(sum((row["figures"][key] for row in rows), ZERO)) for key in keys}
