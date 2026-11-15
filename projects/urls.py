@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import contract_views, views, views_documents, views_purchase_requests, views_reports, views_schedule, views_subcontracts, views_variations
+from . import contract_views, views, views_documents, views_equipment, views_purchase_requests, views_reports, views_schedule, views_subcontracts, views_variations
 
 
 app_name = "projects"
@@ -11,6 +11,9 @@ urlpatterns = [
     # Contracting C7 (HG-125): purchase requests across projects: waiting for approval (the office) and mine (the engineer)
     path("purchase-requests/", views_purchase_requests.inbox, name="purchase_requests_all"),
     path("purchase-requests/mine/", views_purchase_requests.inbox, {"show": "mine"}, name="purchase_requests_mine"),
+    # Contracting C6 (HG-129): the equipment register (owned and hired machines) and a project's equipment hours
+    path("equipment/", views_equipment.register, name="equipment_register"),
+    path("equipment/<int:eid>/", views_equipment.machine_edit, name="equipment_edit"),
     path("<int:pk>/", views.project_detail, name="detail"),
     # CONTRACT-002
     path("<int:pk>/boq/", contract_views.boq, name="boq"),
@@ -18,6 +21,7 @@ urlpatterns = [
     path("<int:pk>/certificates/<int:number>/", contract_views.certificate_detail, name="certificate"),
     path("<int:pk>/certificates/<int:number>/print/", contract_views.certificate_print, name="certificate_print"),
     path("<int:pk>/payments/", contract_views.payments, name="payments"),
+    path("<int:pk>/equipment/", views_equipment.equipment_tab, name="equipment"),
     path("<int:pk>/subcontracts/", contract_views.subcontracts, name="subcontracts"),
     # Contracting C11 (HG-128): one subcontract: its lines, bills by quantities, advance and payments, and the printed bill
     path("<int:pk>/subcontracts/<int:sid>/", views_subcontracts.subcontract_page, name="subcontract"),
