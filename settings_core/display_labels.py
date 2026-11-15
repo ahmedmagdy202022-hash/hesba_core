@@ -43,6 +43,7 @@ AR_LABELS = {
     ("projects.projectexpense", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
     ("projects.projectpurchase", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
     ("projects.projectpayment", "kind"): {"advance": "دفعة مقدمة", "collection": "تحصيل"},
+    ("projects.equipment", "kind"): {"owned": "ملك", "hired": "إيجار"},
     ("projects.subcontractpayment", "kind"): {"advance": "دفعة مقدمة", "payment": "دفعة من المستخلصات"},
     ("restaurant.order", "kind"): {"dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري"},
     ("sales.salesinvoice", "status"): INVOICE_STATUS,

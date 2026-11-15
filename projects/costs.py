@@ -48,6 +48,7 @@ MESSAGES = {
         "below_lines": "قيمة العقد لازم متقلش عن مجموع بنود مقاول الباطن ({total}).",
         "supplier_locked": "مقاول الباطن ده عليه مستخلصات؛ مينفعش يتغيّر لمورد تاني.",
         "lines_needed": "مقاول الباطن ده ليه بنود: اعمل المستخلص بالكميات من صفحته.",
+        "equipment_link": "دي فاتورة إيجار معدات؛ اسحبها من تاب المعدات عشان ساعاتها ترجع.",
     },
     "en": {
         "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Type the value as a number, 0 or more.", "rate": "The rate must be between 0 and 100.",
@@ -62,6 +63,7 @@ MESSAGES = {
         "below_lines": "The value cannot be below the total of the subcontract's lines ({total}).",
         "supplier_locked": "This subcontract has bills; its subcontractor cannot change.",
         "lines_needed": "This subcontract has lines: bill it by quantities from its page.",
+        "equipment_link": "This is an equipment hire bill; withdraw it from the equipment tab so its hours come back.",
     },
 }
 
@@ -437,6 +439,8 @@ def unlink_purchase(project, link, user, lang="ar"):
     link = ProjectPurchase.objects.select_related("invoice").get(pk=link.pk, project=project)
     if hasattr(link.invoice, "subcontract_bill"):
         raise ValidationError(words["bill_link"])
+    if link.invoice.lines.filter(equipment_logs__isnull=False).exists():
+        raise ValidationError(words["equipment_link"])  # Contracting C6 (HG-129): its hours stay billed to a bill that no longer counts
     _visible(link.invoice, words)
     _period(link.invoice)
     _audit(project, user, "unlink_project_purchase", {"invoice": link.invoice.invoice_number})

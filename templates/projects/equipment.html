@@ -1,0 +1,71 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format hesba_labels %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_equipment.css' %}?v=c6-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C6 (HG-129): a project's equipment hours. Hired hours are billed as a draft purchase; owned hours are a memo only. #}
+{% include "projects/_head.html" %}
+<section class="eqp-intro"><h2 class="prj-h">{{ ew.tab_title }}</h2><p>{{ ew.tab_intro }}</p>
+{% url 'projects:equipment_register' as register_url %}{% link_ok register_url as register_ok %}{% if register_ok %}<p><a class="hs-notice-link" href="{{ register_url }}?lang={{ lang }}" data-equipment-register-link>{{ ew.open_register }}</a></p>{% endif %}</section>
+
+<section class="op-summary-grid op-summary-grid--compact" data-equipment-summary>
+<article><small>{{ ew.total_hours }}</small><strong dir="ltr" data-equipment-hours>{{ data.total_hours|qty }}</strong></article>
+{% if can_money and data.groups %}<article><small>{{ ew.hire_title }}</small><strong data-equipment-unbilled>{{ unbilled_total|money }}</strong></article>{% endif %}
+{% if memo %}<article><small>{{ cwords.eq_memo }}</small><strong data-memo="amount">{{ memo.amount|money }}</strong><small dir="ltr">{{ memo.hours|qty }}</small></article>{% elif owned_hours %}<article><small>{{ cwords.eq_memo }}</small><strong dir="ltr" data-owned-hours>{{ owned_hours|qty }}</strong></article>{% endif %}
+</section>
+
+{% if memo %}
+<section class="prj-card" data-equipment-memo>
+<h2 class="prj-h">{{ ew.memo_title }}</h2>
+<p class="eqp-note">{{ ew.memo_hint }}</p>
+{% if memo.rows %}<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ ew.equipment }}</th><th>{{ ew.hours }}</th><th>{{ ew.amount }}</th></tr></thead><tbody>
+{% for row in memo.rows %}<tr data-memo-machine="{{ row.equipment.pk }}"><td>{{ row.equipment.name }}</td><td dir="ltr">{{ row.hours|qty }}</td><td>{{ row.amount|money }}</td></tr>{% endfor %}
+</tbody></table></div>
+<dl class="eqp-profit"><div><dt>{{ ew.profit_before }}</dt><dd data-memo="profit_before">{% include "projects/_profit.html" with value=memo.profit_before loss=ew.loss %}</dd></div>
+<div><dt>{{ cwords.eq_memo }}</dt><dd data-memo="charge">{{ memo.amount|money }}</dd></div>
+<div><dt>{{ ew.profit_after }}</dt><dd data-memo="profit_after"><strong>{% include "projects/_profit.html" with value=memo.profit_after loss=ew.loss %}</strong></dd></div></dl>
+{% else %}<p class="op-empty" data-memo-none>{{ ew.no_owned }}</p>{% endif %}
+</section>
+{% endif %}
+
+{% if can_money and data.groups %}
+<section class="prj-card" data-equipment-hire>
+<h2 class="prj-h">{{ ew.hire_title }}</h2>
+<p class="eqp-note">{{ ew.hire_hint }}</p>
+{% for group in data.groups %}<div class="eqp-group" data-hire-group="{{ group.supplier.pk }}">
+<p class="eqp-group__name"><strong>{{ group.supplier.name }}</strong></p>
+<p class="eqp-group__sum"><span dir="ltr" data-hire-hours>{{ group.hours|qty }}</span> · <span data-hire-amount>{{ group.amount|money }}</span></p>
+{% if can_bill and is_open %}<form method="post" data-hire-bill-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><input type="hidden" name="supplier" value="{{ group.supplier.pk }}"><button class="op-primary" type="submit">{{ ew.bill_btn }}</button></form>{% endif %}
+</div>{% endfor %}
+</section>
+{% endif %}
+
+{% if can_money and data.bills %}
+<section class="prj-card" data-equipment-bills>
+<h2 class="prj-h">{{ ew.bills_title }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ ew.invoice }}</th><th>{{ ew.supplier }}</th><th>{{ ew.hours }}</th><th>{{ ew.amount }}</th><th>{{ cwords.status }}</th><th></th></tr></thead><tbody>
+{% for bill in data.bills %}<tr data-hire-bill="{{ bill.invoice.invoice_number }}"><td dir="ltr">{% if can_view_purchases %}<a href="{% url 'purchases:detail' bill.invoice.pk %}?lang={{ lang }}">{{ bill.invoice.invoice_number|ltr }}</a>{% else %}{{ bill.invoice.invoice_number|ltr }}{% endif %}</td><td>{{ bill.invoice.supplier.name }}</td><td dir="ltr">{{ bill.hours|qty }}</td><td>{{ bill.invoice.total_amount|money }}</td><td><span class="op-status op-status-{{ bill.invoice.status }}">{% choice_label bill.invoice "status" %}</span></td><td class="eqp-actions">{% if can_bill and bill.draft %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="withdraw"><input type="hidden" name="invoice" value="{{ bill.invoice.pk }}"><button class="op-secondary" type="submit">{{ ew.withdraw }}</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+{% endif %}
+
+<section class="prj-card" data-equipment-logs>
+<h2 class="prj-h">{{ ew.logs_title }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ ew.date }}</th><th>{{ ew.equipment }}</th><th>{{ ew.kind }}</th><th>{{ ew.hours }}</th><th>{{ ew.operator }}</th>{% if can_money %}<th>{{ ew.rate }}</th><th>{{ ew.amount }}</th>{% endif %}<th>{{ ew.billed }}</th>{% if can_log and is_open %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}{% with log=row.log %}<tr data-equipment-log="{{ log.pk }}"><td dir="ltr">{{ log.work_date|date:"Y-m-d" }}</td><td>{{ log.equipment.name }}</td><td>{{ row.kind_label }}</td><td dir="ltr">{{ log.hours|qty }}</td><td>{{ log.operator|default:"—" }}</td>{% if can_money %}<td>{{ log.rate|money }}</td><td>{{ row.amount|money }}</td>{% endif %}<td>{% if row.billed %}<span class="op-status op-status-{{ row.invoice.status }}" data-log-billed><bdi dir="ltr">{{ row.invoice.invoice_number }}</bdi></span>{% elif log.equipment.kind == "owned" %}<span class="eqp-muted">—</span>{% else %}<span class="eqp-muted" data-log-unbilled>{{ ew.unbilled }}</span>{% endif %}</td>{% if can_log and is_open %}<td class="eqp-actions">{% if not row.billed %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="delete_log"><input type="hidden" name="log" value="{{ log.pk }}"><button class="op-secondary" type="submit">{{ ew.delete }}</button></form>{% endif %}</td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="9" class="op-empty" data-logs-none>{{ ew.no_logs }}</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+
+{% if not is_open %}<p class="op-message" data-project-closed>{{ ew.closed }}</p>
+{% elif can_log %}
+<form class="op-form hs-form eqp-log-form" method="post" data-equipment-log-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="log"><h2>{{ ew.log_title }}</h2>
+{% if machines %}
+<div class="op-form-grid"><div class="op-field"><label for="eq-machine">{{ ew.equipment }}</label><select id="eq-machine" name="equipment" required><option value="">{{ ew.pick_equipment }}</option>{% for machine in machines %}<option value="{{ machine.pk }}"{% if posted.action == 'log' and posted.equipment == machine.pk|stringformat:'s' %} selected{% endif %}>{{ machine.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="eq-date">{{ ew.date }}</label><input id="eq-date" type="date" name="work_date" value="{% if posted.action == 'log' and posted.work_date %}{{ posted.work_date }}{% else %}{{ today }}{% endif %}" max="{{ today }}"></div>
+<div class="op-field"><label for="eq-hours">{{ ew.hours }}</label><input id="eq-hours" name="hours" value="{% if posted.action == 'log' %}{{ posted.hours }}{% endif %}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="eq-operator">{{ ew.operator }}</label><input id="eq-operator" name="operator" value="{% if posted.action == 'log' %}{{ posted.operator }}{% endif %}" maxlength="120"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ ew.log_btn }}</button></div>
+{% else %}<p class="op-muted" data-no-machines>{{ ew.no_machines }}</p>{% endif %}</form>
+{% endif %}
+{% if not can_money %}<p class="op-muted" data-hours-only>{{ ew.view_hours_only }}</p>{% endif %}
+{% endblock %}
