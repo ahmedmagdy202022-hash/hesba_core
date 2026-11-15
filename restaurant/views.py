@@ -19,7 +19,7 @@ from shifts.gate import require_open_shift, shift_missing
 from shifts.services import open_shift_for
 from staff.models import Employee
 
-from . import branches, services
+from . import branches, brands, services
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities.services import is_multi_entity
 
@@ -50,7 +50,7 @@ WORDS = {
         "kitchen": "المطبخ", "ticket": "تذكرة", "tables_title": "طاولات الصالة", "name": "الاسم / الرقم", "area": "المكان", "sort": "الترتيب", "active": "شغالة",
         "save": "حفظ", "saved": "اتحفظت الطاولة.", "new_table": "طاولة جديدة", "edit": "تعديل", "bad_number": "اكتب رقم صحيح.",
         "ready": "جاهز", "ready_n": "جاهز {n}", "void_why": "السبب", "kitchen_screen": "شاشة المطبخ", "stations_title": "محطات المطبخ",
-        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل",
+        "modifiers_title": "الإضافات والاختيارات", "combos_title": "الكومبو", "call_title": "دليفري برقم العميل", "zones_title": "مناطق التوصيل", "brands_title": "البراندات", "brand": "البراند", "brand_default": "الافتراضي",
         "sent_many": "اتبعتت {count} للمطبخ ({stations}).",
         "branch": "الفرع", "choose_branch": "اختار الفرع", "no_branch_tables": "لسه مفيش طاولات في الفرع ده.",
         "split": "ادفع بأكتر من طريقة", "split_hint": "وزّع الحساب على أكتر من خزنة، زي كاش وفيزا. المجموع لازم يساوي المطلوب بالظبط.",
@@ -83,7 +83,7 @@ WORDS = {
         "kitchen": "Kitchen", "ticket": "Ticket", "tables_title": "Hall tables", "name": "Name / number", "area": "Area", "sort": "Order", "active": "Active",
         "save": "Save", "saved": "Table saved.", "new_table": "New table", "edit": "Edit", "bad_number": "Enter a valid number.",
         "ready": "Ready", "ready_n": "{n} ready", "void_why": "Reason", "kitchen_screen": "Kitchen screen", "stations_title": "Kitchen stations",
-        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones",
+        "modifiers_title": "Add-ons and choices", "combos_title": "Combos", "call_title": "Delivery by caller", "zones_title": "Delivery zones", "brands_title": "Brands", "brand": "Brand", "brand_default": "Default",
         "sent_many": "{count} sent to the kitchen ({stations}).",
         "branch": "Branch", "choose_branch": "Choose the branch", "no_branch_tables": "No tables in this branch yet.",
         "split": "Pay several ways", "split_hint": "Spread the bill over several cashboxes, such as cash and card. Together they must equal the amount to pay exactly.",
@@ -216,7 +216,7 @@ def board(request):
                 request.user, kind=kind, table=_table(request.POST.get("table")), guests=request.POST.get("guests") or 1, entity=entity,
                 customer=_pick(Customer, request.POST.get("customer"), active=True), waiter=_pick(Employee, request.POST.get("waiter"), active=True),
                 address=request.POST.get("address", ""), phone=request.POST.get("phone", ""), notes=request.POST.get("notes", ""), lang=lang,
-                delivery_fee=request.POST.get("delivery_fee"),
+                delivery_fee=request.POST.get("delivery_fee"), brand=request.POST.get("brand") if kind != OrderKind.DINE_IN else None,  # R11 (HG-117)
             )
         except ValidationError as exc:
             messages.error(request, " ".join(exc.messages))
@@ -245,8 +245,20 @@ def board(request):
                                          "branch": order.entity.display(lang) if grouped else ""} for order in others],
         customers=Customer.objects.filter(active=True).order_by("name"), waiters=Employee.objects.filter(active=True),
         branch_groups=groups, branch_choices=branches.choices(request.user, lang) if grouped else [],
+        **brand_pickers(request.user, lang, grouped),
         **requests_context(waiting, lang, _takes_orders(request.user)),
     ))
+
+
+def brand_pickers(user, lang, grouped):
+    """R11 (HG-117): the brand pickers of the takeaway and the delivery forms: ``brand_groups`` is ``[{label, brands: [{pk, label, default}]}]`` for the
+    branches that have an active brand, and empty when none has (the forms are then exactly as before). Across the group each branch is a group of
+    options; the server accepts only a brand of the very branch the order opens in."""
+
+    entities = [choice["entity"] for choice in branches.choices(user, lang)] if grouped else [branches.working_entity()]
+    rows = [{"label": entity.display(lang), "brands": [{"pk": one.pk, "label": one.label(lang), "default": one.is_default} for one in found]}
+            for entity, found in brands.choices(entities)]
+    return {"brand_groups": rows, "brand_grouped": grouped}
 
 
 def _raw_ingredient_ids():
@@ -266,8 +278,9 @@ def _raw_ingredient_ids():
     return ingredients - dishes - ordered
 
 
-def _menu():
+def _menu(brand=None):
     items = Item.objects.filter(active=True).exclude(item_code__in=services.OFF_MENU_CODES).select_related("category").order_by("category__category_code", "item_name")
+    items = brands.menu_items(items, brand)  # R11 (HG-117): the brand's categories; the whole menu when it has none
     categories, seen = [], set()
     for item in items:
         if item.category_id and item.category_id not in seen:
@@ -280,7 +293,7 @@ def _menu():
 def order_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
-    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity", "split_from__table", "merged_into")),
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "customer", "waiter", "invoice", "entity", "split_from__table", "merged_into", "brand")),
                               pk=pk)  # R12: another branch's is a 404
     if request.method == "POST":
         if not _takes_orders(request.user):
@@ -371,7 +384,7 @@ def order_detail(request, pk):
     from .views_combos import COMBO_WORDS, combo_sheets
     from .views_modifiers import MODIFIER_WORDS, menu_entries, sheets
 
-    items, categories = _menu()
+    items, categories = _menu(order.brand)
     raw_ids = _raw_ingredient_ids()
     lines = list(order.lines.select_related("item", "ticket", "combo__item"))
     taking = order.status == OrderStatus.OPEN and _takes_orders(request.user)
@@ -409,7 +422,7 @@ def order_detail(request, pk):
         cashboxes=cashboxes, default_cashbox=default_cashbox,
         split_rows=_split_defaults(cashboxes, default_cashbox) if order.status == OrderStatus.OPEN and len(cashboxes) > 1 else [],  # R2b
         bill_total=(offer_box["summary"]["cash_due"] if offer_box else services.bill_total(order, lines)) if order.status == OrderStatus.OPEN else None,
-        branch_label=order.entity.display(lang) if is_multi_entity() else "",
+        branch_label=order.entity.display(lang) if is_multi_entity() else "", brand_label=brands.label(order, lang),
         shift_missing=shift_missing(request.user),
         customers=Customer.objects.filter(active=True).order_by("name"), free_tables=free_tables,
         **requests_context(asked, lang, _takes_orders(request.user)), requests_order=order.pk,
@@ -613,7 +626,7 @@ def check(request, pk):
     from . import charges
 
     lang = _lang(request)
-    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "waiter", "split_from__table")), pk=pk)  # R12
+    order = get_object_or_404(branches.orders(Order.objects.select_related("table", "waiter", "split_from__table", "brand")), pk=pk)  # R12
     if order.status != OrderStatus.OPEN:
         raise Http404("Only an open order has a check to print.")
     lines = list(order.lines.select_related("item", "combo__item"))
@@ -645,7 +658,7 @@ def check(request, pk):
 
         saved_text = offers.words(lang)["saved"].format(amount=money(bill["offer"]), name=bill["promotion"].name)
     return render(request, "restaurant/check.html", _base(request, order=order, bill=bill, rows=rows, chw=CHARGE_WORDS[lang], kind_label=_kind_label(order, lang),
-                                                        company=company_details(), now=timezone.localtime(), summary=summary, saved_text=saved_text,
+                                                        company=company_details(), now=timezone.localtime(), summary=summary, saved_text=saved_text, brand_name=brands.label(order, lang), brand_header=order.brand.header if order.brand_id else "",
                                                         ow=offer_box["words"] if offer_box is not None else None))
 
 
@@ -742,7 +755,7 @@ def ticket(request, pk):
     sequence: each is its own page, so each station's printer takes its own."""
 
     lang = _lang(request)
-    first = get_object_or_404(branches.tickets(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "sent_by", "station")), pk=pk)
+    first = get_object_or_404(branches.tickets(KitchenTicket.objects.select_related("order", "order__table", "order__waiter", "order__brand", "sent_by", "station")), pk=pk)
     upto = request.GET.get("upto", "")
     tickets = [first]
     if upto.isdigit() and int(upto) > first.sequence:
@@ -765,6 +778,7 @@ def ticket(request, pk):
              for one in tickets]
     return render(request, "restaurant/ticket.html", _base(
         request, ticket=first, order=first.order, cards=cards, kind_label=_kind_label(first.order, lang), company=company_details(),
+        brand_name=brands.label(first.order, lang),
     ))
 
 
@@ -838,6 +852,8 @@ INSIGHT_WORDS = {
            "bad_period": "الفترة مش مظبوطة؛ اتعرض الشهر ده.", "delivery_fee": "رسوم التوصيل", "dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري", "total": "الإجمالي",
            "combo_discount": "خصم الكومبو", "combo_discount_note": "الأطباق فوق بسعر المنيو؛ ده اللي الكومبو وفّره على العملاء منها، فالأطباق ناقص الرقم ده بتساوي صافي سطورها.",
            "service": "الخدمة", "min_topup": "فرق الحد الأدنى",
+           "by_brand": "حسب البراند", "brand": "البراند", "no_brand": "من غير براند",
+           "brand_note": "الطلب المتفتح قبل ما تتعمل البراندات بيظهر في «من غير براند»؛ الفاتورة والضريبة والمخزن واحدة لكل البراندات.",
            "charges_note": "الخدمة وفرق الحد الأدنى سطور على الفواتير، مش أطباق، فمش داخلين في الأكثر مبيعًا. الأطباق ناقص خصم الكومبو زائد الخدمة وفرق الحد الأدنى بتساوي مبيعات الطلبات قبل الضريبة (من غير رسوم التوصيل والمرتجعات)."},
     "en": {"costing": "Dish costs", "costing_intro": "What one plate uses and what it costs at today's average ingredient cost, against its price. An estimate for pricing. A dish marked “Taken from stock” is made from its ingredients before it sells; selling any other dish takes nothing out of stock.",
            "dish": "Dish", "price": "Price", "cost": "Plate cost", "margin": "Margin", "margin_pct": "Margin %", "ingredients": "Ingredients",
@@ -853,6 +869,8 @@ INSIGHT_WORDS = {
            "bad_period": "The period was not valid; showing this month.", "delivery_fee": "Delivery fee", "dine_in": "Dine in", "takeaway": "Takeaway", "delivery": "Delivery", "total": "Total",
            "combo_discount": "Combo discount", "combo_discount_note": "The dishes above are at menu price; this is what combos saved customers on them, so the dishes less this figure come to their lines' net value.",
            "service": "Service charge", "min_topup": "Minimum charge top-up",
+           "by_brand": "By brand", "brand": "Brand", "no_brand": "No brand",
+           "brand_note": "An order opened before brands were set up shows under “No brand”; the invoice, the tax and the stock are one for every brand.",
            "charges_note": "The service charge and the minimum's top-up are invoice lines, not dishes, so they are not among the best sellers. The dishes less the combo discount plus the service charge and the top-up come to the orders' sales before VAT (delivery fees and returns aside)."},
 }
 
@@ -1067,6 +1085,10 @@ def report(request):
     data = insights.period_report(first, last)
     for row in data["kinds"]:
         row["label"] = words.get(row["kind"], row["kind"])
+    show_brands = brands.exist()  # R11 (HG-117): «حسب البراند» only where a brand was ever set up
+    for row in data["brands"]:
+        row["label"] = row["brand"].label(lang) if row["brand"] else words["no_brand"]
+        row["branch"] = row["brand"].entity.display(lang) if row["brand"] and branches.group_mode() else ""
     waste_rows, waste_total = insights.waste(first, last)
     # TRACK-ACTS W14: the report counts restaurant orders only; name the rest so it agrees with the dashboard.
     from reports.selectors import profit_totals
@@ -1076,5 +1098,5 @@ def report(request):
     others = words["others"].format(other=money(all_sales - data["totals"]["sales"]), all=money(all_sales)) if all_sales > data["totals"]["sales"] else ""
     return render(request, "restaurant/report.html", _base(request, page_title=words["report"], iw=words, first=first, last=last, note=note, others=others,
                                                          deliveries=insights.deliveries(first, last), dw=DELIVERY_WORDS[lang],
-                                                         today=timezone.localdate(), waste=waste_rows, waste_total=waste_total,
+                                                         today=timezone.localdate(), waste=waste_rows, waste_total=waste_total, show_brands=show_brands,
                                                          can_cost=user_has_permission(request.user, COST_VIEW), **data))

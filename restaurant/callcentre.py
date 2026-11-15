@@ -314,10 +314,11 @@ def zone_for(address, entity):
 
 
 @transaction.atomic
-def open_delivery(user, *, customer=None, address=None, text="", phone="", fee=None, entity=None, waiter=None, lang="ar"):
+def open_delivery(user, *, customer=None, address=None, text="", phone="", fee=None, entity=None, waiter=None, brand=None, lang="ar"):
     """Open a delivery order. With a saved ``address`` (the customer's, active) the order carries its text and the customer's phone, and the
     fee is the address's zone's (an empty or unusable zone means none), unless ``fee`` is given: the fee box as it was posted, which wins.
-    With none, ``text`` and ``phone`` as typed and no card. Everything else is ``services.open_order``. Returns the order."""
+    With none, ``text`` and ``phone`` as typed and no card. Everything else is ``services.open_order``, brand included (R11: the one picked, else the
+    branch's default). Returns the order."""
 
     words = MESSAGES[lang]
     if customer is not None:
@@ -335,7 +336,7 @@ def open_delivery(user, *, customer=None, address=None, text="", phone="", fee=N
     chosen = fee if fee is not None else (zone.fee if zone is not None else Decimal("0"))
     phone = (latin_digits(phone) or (customer.phone if customer is not None else "") or "").strip()
     return services.open_order(user, kind=OrderKind.DELIVERY, customer=customer, address=text, phone=phone, delivery_fee=chosen, entity=entity,
-                               waiter=waiter, lang=lang)
+                               waiter=waiter, brand=brand, lang=lang)
 
 
 # --- the last orders and «كرر» ------------------------------------------------
@@ -458,10 +459,10 @@ def repeat_order(order, source, user, lang="ar"):
 
 
 @transaction.atomic
-def repeat_as_delivery(user, source, *, customer, address, fee=None, entity=None, lang="ar"):
+def repeat_as_delivery(user, source, *, customer, address, fee=None, entity=None, brand=None, lang="ar"):
     """«كرر» from the call screen: open the delivery for ``customer`` at ``address`` (as ``open_delivery`` does) and repeat ``source`` into it, in one
     step. Returns ``(order, count, skipped)``."""
 
-    order = open_delivery(user, customer=customer, address=address, fee=fee, entity=entity, lang=lang)
+    order = open_delivery(user, customer=customer, address=address, fee=fee, entity=entity, brand=brand, lang=lang)
     count, skipped = repeat_order(order, source, user, lang)
     return order, count, skipped

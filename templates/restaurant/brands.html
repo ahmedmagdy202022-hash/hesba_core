@@ -1,0 +1,29 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b"><link rel="stylesheet" href="{% static 'hesba/css/restaurant_call.css' %}?v=r7-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ bw.back }}</a><h1>{{ bw.title }}</h1><p>{{ bw.intro }}</p></div></section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ bw.name_ar }}</th>{% if grouped %}<th>{{ bw.branch }}</th>{% endif %}<th>{{ bw.categories }}</th><th>{{ bw.sort }}</th><th>{{ bw.default }}</th><th>{{ bw.active }}</th>{% if can_edit %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}<tr data-brand-row="{{ row.brand.name_ar }}"><td>{{ row.label }}{% if row.brand.header %}<br><small class="op-muted">{{ row.brand.header }}</small>{% endif %}</td>{% if grouped %}<td data-brand-branch>{{ row.branch }}</td>{% endif %}<td>{% if row.categories %}{{ row.categories|join:"، " }}{% else %}{{ bw.all_menu }}{% endif %}</td><td>{{ row.brand.sort }}</td><td>{% if row.brand.is_default %}✓{% else %}—{% endif %}</td><td>{% if row.brand.active %}✓{% else %}—{% endif %}</td>{% if can_edit %}<td><div class="rc-zones-actions"><a href="?lang={{ lang }}&amp;edit={{ row.brand.pk }}">{{ bw.edit }}</a>{% if not row.orders %}<form method="post" data-confirm="{{ bw.delete_confirm }}" data-brand-delete>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="pk" value="{{ row.brand.pk }}"><input type="hidden" name="action" value="delete"><button class="op-secondary" type="submit">{{ bw.delete }}</button></form>{% else %}<small class="op-muted">{{ row.orders }} {{ bw.orders }}</small>{% endif %}</div></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="{% if grouped %}7{% else %}6{% endif %}" class="op-empty">{{ bw.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_edit %}<form class="op-form" method="post" data-brand-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ bw.edit }} · {{ editing.name_ar }}{% else %}{{ bw.new }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-brand-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+{% if branch_choices and not editing %}<div class="op-field"><label for="br-entity">{{ bw.branch }}</label><select id="br-entity" name="entity" required><option value="">{{ bw.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}"{% if chosen_branch == branch.pk|stringformat:'s' %} selected{% endif %}>{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="br-name-ar">{{ bw.name_ar }}</label><input id="br-name-ar" name="name_ar" value="{{ form.name_ar|default:'' }}" required maxlength="60"></div>
+<div class="op-field"><label for="br-name-en">{{ bw.name_en }}</label><input id="br-name-en" name="name_en" value="{{ form.name_en|default:'' }}" maxlength="60" dir="ltr"></div>
+<div class="op-field"><label for="br-header">{{ bw.header }}</label><input id="br-header" name="header" value="{{ form.header|default:'' }}" maxlength="80"><small class="op-muted">{{ bw.header_hint }}</small></div>
+<div class="op-field"><label for="br-sort">{{ bw.sort }}</label><input id="br-sort" name="sort" value="{{ form.sort|default:'0' }}" inputmode="numeric" dir="ltr"></div>
+</div>
+<fieldset class="rs-checks"><legend>{{ bw.categories }}</legend><p class="op-muted">{{ bw.menu_hint }}</p>
+{% for category in categories %}<label class="rs-check-chip"><input type="checkbox" name="categories" value="{{ category.pk }}"{% if category.pk in form.categories %} checked{% endif %}><span>{{ category.label }}</span></label>
+{% empty %}<p class="op-muted">{{ bw.no_categories }}</p>{% endfor %}
+</fieldset>
+<div class="rs-checks">
+<label class="rs-check-chip"><input type="checkbox" name="is_default"{% if form.is_default %} checked{% endif %}><span>{{ bw.default }} <small>{{ bw.default_hint }}</small></span></label>
+<label class="rs-check-chip"><input type="checkbox" name="active"{% if form.active %} checked{% endif %}><span>{{ bw.active }}</span></label>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ bw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ bw.new }}</a>{% endif %}</div></form>{% endif %}
+{% endblock %}

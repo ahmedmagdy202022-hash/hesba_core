@@ -94,6 +94,9 @@ class Order(models.Model):
     split_from = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="splits")
     #: R2a (HG-111): the order this one was folded into (status MERGED): the receiving table, or the parent of a part put back.
     merged_into = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="merged_orders")
+    #: R11 (HG-117): the brand the order was sold under («برجر هاوس»): a label on the order, never money or stock. Empty when no brand was set up
+    #: when it was opened. A part of a bill takes its parent's.
+    brand = models.ForeignKey("restaurant.Brand", on_delete=models.PROTECT, null=True, blank=True, related_name="orders")
 
     class Meta:
         ordering = ["-opened_at"]
@@ -152,6 +155,44 @@ class KitchenStation(models.Model):
 
     def save(self, *args, **kwargs):
         if self.entity_id is None:  # as Cashbox.save: a record made without an entity belongs to the main one
+            self.entity = _main_entity()
+        super().save(*args, **kwargs)
+
+
+class Brand(models.Model):
+    """Restaurants R11 (HG-117): a name the kitchen sells under («برجر هاوس», «بيتزا نايل»): several brands from one kitchen.
+
+    A label on the order, its ticket, its check and its receipt. The kitchen's stock, the till, the invoice and the tax registration
+    are the company's, one for every brand: a brand is not an entity (a location belongs to one entity, so separate entities could not
+    share one kitchen's stock). It belongs to one branch (entity), like a table or a zone: its name is unique within that branch
+    (a brand with no entity belongs to the main one, filled in ``save()``), and at most one brand of a branch is its default (a partial
+    unique constraint; the service moves it under a lock). ``categories`` is the brand's menu: empty means the whole menu. A brand an
+    order carries is switched off, never deleted (``Order.brand`` protects it)."""
+
+    name_ar = models.CharField(max_length=60)
+    name_en = models.CharField(max_length=60, blank=True)
+    header = models.CharField(max_length=80, blank=True, help_text="A short line printed under the brand's name on the check and the receipt.")
+    sort = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False, help_text="The brand dine-in orders and an unchosen takeaway or delivery take.")
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, related_name="restaurant_brands")
+    categories = models.ManyToManyField("master_data.Category", blank=True, related_name="restaurant_brands")
+
+    class Meta:
+        ordering = ["sort", "pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["entity", "name_ar"], name="restaurant_brand_name_per_entity"),
+            models.UniqueConstraint(fields=["entity"], condition=Q(is_default=True), name="restaurant_one_default_brand_per_entity"),
+        ]
+
+    def __str__(self):
+        return self.name_ar
+
+    def label(self, lang="ar"):
+        return self.name_en if lang == "en" and self.name_en else self.name_ar
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
             self.entity = _main_entity()
         super().save(*args, **kwargs)
 

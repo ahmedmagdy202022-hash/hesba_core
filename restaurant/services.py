@@ -31,7 +31,7 @@ from config.money import money_round
 from master_data.models import Item
 from permissions.services import user_has_permission
 
-from . import branches, stations
+from . import branches, brands, stations
 from .charges import CHARGE_CODES
 from .models import DiningTable, KitchenTicket, Order, OrderKind, OrderLine, OrderStatus
 from entities.current import current_entity
@@ -184,11 +184,15 @@ def _fee(raw, words):
 
 
 def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=None, waiter=None, address="", phone="", notes="", lang="ar",
-               delivery_fee=None, entity=None):
+               delivery_fee=None, entity=None, brand=None):
     """A new order, or, for a table already taken, the order already open there.
 
     R12: a dine-in order belongs to its table's entity; a takeaway or a delivery to ``entity``, else the working entity,
-    else the main one. Neither may land outside the entity being worked in."""
+    else the main one. Neither may land outside the entity being worked in.
+
+    R11 (HG-117): the order carries a brand when its branch has one. A takeaway or a delivery takes ``brand`` (a Brand or a pk; an inactive one,
+    or another branch's, refuses the order) or, unchosen, the branch's default; a dine-in order takes the default whatever is passed. With no
+    active brand in the branch it stays empty, as it always was."""
 
     words = MESSAGES[lang]
     working = current_entity()
@@ -223,13 +227,14 @@ def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=N
                     existing = Order.objects.filter(table=table, status=OrderStatus.OPEN).first()
                     if existing:
                         return existing
+                picked = brands.default_for(target) if kind == OrderKind.DINE_IN else brands.resolve(target, brand, lang)
                 order = Order.objects.create(
                     number=_next_number(timezone.localdate()), kind=kind, table=table, guests=guests, customer=customer, waiter=waiter,
                     address=address if kind == OrderKind.DELIVERY else "", phone=(phone or (getattr(customer, "phone", "") if customer else "") or "").strip()[:50],
-                    notes=(notes or "").strip()[:255], opened_by=user, delivery_fee=fee, entity=target,
+                    notes=(notes or "").strip()[:255], opened_by=user, delivery_fee=fee, entity=target, brand=picked,
                 )
                 _audit(order, user, "open_order", {"number": order.number, "kind": kind, "table": table.name if table else "",
-                                                     "entity": target.pk}, event=AuditEventType.CREATE)
+                                                     "entity": target.pk, **({"brand": picked.pk} if picked else {})}, event=AuditEventType.CREATE)
                 return order
         except IntegrityError:
             continue  # the same number, or the table, was taken a moment ago; look again
@@ -800,7 +805,8 @@ def _open_part(order, user, words):
         try:
             with transaction.atomic():
                 return Order.objects.create(number=_next_number(timezone.localdate()), kind=order.kind, table=None, guests=0, customer=order.customer,
-                                            waiter=order.waiter, opened_by=user, entity_id=order.entity_id, split_from=order)
+                                            waiter=order.waiter, opened_by=user, entity_id=order.entity_id, split_from=order,
+                                            brand_id=order.brand_id)  # R11: a part is sold under its bill's brand
         except IntegrityError:
             continue  # the same number was taken a moment ago
     raise ValidationError(words["busy"].format(table=order.home_table.name if order.home_table else order.number))
