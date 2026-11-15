@@ -23,7 +23,9 @@ from sales.models import SalesInvoice
 from settings_core.capabilities import set_capability_enabled
 from settings_core.models import ClientProfile
 
-from . import services
+from shipping import services as shipping
+
+from . import platforms, services
 from .models import Order, OrderKind, OrderStatus
 from .tests_reservations import ReservationSetup, balance
 
@@ -38,6 +40,8 @@ class PlatformSetup(ReservationSetup):
         self.talabat_list = pricing.save_price_list(user=self.owner, code="TALABAT", name_ar="أسعار طلبات")
         pricing.set_item_prices(self.talabat_list, {self.dish: D("55.00")}, self.owner)
         pricing.assign_customers(self.talabat_list, [self.talabat], self.owner)
+        self.courier = shipping.save_courier({"name": "طلبات", "fee_per_parcel": "0"}, self.owner)
+        self.platform = platforms.save_platform(self.talabat, self.courier, "18", self.owner)
 
     def delivery(self, customer=None, **extra):
         extra.setdefault("address", "15 ش التحرير، الدقي")
@@ -69,3 +73,25 @@ class PriceBookTests(PlatformSetup):
         self.assertFalse(SalesInvoice.objects.exists())
         self.assertEqual(Order.objects.get(pk=order.pk).status, OrderStatus.OPEN)
         self.assertEqual((balance(self.nour), get_cashbox_balance(self.cashbox)), (D("0.00"), D("0.00")))
+
+
+# ---- posted on credit to the platform (trap 16; shown failing first) ----------------------------------------------
+
+
+class CreditOnlyTests(PlatformSetup):
+    def test_money_in_the_drawer_for_a_platform_order_is_refused(self):
+        order = platforms.open_order(self.owner, self.platform, "TB-1001")
+        services.add_item(order, self.dish, self.owner, 2)
+        with self.assertRaises(ValidationError) as caught:
+            services.pay(Order.objects.get(pk=order.pk), self.owner, cashbox=self.cashbox, tendered=D("125.40"))
+        self.assertIn("بيتسجّل آجل على حسابها", caught.exception.messages[0])
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertEqual(get_cashbox_balance(self.cashbox), D("0.00"))
+
+    def test_a_walk_in_order_is_not_posted_on_the_platforms_account(self):
+        order = self.delivery()
+        services.add_item(order, self.dish, self.owner, 2)
+        with self.assertRaises(ValidationError) as caught:
+            services.pay(Order.objects.get(pk=order.pk), self.owner, cashbox=self.cashbox, customer=self.talabat, tendered=D("0"))
+        self.assertIn("حساب طلبات لطلبات طلبات بس", caught.exception.messages[0])
+        self.assertFalse(SalesInvoice.objects.exists())

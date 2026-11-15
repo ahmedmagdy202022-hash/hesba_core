@@ -216,7 +216,10 @@ def open_order(user, *, kind=OrderKind.DINE_IN, table=None, guests=1, customer=N
         guests = max(1, min(int(guests or 1), 99))
     except (TypeError, ValueError):
         guests = 1
-    fee = _fee(delivery_fee, words) if kind == OrderKind.DELIVERY else Decimal("0")
+    from . import platforms
+
+    # R14 (HG-120): the platform's rider picks a platform order up, so it carries no delivery fee of ours
+    fee = _fee(delivery_fee, words) if kind == OrderKind.DELIVERY and platforms.for_customer(customer) is None else Decimal("0")
     for _attempt in range(5):
         try:
             with transaction.atomic():
@@ -561,6 +564,11 @@ def dispatch(order, driver, user, *, delivery_fee=None, lang="ar"):
     order = _locked_open(order, words)
     if order.kind != OrderKind.DELIVERY:
         raise ValidationError(words["not_delivery"])
+    from . import platforms
+
+    platform = platforms.of_order(order)
+    if platform is not None:  # R14 (HG-120): the platform's rider picks it up; no driver or fee of ours
+        raise ValidationError(platforms.words(lang)["dispatch"].format(name=platform.name))
     if driver is None:
         raise ValidationError(words["driver"])
     before = {"driver": order.driver_id, "fee": str(order.delivery_fee), "dispatched_at": order.dispatched_at.isoformat() if order.dispatched_at else ""}
@@ -732,7 +740,7 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
 
     from sales.pos import walk_in_customer
 
-    from . import kitchen, offers, reservations
+    from . import kitchen, offers, platforms, reservations
 
     words = MESSAGES[lang]
     if tenders is not None:
@@ -741,8 +749,10 @@ def pay(order, user, *, cashbox, discount=Decimal("0"), tendered=Decimal("0"), c
     kitchen.prepare_shortfall(lines, location, user, lang)  # RESTO-004: a kitchen dish is made from its ingredients before it is sold
     customer = customer or order.customer or walk_in_customer()
     _same_prices(order, customer, words)  # R14 (HG-120): the lines were priced from the order's customer's list
-    coupon = str(coupon or "").strip()
-    rows, promotion, promotion_off = _bill(order, lines, lang, offers.Offer(coupon=coupon, customer=customer))
+    # R14 (HG-120): a platform order is posted on credit to the platform, in its name only, at its list's prices with no offer of ours
+    platform = platforms.check_payer(order, customer, tendered=tendered, tenders=tenders, gift=gift, points=points, lang=lang)
+    coupon = "" if platform is not None else str(coupon or "").strip()
+    rows, promotion, promotion_off = _bill(order, lines, lang, None if platform is not None else offers.Offer(coupon=coupon, customer=customer))
     offers.check_seen(promotion_seen, promotion_off)
     spent, points_off = offers.points_part(customer, points, rows, lang)
     if spent:
