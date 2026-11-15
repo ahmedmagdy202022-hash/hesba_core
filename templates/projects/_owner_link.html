@@ -1,0 +1,9 @@
+{# Contracting C10 (HG-135): make the owner's follow-up link; shown once after it is made, with copy and WhatsApp #}
+<section class="op-form" id="owner-link" data-owner-link>
+<h2>{{ box.words.title }}</h2>
+<p class="op-muted">{{ box.words.intro }}</p>
+{% if box.made %}<p data-owner-link-made>{{ box.made_text }}</p>
+<p class="op-cell-text" dir="ltr"><bdi data-owner-link-url>{{ box.made.url }}</bdi></p>
+<div class="op-form-actions"><button class="op-secondary" type="button" data-copy-link="{{ box.made.url }}">{{ box.words.copy }}</button><a class="op-secondary" href="{{ box.made.whatsapp }}" target="_blank" rel="noopener" data-owner-link-whatsapp>{{ box.words.whatsapp }}</a></div>{% endif %}
+<form method="post" action="{{ box.action }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-actions"><button class="{% if box.made %}op-secondary{% else %}op-primary{% endif %}" type="submit" data-owner-link-make>{{ box.words.make }}</button></div></form>
+</section>

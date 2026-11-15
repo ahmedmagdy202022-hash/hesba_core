@@ -215,7 +215,56 @@ def project_detail(request, pk):
     from .views_schedule import header_flag
 
     context["schedule_flag"] = header_flag(project, request.user, lang)  # Contracting C3 (HG-124): the delay line under the title
+    context["owner_link"] = _owner_link_box(request, project, lang)  # Contracting C10 (HG-135)
     return render(request, "projects/detail.html", context)
+
+
+OWNER_LINK_WORDS = {
+    "ar": {"title": "رابط متابعة المالك", "intro": "رابط للمالك أو الاستشاري يفتحه من الموبايل من غير حساب: العقد وأوامر التغيير، والمستخلصات المعتمدة، والجدول الزمني. "
+                                                     "مفيهوش أي تكلفة أو ميزانية أو مقاولين باطن أو ربح، ومنه المالك يقدر يعتمد أوامر التغيير اللي مستنياه.",
+           "make": "اعمل رابط للمالك", "made": "الرابط ده صالح لمدة {days} يوم. ابعته للمالك بس.", "copy": "نسخ الرابط", "whatsapp": "ابعته واتساب"},
+    "en": {"title": "The owner's follow-up link", "intro": "A link the owner or the consultant opens on a phone with no account: the contract and its variation orders, "
+                                                          "the posted certificates and the schedule. It shows no cost, budget, subcontractors or profit, and from it the owner can approve the variation orders waiting for them.",
+           "make": "Make the owner's link", "made": "This link works for {days} days. Send it to the owner only.", "copy": "Copy link", "whatsapp": "Send on WhatsApp"},
+}
+
+
+def _owner_link_key(project):
+    return f"projects_owner_link_{project.pk}"
+
+
+def _owner_link_box(request, project, lang):
+    """The project page's card for the owner's link: None for a user who may not make one (``public.can_share``) or a cancelled project."""
+
+    from . import public
+
+    if project.status == ProjectStatus.CANCELLED or not public.can_share(request.user):
+        return None
+    words = OWNER_LINK_WORDS[lang]
+    made = request.session.pop(_owner_link_key(project), None)  # shown once, right after it was made (post, then get)
+    return {"words": words, "action": f"{reverse('projects:owner_link', args=[project.pk])}?lang={lang}", "made": made,
+            "made_text": words["made"].format(days=made["days"]) if made else ""}
+
+
+@require_any_permission(*PROJECT_SCREENS)
+def owner_link(request, pk):
+    """POST: make the owner's link for this project (Contracting C10, HG-135) and show it once on the project page."""
+
+    from django.http import HttpResponseNotAllowed
+
+    from . import public
+
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    lang = _lang(request)
+    project = get_object_or_404(Project.objects.select_related("customer"), pk=pk)
+    try:
+        link = public.make_link(project, request.user, lang)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        request.session[_owner_link_key(project)] = link
+    return redirect(f"{reverse('projects:detail', args=[project.pk])}?lang={lang}#owner-link")
 
 
 REPORT_WORDS = {

@@ -14,6 +14,7 @@
 </section>
 {% if figures.drafts %}<p class="op-muted">{{ words.drafts }}: {{ figures.drafts|money }}</p>{% endif %}
 {% project_guarantees project %}{# Contracting C4 (HG-123): the project's letters of guarantee; amounts for managers only #}
+{% if owner_link %}{% include "projects/_owner_link.html" with box=owner_link %}{% endif %}
 
 {% if can_view_sales %}<h2>{{ words.bills }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.invoice }}</th><th>{{ cwords.description }}</th><th>{{ words.date }}</th><th>{{ words.total }}</th><th>{{ words.due }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
