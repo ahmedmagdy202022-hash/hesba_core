@@ -181,6 +181,8 @@ class ProductionOrder(models.Model):
     overhead_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     run = models.OneToOneField(ProductionRun, on_delete=models.PROTECT, null=True, blank=True, related_name="order")
     notes = models.CharField(max_length=255, blank=True)
+    # Manufacturing F6b (HG-134): the user's own rank for «رتّب» (lowest first) among orders with the same due date; NULL = no rank.
+    schedule_rank = models.PositiveIntegerField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="production_orders")
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -206,6 +208,31 @@ class OrderStageLog(models.Model):
 
     class Meta:
         ordering = ["done_at", "pk"]
+
+
+class OrderStep(models.Model):
+    """Manufacturing F6b (HG-134): one stage of one order in the production schedule, with the work centre it is planned on,
+    its planned minutes and its planned start and end.
+
+    ``planned_start`` and ``planned_end`` are NULL until «رتّب» or a move gives them; they hold a virtual working-day clock (a
+    working day starts at 08:00 local time and the hours into it are working minutes), so read the day through
+    ``schedule.day_of``, never as wall-clock time. ``finished_at`` is filled when the stage is advanced; ``started_at`` is
+    left for the floor screen (F8). A schedule record only: no stock, cost or ledger row is written or read from it."""
+
+    order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name="steps")
+    index = models.PositiveSmallIntegerField()
+    stage_key = models.CharField(max_length=30)
+    work_centre = models.ForeignKey(WorkCentre, on_delete=models.PROTECT, null=True, blank=True, related_name="order_steps")
+    planned_minutes = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    planned_start = models.DateTimeField(null=True, blank=True)
+    planned_end = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["order_id", "index"]
+        constraints = [models.UniqueConstraint(fields=["order", "index"], name="mfg_one_step_per_index"),
+                       models.CheckConstraint(condition=models.Q(planned_minutes__isnull=True) | models.Q(planned_minutes__gte=0), name="mfg_orderstep_minutes")]
 
 
 class LotUse(models.Model):
