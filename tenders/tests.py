@@ -382,6 +382,7 @@ class ScreenTests(TenderSetup):
         for words in ("بنود المقايسة", "سعر الوحدة", "التكلفة المباشرة للوحدة", "التكلفة حسب البند", "خامات", "اترسّت علينا", "مارسيتش علينا", "انسحبنا"):
             self.assertContains(arabic, words)
         self.assertNotContains(arabic, "Unit rate")
+        self.assertContains(arabic, "76.7%")  # 660,000.00 of 860,000.00, with a Latin point in Arabic too (never «76,7%»)
         self.assertContains(self.client.get(self.url("list") + "?lang=en"), "Under study")
         self.assertContains(self.client.get(self.url("list")), "تحت الدراسة")
         self.assertContains(self.client.get(self.url("item", tender.pk, self.concrete.pk) + "?lang=en"), "Unit price analysis")

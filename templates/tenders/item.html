@@ -10,7 +10,7 @@
 <article><small>{{ words.rate }}</small><strong><bdi data-figure="rate">{{ row.rate|money }}</bdi></strong></article>
 <article><small>{{ words.amount }}</small><strong><bdi data-figure="total">{{ row.total|money }}</bdi></strong></article>
 {% if can_costs %}<article><small>{{ words.direct }}</small><strong><bdi data-figure="direct">{{ row.direct|money }}</bdi></strong></article>
-<article><small>{{ words.after_overhead }} (<bdi dir="ltr">{{ t.overhead_percent|floatformat:"-2" }}%</bdi>)</small><strong><bdi data-figure="overhead">{{ row.with_overhead|money }}</bdi></strong></article>{% endif %}
+<article><small>{{ words.after_overhead }} (<bdi dir="ltr">{{ t.overhead_percent|floatformat:"-2u" }}%</bdi>)</small><strong><bdi data-figure="overhead">{{ row.with_overhead|money }}</bdi></strong></article>{% endif %}
 </section>
 
 {% if can_costs %}<h2 class="td-h2">{{ words.costs }}</h2>

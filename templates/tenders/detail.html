@@ -13,8 +13,8 @@
 <article><small>{{ words.total }}</small><strong><bdi data-figure="total">{{ figures.total|money }}</bdi></strong></article>
 <article><small>{{ words.items_n }}</small><strong data-figure="items">{{ rows|length }}</strong>{% if figures.unpriced %}<small class="td-warn" data-figure="unpriced">{{ words.unpriced }}: {{ figures.unpriced|length }}</small>{% endif %}</article>
 {% if can_costs %}<article><small>{{ words.direct_total }}</small><strong><bdi data-figure="direct">{{ figures.direct|money }}</bdi></strong></article>
-<article><small>{{ words.overhead_amount }} (<bdi dir="ltr">{{ t.overhead_percent|floatformat:"-2" }}%</bdi>)</small><strong><bdi data-figure="overhead">{{ figures.overhead|money }}</bdi></strong></article>
-<article><small>{{ words.profit_amount }} (<bdi dir="ltr">{{ t.profit_percent|floatformat:"-2" }}%</bdi>)</small><strong><bdi data-figure="profit">{{ figures.profit|money }}</bdi></strong></article>{% endif %}
+<article><small>{{ words.overhead_amount }} (<bdi dir="ltr">{{ t.overhead_percent|floatformat:"-2u" }}%</bdi>)</small><strong><bdi data-figure="overhead">{{ figures.overhead|money }}</bdi></strong></article>
+<article><small>{{ words.profit_amount }} (<bdi dir="ltr">{{ t.profit_percent|floatformat:"-2u" }}%</bdi>)</small><strong><bdi data-figure="profit">{{ figures.profit|money }}</bdi></strong></article>{% endif %}
 </section>
 {% if not can_costs %}<p class="op-muted" data-costs-hidden>{{ words.costs_hidden }}</p>{% endif %}
 
@@ -43,7 +43,7 @@
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.add_item }}</button></div></form>{% endif %}
 
 {% if can_costs and figures.headings %}<section class="td-card" data-by-heading><h2>{{ words.by_heading }}</h2>
-<ul>{% for h in figures.headings %}<li data-heading="{{ h.heading }}"><span>{{ h.label }}</span><span class="td-card__share"><bdi dir="ltr">{{ h.share }}%</bdi></span><strong><bdi data-heading-amount="{{ h.heading }}">{{ h.amount|money }}</bdi></strong></li>{% endfor %}
+<ul>{% for h in figures.headings %}<li data-heading="{{ h.heading }}"><span>{{ h.label }}</span><span class="td-card__share"><bdi dir="ltr">{{ h.share|stringformat:"s" }}%</bdi></span><strong><bdi data-heading-amount="{{ h.heading }}">{{ h.amount|money }}</bdi></strong></li>{% endfor %}
 <li class="td-card__total"><span>{{ words.direct_total }}</span><span></span><strong><bdi>{{ figures.direct|money }}</bdi></strong></li></ul></section>{% endif %}
 
 {% if rows %}<nav class="td-prints" aria-label="{{ words.p_print }}"><a class="op-secondary" href="{% url 'tenders:boq_print' t.pk %}?lang={{ lang }}" data-print-boq>{{ words.print_boq }}</a>{% if can_costs %}<a class="op-secondary" href="{% url 'tenders:analysis_print' t.pk %}?lang={{ lang }}" data-print-analysis>{{ words.print_analysis }}</a>{% endif %}</nav>{% endif %}

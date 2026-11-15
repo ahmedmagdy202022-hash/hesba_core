@@ -28,8 +28,8 @@
         <div><dt>{{ words.name }}</dt><dd>{{ t.name }}</dd></div>
         <div><dt>{{ words.party }}</dt><dd>{{ party }}</dd></div>
         <div><dt>{{ words.status }}</dt><dd>{{ status.label }}</dd></div>
-        <div><dt>{{ words.overhead }}</dt><dd dir="ltr">{{ t.overhead_percent|floatformat:"-2" }}%</dd></div>
-        <div><dt>{{ words.profit }}</dt><dd dir="ltr">{{ t.profit_percent|floatformat:"-2" }}%</dd></div>
+        <div><dt>{{ words.overhead }}</dt><dd dir="ltr">{{ t.overhead_percent|floatformat:"-2u" }}%</dd></div>
+        <div><dt>{{ words.profit }}</dt><dd dir="ltr">{{ t.profit_percent|floatformat:"-2u" }}%</dd></div>
         <div><dt>{{ words.p_date }}</dt><dd>{{ printed }}</dd></div>
       </dl>
     </div>
@@ -46,7 +46,7 @@
     </tbody>{% endwith %}{% endfor %}
   </table>
   <section class="pr-totals"><dl>
-    {% for h in figures.headings %}<div data-print-heading-amount="{{ h.heading }}"><dt>{{ h.label }} (<bdi dir="ltr">{{ h.share }}%</bdi>)</dt><dd>{{ h.amount|money }}</dd></div>{% endfor %}
+    {% for h in figures.headings %}<div data-print-heading-amount="{{ h.heading }}"><dt>{{ h.label }} (<bdi dir="ltr">{{ h.share|stringformat:"s" }}%</bdi>)</dt><dd>{{ h.amount|money }}</dd></div>{% endfor %}
     <div><dt>{{ words.direct_total }}</dt><dd data-print-direct>{{ figures.direct|money }}</dd></div>
     <div><dt>{{ words.overhead_amount }}</dt><dd>{{ figures.overhead|money }}</dd></div>
     <div><dt>{{ words.profit_amount }}</dt><dd>{{ figures.profit|money }}</dd></div>
