@@ -276,6 +276,21 @@ class AdvanceGuardTests(SubcontractSetup):
         post_purchase_invoice(bill.invoice_id, self.owner)
         self.assertEqual(gl("subcontractor_advances"), D("24000.00"))
         ledger_ok(self)
+        # Codex #435: from the main entity, the branch's subcontract keeps its terms and shows none of its money.
+        from entities.services import main_entity
+
+        with working_in(main_entity()):
+            with self.assertRaisesMessage(ValidationError, "من كيان تاني"):
+                costs.save_subcontract(self.project, self.owner, {"supplier": self.subcontract.supplier, "scope": "x", "value": "999999",
+                                                                  "retention_rate": "0", "advance_recovery_rate": "0"}, self.subcontract)
+            seen = subcontracting.figures(self.subcontract)
+            self.assertEqual((seen["advance"], seen["recovered"], seen["advance_left"], seen["paid"]), (D("0"), D("0"), D("0"), D("0")))
+            self.assertEqual([row["billed"] for row in subcontracting.line_rows(self.subcontract)], [D("0")] * self.subcontract.lines.count())
+            self.assertEqual(subcontracting.visible_advance_left(self.subcontract), D("0"))
+        self.subcontract.refresh_from_db()
+        self.assertEqual((self.subcontract.value, self.subcontract.retention_rate), (D("300000.00"), D("5.00")))
+        with working_in(branch):
+            self.assertEqual(subcontracting.figures(self.subcontract)["advance_left"], D("24000.00"))
 
 
 class SubcontractScreenTests(SubcontractSetup):

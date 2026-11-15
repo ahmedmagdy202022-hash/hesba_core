@@ -486,7 +486,7 @@ def subcontracts(request, pk):
         subs.append({"subcontract": subcontract, "figures": costs.subcontract_figures(subcontract), "bills": bills,
                      "releases": subcontract.releases.all() if costs.in_reach(subcontract) else [],
                      # C11 (HG-128): a subcontract with lines is billed by quantities from its own page
-                     "has_lines": subcontract.lines.exists(), "advance_left": subcontracting.advance_left(subcontract)})
+                     "has_lines": subcontract.lines.exists(), "advance_left": subcontracting.visible_advance_left(subcontract)})
     others = [{"link": link, "heading_label": choice_label(link, "heading", lang), "net": costs.net_purchase(link.invoice),
                "status_label": choice_label(link.invoice, "status", lang)}
               for link in costs._here(project.purchases.select_related("invoice", "invoice__supplier").filter(invoice__subcontract_bill__isnull=True))]
