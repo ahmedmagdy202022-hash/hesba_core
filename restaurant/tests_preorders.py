@@ -154,6 +154,16 @@ class DepositAtCollectionTests(PreOrderSetup):
         self.assertEqual(Deposit.objects.get().status, DepositStatus.HELD)
         self.assertEqual(balance(self.nour), D("-200.00"))
 
+    def test_a_deposit_taken_on_a_stale_copy_goes_to_the_pre_orders_customer_now(self):
+        """Codex on #423, as on R8: the deposit's customer is the pre-order's as it is under the lock, not a stale copy's."""
+        booked = self.preorder()
+        stale = PreOrder.objects.get(pk=booked.pk)
+        other = make_customer(customer_code="C-OTHER", name="عميل تاني")
+        preorders.save_preorder({"customer": other, "starts_at": at(1, "18:00"), "notes": ""}, [{"item": self.cake, "quantity": "1", "unit_price": ""}],
+                                self.owner, booked)
+        deposit = self.deposit_on(stale)
+        self.assertEqual(deposit.payment.customer_id, other.pk)
+
     def test_a_held_deposit_before_collection_never_touches_another_bill(self):
         booked = self.preorder()
         self.deposit_on(booked)
