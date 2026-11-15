@@ -276,3 +276,131 @@ class AdvanceGuardTests(SubcontractSetup):
         post_purchase_invoice(bill.invoice_id, self.owner)
         self.assertEqual(gl("subcontractor_advances"), D("24000.00"))
         ledger_ok(self)
+
+
+class SubcontractScreenTests(SubcontractSetup):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.owner)
+
+    def url(self, name, *args):
+        return reverse(f"projects:{name}", args=[self.project.pk, *args])
+
+    def test_the_whole_subcontract_from_its_page(self):
+        page_url = self.url("subcontract", self.subcontract.pk)
+        listing = self.client.get(self.url("subcontracts"))
+        self.assertContains(listing, page_url)
+        self.assertContains(listing, "data-sub-by-quantities")  # lines: no lump-sum form for it
+        page = self.client.get(page_url)
+        for marker in ('data-sub-line="1"', "data-sub-line-form", "data-sub-quantities-form", "data-sub-pay-form", "data-sub-terms-form", "الكمية حتى تاريخه"):
+            self.assertContains(page, marker)
+        english = self.client.get(page_url + "?lang=en")
+        for words in ("Subcontract lines", "New subcontractor bill", "Qty to date", "Pay the subcontractor"):
+            self.assertContains(english, words)
+
+        self.assertContains(self.client.post(page_url, {"action": "add_line", "description": "بياض سقف", "quantity": "1000", "rate": "60"}), "زوّد قيمة العقد الأول")
+        self.client.post(page_url, {"action": "terms", "scope": "أعمال البياض", "value": "360000", "retention_rate": "5", "advance_recovery_rate": "10"})
+        self.assertRedirects(self.client.post(page_url, {"action": "add_line", "description": "بياض سقف", "unit": "م²", "quantity": "1000", "rate": "60"}),
+                             page_url + "?lang=ar", fetch_redirect_response=False)
+        ceiling = self.subcontract.lines.get(line_number=2)
+        self.assertEqual((ceiling.description, ceiling.boq_line), ("بياض سقف", None))
+        self.client.post(page_url, {"action": "delete_line", "line": str(ceiling.pk)})
+        self.assertFalse(self.subcontract.lines.filter(line_number=2).exists())
+
+        paid = self.client.post(page_url, {"action": "pay", "kind": "advance", "cashbox": str(self.cashbox.pk), "amount": "30000"}, follow=True)
+        self.assertContains(paid, "SP-00001")
+        self.assertEqual(subcontracting.advance_received(self.subcontract), D("30000.00"))
+
+        certificate = contract.create_certificate(self.project, self.owner, quantities={self.client_plaster.pk: "2000"})
+        post_sales_invoice(certificate.invoice_id, self.owner)
+        refused = self.client.post(page_url, {"action": "bill", f"q_{self.plaster.pk}": "5001"})
+        self.assertContains(refused, "أكبر من كميته في عقد مقاول الباطن")
+        self.assertContains(refused, 'value="5001"')  # what was typed comes back
+        made = self.client.post(page_url, {"action": "bill", f"q_{self.plaster.pk}": "2500", "description": "أعمال الشهر"}, follow=True)
+        self.assertContains(made, "أكتر من اللي اتعمل بيه مستخلص للمالك")
+        bill = self.subcontract.bills.get()
+        self.assertEqual((bill.gross, bill.retention_amount, bill.recovery_amount), (D("150000.00"), D("7500.00"), D("15000.00")))
+        self.assertContains(made, 'data-sub-bill="SC-P-0001-01"')
+        self.assertContains(made, "data-sub-bill-warning")
+        self.assertContains(made, "data-sub-draft-open")
+
+        printed = self.client.get(self.url("subcontract_bill_print", self.subcontract.pk, bill.number))
+        self.assertContains(printed, 'data-kind="subcontractor_bill"')
+        self.assertContains(printed, "مؤسسة الإتقان للتشطيبات")
+        self.assertContains(printed, 'data-print-row="1"')
+        self.assertContains(printed, "127,500.00")  # 150,000 − 7,500 − 15,000
+        english = self.client.get(self.url("subcontract_bill_print", self.subcontract.pk, bill.number) + "?lang=en")
+        self.assertContains(english, "Subcontractor bill")
+        self.assertContains(english, 'dir="ltr"')
+
+        withdrawn = self.client.post(page_url, {"action": "withdraw", "bill": str(bill.pk)}, follow=True)
+        self.assertNotContains(withdrawn, "data-sub-draft-open")
+        self.assertFalse(self.subcontract.bills.exists())
+
+    def test_the_terms_raise_the_value_and_set_the_recovery(self):
+        page_url = self.url("subcontract", self.subcontract.pk)
+        self.client.post(page_url, {"action": "terms", "scope": "أعمال البياض", "value": "360000", "retention_rate": "5", "advance_recovery_rate": "15"})
+        self.subcontract.refresh_from_db()
+        self.assertEqual((self.subcontract.value, self.subcontract.advance_recovery_rate), (D("360000.00"), D("15.00")))
+        self.assertContains(self.client.post(page_url, {"action": "terms", "value": "200000", "retention_rate": "5", "advance_recovery_rate": "15"}),
+                            "متقلش عن مجموع بنود مقاول الباطن")
+        self.assertContains(self.client.post(page_url, {"action": "terms", "value": "360000", "retention_rate": "60", "advance_recovery_rate": "50"}),
+                            "ميزيدش عن 100%")
+
+    def test_permissions_follow_the_subcontracts_tab(self):
+        from hesba_testing.factories import grant, make_permission, make_role, make_user, make_user_profile
+        from permissions.models import Permission
+
+        page_url = self.url("subcontract", self.subcontract.pk)
+        engineer = person(RoleCode.SITE_ENGINEER, "c11_engineer")
+        self.client.force_login(engineer)
+        self.assertEqual(self.client.get(page_url).status_code, 403)
+        self.assertEqual(self.client.get(self.url("subcontract_bill_print", self.subcontract.pk, 1)).status_code, 403)
+
+        def user_with(username, *codes):
+            role = make_role(code=f"R-{username}")
+            for code in codes:
+                permission = Permission.objects.filter(code=code).first() or make_permission(code=code)
+                grant(role, permission)
+            user = make_user(username=username)
+            make_user_profile(user=user, role=role)
+            return user
+
+        reader = user_with("c11_reader", "purchases.view_purchase_invoices")
+        self.client.force_login(reader)
+        page = self.client.get(page_url)
+        self.assertEqual(page.status_code, 200)
+        for form in ("data-sub-line-form", "data-sub-quantities-form", "data-sub-pay-form", "data-sub-terms-form"):
+            self.assertNotContains(page, form)
+        for data in ({"action": "add_line", "description": "x", "quantity": "1", "rate": "1"}, {"action": "bill", f"q_{self.plaster.pk}": "10"},
+                     {"action": "pay", "kind": "advance", "cashbox": str(self.cashbox.pk), "amount": "10"}):
+            self.assertEqual(self.client.post(page_url, data).status_code, 403, data["action"])
+
+        buyer = user_with("c11_buyer", "purchases.view_purchase_invoices", "purchases.create_purchase_invoice")
+        self.client.force_login(buyer)
+        self.assertNotContains(self.client.get(page_url), "data-sub-pay-form")
+        self.assertEqual(self.client.post(page_url, {"action": "pay", "kind": "advance", "cashbox": str(self.cashbox.pk), "amount": "10"}).status_code, 403)
+        self.client.post(page_url, {"action": "bill", f"q_{self.plaster.pk}": "10"})
+        self.assertEqual(self.subcontract.bills.get().created_by, buyer)
+
+        payer = user_with("c11_payer", "purchases.view_purchase_invoices", "purchases.pay_supplier")
+        self.client.force_login(payer)
+        self.assertContains(self.client.get(page_url), "data-sub-pay-form")
+        self.client.post(page_url, {"action": "pay", "kind": "advance", "cashbox": str(self.cashbox.pk), "amount": "10"})
+        self.assertEqual(subcontracting.advance_received(self.subcontract), D("10.00"))
+
+    def test_the_page_uses_tokens_and_premium_words_only(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        css = Path(settings.BASE_DIR, "static/hesba/css/projects_subcontracts.css").read_text(encoding="utf-8")
+        import re
+
+        self.assertIsNone(re.search(r"#[0-9a-fA-F]{3,8}\b|rgba?\(", css))
+        self.assertIn("@media (min-width:720px)", css)
+        sources = [Path(settings.BASE_DIR, path).read_text(encoding="utf-8") for path in (
+            "templates/projects/subcontract.html", "templates/projects/subcontract_bill_print.html", "projects/subcontracting.py", "projects/views_subcontracts.py")]
+        for word in ("ورشة", "الأسطى", "بتاع", "دوس", "لينك"):
+            for source in sources:
+                self.assertNotIn(word, source)
