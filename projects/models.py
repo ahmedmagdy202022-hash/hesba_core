@@ -424,3 +424,70 @@ class ProjectTask(models.Model):
 
     def __str__(self):
         return f"{self.project.code} {self.name}"
+
+
+# ---- Contracting C7 (HG-125): purchase requests from the site. A request is a document: it holds no money and moves no stock.
+# The site engineer drafts and submits it; someone who buys (never the requester) approves it, and the approval makes an ordinary
+# draft purchase order through ``orders.purchasing`` (unchanged). The link back is ``PurchaseRequest.purchase_order``;
+# ``PurchaseOrder`` gains no column.
+
+
+class PurchaseRequestStatus(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    SUBMITTED = "submitted", "Waiting for approval"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    ORDERED = "ordered", "Ordered"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class PurchaseRequest(models.Model):
+    """What the site needs bought (طلب شراء), before any supplier is chosen: shown as ``PR-<project code>-NN``.
+
+    «Ordered» means a draft purchase order was made from it. When that order is cancelled the request reads as approved again
+    (``projects.purchase_requests.state``): the order's own status is read, nothing is written back."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="purchase_requests")
+    number = models.PositiveIntegerField()
+    needed_by = models.DateField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=10, choices=PurchaseRequestStatus.choices, default=PurchaseRequestStatus.DRAFT, db_index=True)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    # The reason of a rejection, or what the approver changed (quantities, items) and their own note.
+    decision_note = models.TextField(blank=True)
+    # The latest purchase order made from this request. A cancelled order stays linked, so the request shows it, until a new one replaces it.
+    purchase_order = models.ForeignKey("orders.PurchaseOrder", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-number"]
+        constraints = [models.UniqueConstraint(fields=["project", "number"], name="projects_purchase_request_number_unique")]
+
+    def __str__(self):
+        return f"PR-{self.project.code}-{self.number:02d}"
+
+
+class PurchaseRequestLine(models.Model):
+    """One thing the site asks for: an item of the catalogue (its unit is the item's) or a free description with its own unit."""
+
+    request = models.ForeignKey(PurchaseRequest, on_delete=models.CASCADE, related_name="lines")
+    position = models.PositiveSmallIntegerField(default=0)
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    description = models.CharField(max_length=255, blank=True)
+    unit = models.CharField(max_length=50, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    # What the engineer asked for, kept when the approver changed the quantity (NULL: approved as asked, or not decided yet).
+    requested_quantity = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    boq_line = models.ForeignKey(BoqLine, on_delete=models.PROTECT, null=True, blank=True, related_name="purchase_request_lines")
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["position", "pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="projects_purchase_request_line_quantity_positive"),
+            models.CheckConstraint(condition=models.Q(item__isnull=False) | ~models.Q(description=""), name="projects_purchase_request_line_item_or_description"),
+        ]
