@@ -259,6 +259,16 @@ class BrandSetupScreenTests(BrandSetup):
         self.assertContains(deleted, "ده البراند الافتراضي")
         self.assertTrue(Brand.objects.filter(pk=self.bh.pk).exists())
 
+    def test_deleting_a_row_while_another_brand_is_open_for_editing_deletes_the_row_clicked(self):
+        """Codex: the row's delete form posts to the page's own address, which keeps ``?edit=`` of the brand being edited."""
+        self.make_brands()
+        open_one = brands.save_brand({"name_ar": "براند مفتوح"}, self.owner, entity=self.main)
+        clicked = brands.save_brand({"name_ar": "براند اتداس عليه"}, self.owner, entity=self.main)
+        self.enter(self.manager)
+        self.client.post(f"{reverse('restaurant:brands')}?lang=ar&edit={open_one.pk}", {"lang": "ar", "pk": clicked.pk, "action": "delete"})
+        self.assertFalse(Brand.objects.filter(pk=clicked.pk).exists())
+        self.assertTrue(Brand.objects.filter(pk=open_one.pk).exists())
+
     def test_another_branchs_brand_is_a_404_on_the_screen_and_a_branch_manager_cannot_move_one(self):
         self.make_brands()
         theirs = brands.save_brand({"name_ar": "براند المعادي"}, self.owner, entity=self.branch)

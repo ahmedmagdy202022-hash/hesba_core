@@ -105,6 +105,27 @@ class SplitBillTests(SplitSetup):
         self.assertEqual((first.total_amount + second.total_amount, unsplit.total_amount, unsplit.tax_amount), (D("136.80"), D("136.80"), D("16.80")))
         self.assertEqual(get_cashbox_balance(self.cashbox), D("136.80") * 2)
 
+    def test_vat_is_rounded_on_each_bill_so_a_split_of_an_odd_price_can_differ_by_a_piastre(self):
+        # Review finding: 2 x 45.04 at 14% is one line of 90.08 with VAT 12.61 (12.6112). Split 1 of 2, each bill has a line
+        # of 45.04 with VAT 6.31 (6.3056): 12.62 together. Each invoice's VAT is right for that invoice (the unchanged engine
+        # rounds per line); the split bills then come to one piastre more than the unsplit bill. Pinned, and said in HG-111.
+        odd = make_item(item_code="D-ODD", item_name="طاجن", default_sale_price="45.04", is_stock_tracked=False)
+        order = services.open_order(self.owner, table=self.t1, guests=2)
+        services.add_item(order, odd, self.owner, 2)
+        services.add_item(order, self.t10, self.owner, 1)
+        part = self.split(order, [(odd, 1)])
+        first, second = self.pay(part), self.pay(order)
+        self.assertEqual((first.total_amount, first.tax_amount), (D("51.35"), D("6.31")))
+        self.assertEqual((second.total_amount, second.tax_amount), (D("62.75"), D("7.71")))  # 45.04 + 10.00, VAT 6.31 + 1.40
+        twin = services.open_order(self.owner, table=self.t2, guests=2)
+        services.add_item(twin, odd, self.owner, 2)
+        services.add_item(twin, self.t10, self.owner, 1)
+        unsplit = self.pay(twin)
+        self.assertEqual((unsplit.total_amount, unsplit.tax_amount), (D("114.09"), D("14.01")))  # 90.08 + 10.00, VAT 12.61 + 1.40
+        self.assertEqual(first.total_amount + second.total_amount - unsplit.total_amount, D("0.01"))
+        net = lambda invoice: invoice.total_amount - invoice.tax_amount  # noqa: E731
+        self.assertEqual(net(first) + net(second), net(unsplit))  # the food is the same to the piastre: only VAT rounds
+
     def test_vat_off_55_00_and_65_00(self):
         self.vat(False)
         order = self.table_order()
@@ -379,6 +400,27 @@ class MergeTests(SplitSetup):
         report = period_report(timezone.localdate(), timezone.localdate())
         self.assertEqual((report["totals"]["orders"], report["totals"]["sales"], report["totals"]["guests"]), (1, D("120.00"), 5))
         self.assertEqual([(row["table"].name, row["orders"], row["guests"]) for row in report["tables"]], [("1", 1, 5)])
+
+
+class MergedWaiterTests(SplitSetup):
+    def test_a_merged_tables_paid_part_counts_for_the_receiving_bills_waiter(self):
+        # Review finding: the merged table's part kept its own waiter, so the report gave that waiter sales with no order
+        # while the receiving waiter's order missed part of its bill. The whole bill belongs to the receiving order's waiter.
+        self.vat(False)
+        from staff.services import save_employee
+
+        first_waiter, second_waiter = save_employee({"name": "كريم الصالة"}, self.owner), save_employee({"name": "هاني الصالة"}, self.owner)
+        one = services.open_order(self.owner, table=self.t1, guests=2, waiter=first_waiter)
+        services.add_item(one, self.k45, self.owner, 2)  # 90.00
+        two = services.open_order(self.owner, table=self.t2, guests=3, waiter=second_waiter)
+        services.add_item(two, self.t10, self.owner, 3)  # 30.00
+        self.pay(self.split(two, [(self.t10, 1)]))  # 10.00, paid before the merge, waiter 2's part
+        services.merge_orders(one, two, self.owner)
+        self.pay(one)  # 110.00
+        report = period_report(timezone.localdate(), timezone.localdate())
+        self.assertEqual((report["totals"]["orders"], report["totals"]["sales"]), (1, D("120.00")))
+        self.assertEqual([(row["waiter"], row["orders"], row["sales"], row["average"]) for row in report["waiters"]],
+                         [(first_waiter, 1, D("120.00"), D("120.00"))])
 
 
 class ReportTests(SplitSetup):

@@ -384,6 +384,25 @@ class RepeatTests(CallSetup):
         self.assertContains(response, "اتكرر 1 من الطلب")
         self.assertFalse(again.lines.filter(ticket__isnull=False).exists())
 
+    def test_a_repeated_combo_keeps_each_components_kitchen_note(self):
+        fries = make_item(item_code="C-FRIES", item_name="بطاطس", default_sale_price="40.00", is_stock_tracked=False)
+        large = make_item(item_code="C-FRIES-L", item_name="بطاطس كبيرة", default_sale_price="50.00", is_stock_tracked=False)
+        pepsi = make_item(item_code="C-PEPSI", item_name="بيبسي", default_sale_price="25.00", is_stock_tracked=True)
+        stock_in(pepsi, self.location, 20, "8.00")
+        combo = combos.save_combo(meal(self.burger, fries, large, pepsi), self.owner)
+        sandwich, side, drink = combo.slots.order_by("sort", "pk")
+        order = callcentre.open_delivery(self.owner, customer=self.sara, address=self.home)
+        head = services.add_combo(order, combo, self.owner, {sandwich.pk: sandwich.choices.get().pk, side.pk: side.choices.get(item=fries).pk,
+                                                             drink.pk: drink.choices.get().pk}, note="بدون بصل", options={sandwich.pk: [self.medium.pk]})
+        side_line = order.lines.get(bundle=head.bundle, item=fries)
+        services.change_line(side_line, self.owner, note="من غير ملح")
+        drink_line = order.lines.get(bundle=head.bundle, item=pepsi)
+        services.change_line(drink_line, self.owner, note="من غير تلج")
+        self.pay(order)
+        again, _response = self.repeat(Order.objects.get(pk=order.pk))
+        self.assertEqual([(line.item.item_code, line.note) for line in again.lines.filter(parent__isnull=True).order_by("pk")],
+                         [("D-BURG", "بدون بصل"), ("C-FRIES", "من غير ملح"), ("C-PEPSI", "من غير تلج")])
+
     def test_a_combo_that_was_switched_off_is_skipped_and_listed(self):
         fries = make_item(item_code="C-FRIES", item_name="بطاطس", default_sale_price="40.00", is_stock_tracked=False)
         large = make_item(item_code="C-FRIES-L", item_name="بطاطس كبيرة", default_sale_price="50.00", is_stock_tracked=False)
@@ -569,6 +588,15 @@ class ZoneSetupTests(CallSetup):
         self.client.post(reverse("restaurant:zones"), {"lang": "ar", "action": "delete", "pk": spare.pk})
         self.assertFalse(DeliveryZone.objects.filter(pk=spare.pk).exists())
         self.assertTrue(AuditLog.objects.filter(action="delete_zone").exists())
+
+    def test_deleting_a_row_while_another_zone_is_open_for_editing_deletes_the_row_clicked(self):
+        """Codex (on R11's brands, the same page shape): the row's delete form keeps the page's ``?edit=``."""
+        open_one = callcentre.save_zone({"name_ar": "مفتوحة"}, self.owner, entity=self.main)
+        clicked = callcentre.save_zone({"name_ar": "اتداس عليها"}, self.owner, entity=self.main)
+        self.enter(self.manager)
+        self.client.post(f"{reverse('restaurant:zones')}?lang=ar&edit={open_one.pk}", {"lang": "ar", "action": "delete", "pk": clicked.pk})
+        self.assertFalse(DeliveryZone.objects.filter(pk=clicked.pk).exists())
+        self.assertTrue(DeliveryZone.objects.filter(pk=open_one.pk).exists())
 
     def test_the_zones_form_saves_a_zone_with_its_fee_and_time(self):
         self.enter(self.manager)
