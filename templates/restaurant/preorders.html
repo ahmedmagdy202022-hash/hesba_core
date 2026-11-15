@@ -1,0 +1,69 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b"><link rel="stylesheet" href="{% static 'hesba/css/restaurant_reservations.css' %}?v=r8-1"><link rel="stylesheet" href="{% static 'hesba/css/restaurant_preorders.css' %}?v=r10-1">{% endblock %}
+{% block operation_content %}
+{# R10 (HG-119): pre-orders by pick-up day and the day's production list. Seen with the floor's right; changed by whoever can open orders; a deposit with the deposits' own rights; «حضّر» with kitchen.prepare's own. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ pw.back }}</a><h1>{{ pw.title }}</h1><p>{{ pw.intro }}</p></div></section>
+<nav class="rv-days" aria-label="{{ pw.day }}" data-preorder-days>
+<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ prev_day|date:'Y-m-d' }}" data-day-prev>{{ pw.prev }}</a>
+<strong data-day="{{ day|date:'Y-m-d' }}"><bdi dir="ltr">{{ day|date:'Y-m-d' }}</bdi></strong>
+<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ next_day|date:'Y-m-d' }}" data-day-next>{{ pw.next }}</a>
+{% if day != today %}<a class="op-secondary" href="?lang={{ lang }}" data-day-today>{{ pw.today }}</a>{% endif %}
+<form method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="po-day">{{ pw.day }}</label><input id="po-day" type="date" name="day" value="{{ day|date:'Y-m-d' }}" dir="ltr"><button class="op-secondary" type="submit">{{ pw.show }}</button></form>
+</nav>
+{% if policy %}<p class="op-muted" data-deposit-policy>{{ policy }}</p>{% endif %}
+<ul class="rv-list" data-preorder-list>
+{% for card in cards %}{% with r=card.row %}<li class="rv-card rv-card--{{ r.status }}" data-preorder="{{ r.number }}" data-status="{{ r.status }}">
+<header><span class="rv-time"><bdi dir="ltr">{{ card.time }}</bdi></span><span class="rv-name" data-preorder-name>{{ r.name }}</span><span class="rv-status rv-status--{{ r.status }}" data-status-label>{{ card.status }}</span></header>
+<p class="rv-facts"><span>{{ r.customer.name }}</span>{% if r.phone %}<span><bdi dir="ltr">{{ r.phone }}</bdi></span>{% endif %}{% if grouped %}<span data-preorder-branch>{{ card.branch }}</span>{% endif %}<span class="op-muted"><bdi dir="ltr">{{ r.number }}</bdi></span></p>
+<ul class="po-lines" data-preorder-lines>{% for line in card.lines %}<li><span><bdi dir="ltr">{{ line.quantity|qty }}</bdi> × {{ line.item.item_name }}{% if line.note %} · <span class="op-muted">{{ line.note }}</span>{% endif %}</span><bdi dir="ltr" data-line-price="{{ line.unit_price|stringformat:'.2f' }}">{{ line.amount|money }}</bdi></li>{% endfor %}
+<li class="po-total"><span>{{ pw.total }}</span><bdi dir="ltr" data-preorder-total="{{ card.total|stringformat:'.2f' }}">{{ card.total|money }}</bdi></li></ul>
+{% if r.notes %}<p class="po-notes" data-preorder-notes>{{ r.notes }}</p>{% endif %}
+{% if card.deposit %}<div class="rv-deposit" data-deposit="{{ card.deposit.status }}"><p>{{ pw.deposit }}: <strong><bdi dir="ltr">{{ card.deposit.payment.amount|money }}</bdi></strong> · {{ card.deposit_label }}</p>
+{% if card.can_forfeit or card.can_refund %}<div class="rv-tools">{% if card.can_forfeit %}<form method="post" data-deposit-forfeit>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="deposit_forfeit"><button class="op-secondary" type="submit">{{ pw.forfeit }}</button></form>{% endif %}
+{% if card.can_refund %}<form method="post" data-deposit-refund>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="deposit_refund"><label>{{ pw.refund_reason }}<input name="reason" required maxlength="200"></label><button class="op-secondary" type="submit">{{ pw.refund }}</button></form>{% endif %}</div>{% endif %}
+</div>{% endif %}
+{% if card.can_take_deposit %}<details class="rv-more" data-deposit-take><summary>{{ pw.take }}</summary><form method="post" class="rv-tools">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="deposit">
+<label>{{ pw.deposit_amount }}<input name="amount" inputmode="decimal" dir="ltr" autocomplete="off" required></label><label>{{ pw.cashbox }}<select name="cashbox">{% for box in card.cashboxes %}<option value="{{ box.pk }}"{% if box.is_default %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></label><button class="op-primary" type="submit">{{ pw.take }}</button></form></details>{% endif %}
+{% if card.can_act %}<div class="rv-tools" data-preorder-actions>
+{% if r.status == 'booked' %}<form method="post" data-preorder-confirm>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="confirm"><button class="op-secondary" type="submit">{{ pw.confirm }}</button></form>{% endif %}
+{% if r.status != 'ready' %}<form method="post" data-preorder-ready>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="ready"><button class="op-secondary" type="submit">{{ pw.ready }}</button></form>{% endif %}
+<form method="post" data-confirm="{{ pw.collect_confirm }}" data-preorder-collect>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="collect"><button class="op-primary" type="submit">{{ pw.collect }}</button></form>
+{% if card.editable %}<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ day|date:'Y-m-d' }}&amp;edit={{ r.pk }}#po-form" data-preorder-edit>{{ pw.edit }}</a>{% endif %}
+<details class="rv-more"><summary>{{ pw.cancel }} / {{ pw.no_show }}</summary><div class="rv-tools">
+<form method="post" data-confirm="{{ pw.cancel_confirm }}" data-preorder-cancel>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="cancel"><label>{{ pw.reason }}<input name="reason" maxlength="200"></label><button class="op-secondary" type="submit">{{ pw.cancel }}</button></form>
+<form method="post" data-confirm="{{ pw.no_show_confirm }}" data-preorder-no-show>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="no_show"><button class="op-secondary" type="submit">{{ pw.no_show }}</button></form>
+</div></details>
+</div>{% elif card.can_order %}<div class="rv-tools"><a class="op-secondary" href="{% url 'restaurant:order' r.order_id %}?lang={{ lang }}" data-preorder-order>{{ pw.open_order }}</a></div>{% endif %}
+</li>{% endwith %}{% empty %}<li class="op-empty" data-no-preorders>{{ pw.none }}</li>{% endfor %}
+</ul>
+<section class="rv-page" id="pre-make" data-production aria-labelledby="po-make-title"><h2 id="po-make-title">{{ pw.make_title }}</h2><p class="op-muted">{{ pw.make_intro }}</p>
+<form method="get" class="rv-tools"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}"><label>{{ pw.make_day }}<input type="date" name="make" value="{{ make_day|date:'Y-m-d' }}" dir="ltr" data-make-day></label><button class="op-secondary" type="submit">{{ pw.show }}</button></form>
+<ul class="po-make" data-production-list>
+{% for row in production %}<li data-production-row="{{ row.item.item_code }}"{% if grouped %} data-production-branch="{{ row.entity.pk }}"{% endif %}>
+<div class="po-make-head"><strong>{{ row.item.item_name }}</strong>{% if grouped %}<span class="op-muted">{{ row.branch }}</span>{% endif %}<span>{{ pw.wanted }}: <bdi dir="ltr" data-wanted="{{ row.quantity|qty }}">{{ row.quantity|qty }}</bdi></span>
+{% if row.kitchen %}<span>{{ pw.in_stock }}: <bdi dir="ltr" data-in-stock>{{ row.in_stock|qty }}</bdi></span><span>{{ pw.missing }}: <bdi dir="ltr" data-missing>{{ row.missing|qty }}</bdi></span>{% else %}<span class="op-muted" data-not-kitchen>{{ pw.not_kitchen }}</span>{% endif %}</div>
+{% if row.kitchen and can_prepare %}<form method="post" class="rv-tools" data-prepare>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="make_view" value="{{ make_day|date:'Y-m-d' }}"><input type="hidden" name="action" value="prepare"><input type="hidden" name="item" value="{{ row.item.pk }}"><input type="hidden" name="entity" value="{{ row.entity.pk }}"><label>{{ pw.quantity }}<input name="quantity" inputmode="decimal" dir="ltr" value="{% if row.missing %}{{ row.missing|qty }}{% else %}{{ row.quantity|qty }}{% endif %}" required></label><button class="op-primary" type="submit">{{ pw.prepare }}</button></form>{% endif %}
+</li>{% empty %}<li class="op-empty" data-no-production>{{ pw.make_none }}</li>{% endfor %}
+</ul></section>
+{% if can_edit %}<form class="op-form" method="post" id="po-form" data-preorder-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="save"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ pw.edit }} · <bdi dir="ltr">{{ editing.number }}</bdi>{% else %}{{ pw.new }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-preorder-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+{% if branch_choices and not editing %}<div class="op-field"><label for="po-entity">{{ pw.branch }}</label><select id="po-entity" name="entity" required><option value="">{{ pw.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}"{% if chosen_branch == branch.pk|stringformat:'s' %} selected{% endif %}>{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="po-customer">{{ pw.customer }}</label><select id="po-customer" name="customer" required><option value="">{{ pw.choose_customer }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if form.customer|stringformat:'s' == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="po-name">{{ pw.name }}</label><input id="po-name" name="name" value="{{ form.name|default:'' }}" maxlength="120" autocomplete="off"></div>
+<div class="op-field"><label for="po-phone">{{ pw.phone }}</label><input id="po-phone" name="phone" type="tel" inputmode="tel" dir="ltr" value="{{ form.phone|default:'' }}" maxlength="30" autocomplete="off"></div>
+<div class="op-field"><label for="po-fday">{{ pw.day }}</label><input id="po-fday" name="day" type="date" dir="ltr" value="{{ form.day|default:'' }}" required></div>
+<div class="op-field"><label for="po-time">{{ pw.time }}</label><input id="po-time" name="time" type="time" dir="ltr" value="{{ form.time|default:'' }}" required></div>
+<div class="op-field"><label for="po-notes">{{ pw.notes }}</label><input id="po-notes" name="notes" value="{{ form.notes|default:'' }}" maxlength="255"></div>
+</div>
+<fieldset class="po-rows" data-preorder-rows><legend>{{ pw.lines }}</legend><p class="op-muted">{{ pw.price_hint }}</p>
+{% for row in form_rows %}<div class="po-row" data-preorder-row>
+<label>{{ pw.item }}<select name="item"><option value="">{{ pw.no_item }}</option>{% for item in menu_items %}<option value="{{ item.pk }}"{% if row.item == item.pk|stringformat:'s' %} selected{% endif %}>{{ item.item_name }} · {{ item.default_sale_price|money }}</option>{% endfor %}</select></label>
+<label>{{ pw.quantity }}<input name="quantity" inputmode="decimal" dir="ltr" value="{{ row.quantity|default:'' }}"></label>
+<label>{{ pw.price }}<input name="unit_price" inputmode="decimal" dir="ltr" value="{{ row.unit_price|default:'' }}"></label>
+<label>{{ pw.line_note }}<input name="line_note" value="{{ row.note|default:'' }}" maxlength="120"></label>
+</div>{% endfor %}</fieldset>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ pw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ day|date:'Y-m-d' }}">{{ pw.new }}</a>{% endif %}</div></form>{% endif %}
+{% endblock %}

@@ -50,6 +50,7 @@ WORDS = {
         "returnable": "المتاح للارتجاع", "nothing_out": "مفيش خامات مصروفة للمشروع لسه عشان ترجع.",
         "expenses_title": "مصروفات المشروع", "link_expense": "اربط مصروف متسجل", "expense_hint": "سجّل المصروف الأول من شاشة المصروفات، وبعدين اربطه هنا.",
         "none": "مفيش.", "view_only": "التعديل لصاحب صلاحية البيع بس.", "statuses": "غيّر الحالة",
+        "purchase_requests": "طلبات الشراء",  # Contracting C7 (HG-125)
     },
     "en": {
         "page_title": "Projects", "title": "Projects", "intro": "Each project with its customer and contract value: progress bills, materials used, expenses and profit.",
@@ -71,6 +72,7 @@ WORDS = {
         "returnable": "Can come back", "nothing_out": "Nothing has been issued to this project yet, so nothing can come back.",
         "expenses_title": "Project expenses", "link_expense": "Link a recorded expense", "expense_hint": "Record the expense on the expenses screen first, then link it here.",
         "none": "None.", "view_only": "Only users who can sell can change projects.", "statuses": "Change status",
+        "purchase_requests": "Purchase requests",  # Contracting C7 (HG-125)
     },
 }
 

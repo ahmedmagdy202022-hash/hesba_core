@@ -1,0 +1,47 @@
+/* Contracting C7 (HG-125): purchase requests from the site: the list, the form with its lines, one request and its decision.
+   Tokens only: no colour literals. Logical properties, so an Arabic page mirrors and an English one does not. On a phone
+   (390 px) every line of the form is one card with its fields stacked; from 720 px a line lays its fields on two rows. */
+
+.prq-intro{margin:0 0 var(--hs-space-3)}
+.prq-intro p{margin:var(--hs-space-1) 0 0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.prq-names{display:block;margin-top:2px;color:var(--hs-muted);font-size:var(--hs-text-xs);white-space:normal;overflow-wrap:anywhere}
+.prq-struck{text-decoration:line-through;color:var(--hs-muted)}
+.prq-note{margin:var(--hs-space-1) 0 0;color:var(--hs-ink);overflow-wrap:anywhere}
+.prq-money{margin:var(--hs-space-3) 0 0;padding:var(--hs-space-3);border-radius:var(--hs-radius-md);background:var(--hs-teal-wash);color:var(--hs-navy);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+
+/* ---- the form: one card per line ---- */
+.prq-lines{display:grid;gap:var(--hs-space-3);min-width:0}
+.prq-lines__title{margin:0}
+.prq-line{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-2);margin:0;padding:var(--hs-space-3);min-width:0;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.prq-line .op-field{margin:0;min-width:0}
+.prq-line label{display:grid;gap:var(--hs-space-1);color:var(--hs-navy);font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold)}
+.prq-line label small{color:var(--hs-muted);font-weight:var(--hs-weight-medium)}
+.prq-line input,.prq-line select{width:100%;min-width:0;min-height:var(--hs-control-height);padding:0 var(--hs-space-3);border:1px solid var(--hs-line-strong);border-radius:var(--hs-input-radius);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:var(--hs-weight-medium)}
+.prq-line input:focus-visible,.prq-line select:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+@media (min-width:720px){
+  .prq-line{grid-template-columns:minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr)}
+  .prq-line__item,.prq-line__desc{grid-column:span 2}
+  .prq-line__boq,.prq-line__note{grid-column:span 2}
+}
+
+/* ---- one request ---- */
+.prq-sheet{list-style:none;margin:0;padding:0;display:grid}
+.prq-sheet li{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:var(--hs-space-2);padding:var(--hs-space-3) 0;border-bottom:1px solid var(--hs-line)}
+.prq-sheet li:last-child{border-bottom:0}
+.prq-sheet__what{display:grid;gap:2px;min-width:0;flex:1 1 12rem}
+.prq-sheet__what b{color:var(--hs-navy);overflow-wrap:anywhere}
+.prq-sheet__what small,.prq-sheet__qty small{color:var(--hs-muted);font-size:var(--hs-text-sm);overflow-wrap:anywhere}
+.prq-sheet__qty{display:grid;gap:2px;text-align:end;color:var(--hs-ink)}
+.prq-decide{margin:0 0 var(--hs-space-4)}
+.prq-decide h2{margin:0 0 var(--hs-space-2)}
+.prq-decide .op-field{margin:0 0 var(--hs-space-3)}
+.prq-decide .op-form-actions{margin-top:var(--hs-space-2)}
+.prq-approve{display:grid;gap:var(--hs-space-2);margin:0 0 var(--hs-space-3)}
+.prq-approve__row{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-2);padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.prq-approve__row .op-field{margin:0}
+.prq-approve__what{display:grid;gap:2px;min-width:0}
+.prq-approve__what b{color:var(--hs-navy);overflow-wrap:anywhere}
+.prq-approve__what small{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+@media (min-width:720px){.prq-approve__row{grid-template-columns:minmax(0,2fr) minmax(0,2fr) minmax(0,1fr);align-items:end}}
+.prq-links{display:flex;flex-wrap:wrap;gap:var(--hs-space-4)}
+.prq-links a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}

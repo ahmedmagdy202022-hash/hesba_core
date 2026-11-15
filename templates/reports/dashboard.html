@@ -153,11 +153,11 @@
         <div class="dash-section__head"><h2 class="dash-section__title">{{ activity_panel.title }}</h2><a class="dash-activity__open" href="{{ activity_panel.link }}?lang={{ lang }}">{{ activity_panel.open }} ←</a></div>
         <div class="dash-activity__tiles">
           {% for t in activity_panel.tiles %}
-          <article class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" data-tile="{{ t.key }}">
+          {% if t.url %}<a class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" href="{{ t.url }}?lang={{ lang }}" data-tile="{{ t.key }}">{% else %}<article class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" data-tile="{{ t.key }}">{% endif %}
             <span class="dash-atile__label">{{ t.label }}</span>
             <span class="dash-atile__value">{% if t.kind == 'money' %}{{ t.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}{% else %}{{ t.value }}{% endif %}</span>
             {% if t.sub %}<span class="dash-atile__sub">{{ t.sub }}</span>{% endif %}
-          </article>
+          {% if t.url %}</a>{% else %}</article>{% endif %}
           {% endfor %}
         </div>
       </section>

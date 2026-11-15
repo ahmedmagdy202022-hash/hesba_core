@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import contract_views, views, views_documents, views_reports, views_schedule, views_variations
+from . import contract_views, views, views_documents, views_purchase_requests, views_reports, views_schedule, views_variations
 
 
 app_name = "projects"
@@ -8,6 +8,9 @@ app_name = "projects"
 urlpatterns = [
     path("", views.project_list, name="list"),
     path("report/", views.report, name="report"),
+    # Contracting C7 (HG-125): purchase requests across projects: waiting for approval (the office) and mine (the engineer)
+    path("purchase-requests/", views_purchase_requests.inbox, name="purchase_requests_all"),
+    path("purchase-requests/mine/", views_purchase_requests.inbox, {"show": "mine"}, name="purchase_requests_mine"),
     path("<int:pk>/", views.project_detail, name="detail"),
     # Contracting C12 (HG-127): the printed issue and return vouchers
     path("<int:pk>/materials/<str:kind>/<int:number>/print/", views.voucher_print, name="voucher_print"),
@@ -40,4 +43,9 @@ urlpatterns = [
     # Contracting C3 (HG-124): the schedule and its delay alerts
     path("<int:pk>/schedule/", views_schedule.schedule_tab, name="schedule"),
     path("<int:pk>/schedule/<int:tid>/", views_schedule.task_page, name="schedule_task"),
+    # Contracting C7 (HG-125): the project's purchase requests, with approval
+    path("<int:pk>/purchase-requests/", views_purchase_requests.requests_tab, name="purchase_requests"),
+    path("<int:pk>/purchase-requests/new/", views_purchase_requests.request_form, name="purchase_request_new"),
+    path("<int:pk>/purchase-requests/<int:rid>/", views_purchase_requests.request_detail, name="purchase_request"),
+    path("<int:pk>/purchase-requests/<int:rid>/edit/", views_purchase_requests.request_form, name="purchase_request_edit"),
 ]

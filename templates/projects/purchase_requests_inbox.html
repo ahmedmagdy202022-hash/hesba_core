@@ -1,0 +1,18 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_requests.css' %}?v=c7-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C7 (HG-125): purchase requests across projects: waiting for approval (the office's dashboard tile opens it) and «طلباتي» (the engineer). #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ title }}</h1><p>{{ pw.inbox_intro }}</p></div></section>
+<nav class="op-subnav" aria-label="{{ pw.inbox_title }}" data-request-filters>{% for t in tabs %}<a href="{{ t.url }}"{% if t.current %} aria-current="page"{% endif %} data-show="{{ t.key }}">{{ t.label }}</a>{% endfor %}</nav>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-request-inbox="{{ show }}"><thead><tr><th>{{ pw.number }}</th><th>{{ pw.project }}</th><th>{{ pw.needed_by }}</th><th>{{ pw.requester }}</th><th>{{ pw.status }}</th><th>{{ pw.order }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-purchase-request="{{ row.label }}" data-status="{{ row.state }}">
+<td data-row="title"><a href="{{ row.url }}" data-row-link><bdi dir="ltr">{{ row.label }}</bdi></a> <small class="prq-names">{{ row.count }} · {{ row.names }}</small></td>
+<td data-row="sub">{{ row.project.name }}</td>
+<td data-row="sub">{{ row.needed_by }}</td>
+<td data-row="sub">{{ row.requester }}</td>
+<td data-row="meta"><span class="op-status op-status-{{ row.status_class }}" data-request-status>{{ row.status_label }}</span></td>
+<td data-row="meta">{% if row.order %}<bdi dir="ltr" data-request-order{% if row.order_cancelled %} data-order-was-cancelled class="prq-struck"{% endif %}>{{ row.order }}</bdi>{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ pw.inbox_none }}</b></span></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
