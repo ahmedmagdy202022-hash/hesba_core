@@ -1,0 +1,51 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_schedule.css' %}?v=c3-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C3 (HG-124): the project's schedule. It reads the certificates and moves no money. #}
+{% include "projects/_head.html" %}
+<section class="sch-intro"><h2 class="prj-h">{{ sw.page_title }}</h2><p>{{ sw.intro }}</p></section>
+{% if other_entity %}<p class="op-message" data-other-entity>{{ sw.other_entity }}</p>{% else %}
+{% if summary %}
+<section class="op-summary-grid op-summary-grid--compact" data-schedule-summary>
+<article><small>{{ sw.planned }}</small><strong dir="ltr" data-summary="planned">{{ summary.planned }}%</strong></article>
+<article><small>{{ sw.actual }}</small><strong dir="ltr" data-summary="actual">{{ summary.actual }}%</strong></article>
+<article><small>{{ sw.gap }}</small><strong data-summary="gap">{{ summary.gap }}</strong></article>
+<article><small>{{ sw.planned_end }}</small><strong data-summary="planned_end">{{ summary.planned_end }}</strong>{% if summary.extension %}<small data-summary="extension">{{ summary.extension }}</small>{% endif %}</article>
+</section>
+{% if summary.alerts %}<ul class="sch-alerts" aria-label="{{ sw.alerts }}" data-schedule-alerts>{% for text in summary.alerts %}<li data-schedule-alert-item>{{ text }}</li>{% endfor %}</ul>
+{% else %}<p class="sch-ok" data-schedule-ok>{{ sw.no_alerts }}</p>{% endif %}
+{% endif %}
+{% if chart %}
+<section class="sch-card" data-schedule-chart><h2>{{ sw.chart }}</h2><p class="sch-hint">{{ sw.chart_hint }}</p>
+<div class="sch-gantt" data-gantt-scroll tabindex="0" role="region" aria-label="{{ sw.chart }}">
+<div class="sch-canvas" style="--sch-width:{{ chart.width }}" data-gantt>
+<div class="sch-head" aria-hidden="true"><span class="sch-name">{{ sw.task }}</span><span class="sch-track">{% for mark in chart.marks %}<span class="sch-mark" style="--sch-at:{{ mark.at }}">{{ mark.label }}</span>{% endfor %}</span></div>
+{% for bar in chart.bars %}<div class="sch-row{% if bar.late %} is-late{% elif bar.finished %} is-done{% endif %}{% if bar.waiting %} is-waiting{% endif %}" data-gantt-row="{{ bar.task.pk }}"><span class="sch-name">{{ bar.task.name }}</span><span class="sch-track"><span class="sch-bar" style="--sch-from:{{ bar.from }};--sch-span:{{ bar.span }};--sch-done:{{ bar.done }}" data-gantt-bar><span class="sch-bar__done"></span></span></span></div>{% endfor %}
+{% if chart.today %}<span class="sch-today" style="--sch-at:{{ chart.today }}" data-gantt-today><span>{{ sw.today }}</span></span>{% endif %}
+</div></div>
+<ul class="sch-legend" aria-hidden="true"><li><i></i>{{ sw.legend_progress }}</li><li class="is-late"><i></i>{{ sw.legend_late }}</li><li class="is-done"><i></i>{{ sw.done_chip }}</li></ul>
+</section>
+{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-schedule-tasks><thead><tr><th>{{ sw.task }}</th><th>{{ sw.start }}</th><th>{{ sw.end }}</th><th>{{ sw.predecessor }}</th><th>{{ sw.progress }}</th><th>{{ sw.planned_short }}</th><th>{{ sw.share }}</th><th>{{ sw.boq }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-schedule-task="{{ row.task.pk }}"{% if row.late %} data-late{% endif %}>
+<td data-row="title"><a href="{{ row.url }}" data-row-link>{{ row.task.name }}</a></td>
+<td data-row="sub">{{ row.start }} – {{ row.end }} · {{ row.days }}</td>
+<td data-row="amount" dir="ltr" data-task-progress>{{ row.actual }}%</td>
+<td data-row="meta">{% if row.task.predecessor %}{{ sw.predecessor }} «{{ row.task.predecessor.name }}»{% else %}{{ sw.none_dash }}{% endif %}</td>
+<td data-row="meta" data-join>{% if row.late %}<span class="sch-chip sch-chip--late" data-task-late>{{ row.late }}</span>{% elif row.done %}<span class="sch-chip sch-chip--done">{{ sw.done_chip }}</span>{% elif row.waiting %}<span class="sch-chip sch-chip--waiting" data-task-waiting>{{ row.waiting }}</span>{% else %}<span class="sch-muted">{{ row.source }}</span>{% endif %}</td>
+<td data-row="meta">{{ sw.planned_short }} <span dir="ltr" data-task-planned>{{ row.planned }}%</span></td>
+<td data-row="meta">{{ sw.share }} <span dir="ltr" data-task-share>{{ row.share }}%</span></td>
+<td data-row="meta">{% if row.boq %}<bdi dir="ltr" data-task-boq>{{ row.boq }}</bdi>{% else %}{{ sw.none_dash }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="8" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ sw.empty }}</b>{% if can_plan and is_open %}<span>{{ sw.empty_hint }}</span>{% endif %}</span></td></tr>{% endfor %}
+</tbody></table></div>
+{% if not is_open %}<p class="op-message" data-project-closed>{{ sw.closed }}</p>
+{% elif can_plan %}
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<form class="op-form hs-form sch-card" method="post" data-task-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ sw.add }}</h2>
+{% include "projects/_task_fields.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ sw.save }}</button></div></form>
+{% elif can_progress %}<p class="op-muted" data-plan-only>{{ sw.plan_only }}</p>
+{% else %}<p class="op-muted" data-view-only>{{ sw.view_only }}</p>{% endif %}
+{% endif %}
+{% endblock %}

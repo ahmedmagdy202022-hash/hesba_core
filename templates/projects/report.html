@@ -14,7 +14,7 @@
 <div class="op-table-wrap"><table class="op-table" data-portfolio><thead><tr><th>{{ rw.project }}</th><th>{{ rw.contract }}</th><th>{{ rw.billed }}</th><th>{{ rw.progress }}</th><th>{{ rw.time }}</th><th>{{ rw.cost }}</th><th>{{ rw.profit }}</th><th>{{ rw.margin }}</th><th>{{ rw.due }}</th><th>{{ rw.retention }}</th></tr></thead><tbody>
 {% for row in rows %}{% with p=row.project f=row.figures %}<tr data-portfolio-row="{{ p.code }}"{% if row.behind %} data-behind{% endif %}><td class="op-cell-text"><a href="{% url 'projects:detail' p.pk %}?lang={{ lang }}">{{ p.name }}</a><br><small class="op-muted">{{ p.customer.name }}</small></td>
 <td>{{ f.contract|money }}</td><td>{{ f.billed|money }}</td><td>{{ f.progress }}%</td>
-<td>{% if row.time_pct is not None %}{{ row.time_pct }}%{% if row.behind %} <span class="op-status op-status-cancelled">{{ rw.behind }}</span>{% endif %}{% else %}—{% endif %}</td>
+<td>{% if row.schedule %}<span data-plan-figures>{{ row.plan_text }}</span>{% if row.behind %} <span class="op-status op-status-cancelled" data-behind-by="schedule">{{ rw.behind }}</span>{% endif %}{% elif row.time_pct is not None %}{{ row.time_pct }}%{% if row.behind %} <span class="op-status op-status-cancelled" data-behind-by="billing">{{ rw.behind }}</span>{% endif %}{% else %}—{% endif %}</td>
 <td>{{ f.cost|money }}</td><td><span class="{% if f.profit < 0 %}op-status op-status-cancelled{% endif %}">{% include "projects/_profit.html" with value=f.profit loss=rw.loss %}</span></td><td>{{ f.margin }}%</td><td>{{ f.due|money }}</td><td>{{ row.retention|money }}</td></tr>{% endwith %}
 {% empty %}<tr><td colspan="10" class="op-empty">{{ rw.none }}</td></tr>{% endfor %}
 </tbody></table></div>

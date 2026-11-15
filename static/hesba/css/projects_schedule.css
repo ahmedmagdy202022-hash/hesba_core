@@ -1,0 +1,65 @@
+/* Contracting C3 (HG-124): the project's schedule: the summary, the alerts, the Gantt and one task.
+   Tokens only: no colour literals. The Gantt is plain boxes placed with logical properties, so an Arabic page mirrors it
+   (the first day on the right) and an English page does not. It scrolls sideways inside its own box, never the page.
+   A bar's place comes from three numbers the page writes as custom properties: --sch-from, --sch-span (fractions of the
+   chart) and --sch-done (the share done). */
+
+.sch-intro{margin:0 0 var(--hs-space-3)}
+.sch-intro p{margin:var(--hs-space-1) 0 0;color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.sch-card{margin:0 0 var(--hs-space-4);padding:var(--hs-space-4);border:var(--hs-card-border);border-radius:var(--hs-card-radius);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow);min-width:0}
+.sch-card h2{margin:0 0 var(--hs-space-2);color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-lg);line-height:var(--hs-leading-tight)}
+.sch-hint{margin:0 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+
+/* ---- the alerts ---- */
+.sch-alerts{display:grid;gap:var(--hs-space-2);margin:0 0 var(--hs-space-4);padding:0;list-style:none}
+.sch-alerts li{padding:var(--hs-space-3) var(--hs-space-4);border:1px solid var(--hs-danger-line);border-radius:var(--hs-radius-md);background:var(--hs-danger-wash);color:var(--hs-danger);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.sch-ok{margin:0 0 var(--hs-space-4);padding:var(--hs-space-3) var(--hs-space-4);border:1px solid var(--hs-success-line);border-radius:var(--hs-radius-md);background:var(--hs-success-wash);color:var(--hs-success);font-size:var(--hs-text-sm)}
+
+/* ---- the Gantt: the box scrolls, the page does not ---- */
+.sch-gantt{max-inline-size:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.sch-gantt:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.sch-canvas{--sch-label:150px;position:relative;min-inline-size:var(--sch-width,640px);padding-block-end:var(--hs-space-2)}
+.sch-head,.sch-row{display:grid;grid-template-columns:var(--sch-label) 1fr;align-items:center}
+.sch-head{min-block-size:32px;border-block-end:1px solid var(--hs-line);color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.sch-row{min-block-size:var(--hs-control-height);border-block-end:1px solid var(--hs-line)}
+.sch-row:last-child{border-block-end:0}
+.sch-name{position:sticky;inset-inline-start:0;z-index:2;align-self:stretch;display:flex;align-items:center;padding:0 var(--hs-space-3);background:var(--hs-surface);border-inline-end:1px solid var(--hs-line);color:var(--hs-ink);font-size:var(--hs-text-sm);line-height:var(--hs-leading-tight);overflow-wrap:anywhere}
+.sch-head .sch-name{color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.sch-track{position:relative;align-self:stretch}
+.sch-mark{position:absolute;inset-block:0;inset-inline-start:calc(var(--sch-at) * 100%);display:flex;align-items:center;padding-inline-start:var(--hs-space-1);border-inline-start:1px solid var(--hs-chart-grid);white-space:nowrap}
+.sch-bar{position:absolute;inset-block:12px;inset-inline-start:calc(var(--sch-from) * 100%);inline-size:max(calc(var(--sch-span) * 100%),6px);overflow:hidden;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);border:1px solid var(--hs-teal)}
+.sch-bar__done{display:block;block-size:100%;inline-size:calc(var(--sch-done) * 100%);background:var(--hs-teal)}
+.sch-row.is-late .sch-bar{background:var(--hs-danger-wash);border-color:var(--hs-danger-solid)}
+.sch-row.is-late .sch-bar__done{background:var(--hs-danger-solid)}
+.sch-row.is-waiting .sch-bar{border-style:dashed}
+.sch-row.is-done .sch-bar{background:var(--hs-success-wash);border-color:var(--hs-success)}
+.sch-row.is-done .sch-bar__done{background:var(--hs-success)}
+.sch-today{position:absolute;inset-block:0;inset-inline-start:calc(var(--sch-label) + (100% - var(--sch-label)) * var(--sch-at));z-index:3;inline-size:2px;background:var(--hs-navy);pointer-events:none}
+.sch-today span{position:absolute;inset-block-start:2px;inset-inline-start:4px;padding:0 var(--hs-space-1);border-radius:var(--hs-radius-sm);background:var(--hs-navy);color:var(--hs-on-navy);font-size:var(--hs-text-xs);white-space:nowrap}
+.sch-legend{display:flex;flex-wrap:wrap;gap:var(--hs-space-2) var(--hs-space-4);margin:var(--hs-space-3) 0 0;padding:0;list-style:none;color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.sch-legend i{display:inline-block;inline-size:14px;block-size:8px;margin-inline-end:var(--hs-space-1);border-radius:var(--hs-radius-pill);background:var(--hs-teal);vertical-align:middle}
+.sch-legend .is-late i{background:var(--hs-danger-solid)}
+.sch-legend .is-done i{background:var(--hs-success)}
+
+/* ---- the task list's small chips ---- */
+.sch-chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--hs-radius-pill);font-size:var(--hs-text-xs);font-weight:var(--hs-weight-semibold);white-space:nowrap}
+.sch-chip--late{background:var(--hs-danger-wash);color:var(--hs-danger)}
+.sch-chip--waiting{background:var(--hs-warning-wash);color:var(--hs-warning)}
+.sch-chip--done{background:var(--hs-success-wash);color:var(--hs-success)}
+.sch-muted{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+
+/* ---- the forms ---- */
+.sch-boq{display:grid;gap:var(--hs-space-1);margin:0;padding:0;border:0}
+.sch-boq legend{margin-bottom:var(--hs-space-1);color:var(--hs-ink);font-weight:var(--hs-weight-semibold)}
+.sch-boq label{display:flex;align-items:center;gap:var(--hs-space-2);min-block-size:var(--hs-control-height);font-size:var(--hs-text-sm)}
+.sch-boq input{inline-size:20px;block-size:20px;flex:none}
+.sch-boq small{color:var(--hs-muted)}
+.sch-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--hs-space-3);margin:0}
+.sch-facts div{min-width:0}
+.sch-facts dt{color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.sch-facts dd{margin:0;color:var(--hs-navy);font-weight:var(--hs-weight-semibold);overflow-wrap:anywhere}
+
+@media (max-width:640px){
+  .sch-canvas{--sch-label:112px}
+  .sch-card{padding:var(--hs-space-3)}
+}

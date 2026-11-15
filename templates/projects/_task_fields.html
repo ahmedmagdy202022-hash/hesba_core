@@ -1,0 +1,12 @@
+{# Contracting C3 (HG-124): the plan of one task, shared by «إضافة بند للجدول» and the task's edit form. #}
+<div class="op-form-grid">
+<div class="op-field"><label for="tk-name">{{ sw.f_name }}</label><input id="tk-name" name="name" maxlength="160" value="{{ form.name }}" placeholder="{{ sw.f_name_ph }}" autocomplete="off" required></div>
+<div class="op-field"><label for="tk-start">{{ sw.f_start }}</label><input id="tk-start" type="date" name="start_date" value="{{ form.start_date }}" required></div>
+<div class="op-field"><label for="tk-end">{{ sw.f_end }}</label><input id="tk-end" type="date" name="end_date" value="{{ form.end_date }}" required></div>
+<div class="op-field"><label for="tk-pred">{{ sw.f_predecessor }}</label><select id="tk-pred" name="predecessor"><option value="">{{ sw.f_no_predecessor }}</option>{% for other in tasks %}<option value="{{ other.pk }}"{% if form.predecessor == other.pk|stringformat:'s' %} selected{% endif %}>{{ other.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="tk-weight">{{ sw.f_weight }}</label><input id="tk-weight" name="weight" value="{{ form.weight }}" inputmode="decimal" dir="ltr" autocomplete="off" aria-describedby="tk-weight-hint"><small id="tk-weight-hint">{{ sw.f_weight_hint }}</small></div>
+<div class="op-field"><label for="tk-sort">{{ sw.f_sort }}</label><input id="tk-sort" name="sort" value="{{ form.sort }}" inputmode="numeric" dir="ltr" autocomplete="off"></div>
+</div>
+{% if boq_choices %}<fieldset class="sch-boq" data-task-boq-links><legend>{{ sw.f_boq }}</legend><p class="sch-hint">{{ sw.f_boq_hint }}</p>
+{% for choice in boq_choices %}{% with line=choice.line %}<label><input type="checkbox" name="boq_lines" value="{{ line.pk }}"{% if line.pk|stringformat:'s' in form.boq_lines %} checked{% endif %}{% if choice.taken %} disabled{% endif %}><span><bdi dir="ltr">{{ line.code|default:line.line_number }}</bdi> {{ line.description }}{% if choice.taken %} <small>«{{ choice.taken }}»</small>{% endif %}</span></label>{% endwith %}{% endfor %}
+</fieldset>{% endif %}

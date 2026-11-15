@@ -34,7 +34,7 @@ COLLECT, BUY, BUY_VIEW = "sales.receive_customer_payment", "purchases.create_pur
 WORDS = {
     "ar": {
         "tab_overview": "نظرة عامة", "tab_boq": "المقايسة", "tab_certificates": "المستخلصات", "tab_payments": "الدفعات وضمان الأعمال",
-        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير",
+        "tab_subcontracts": "مقاولو الباطن", "tab_budget": "الموازنة والتكلفة", "tab_reports": "اليوميات", "tab_documents": "المستندات", "tab_variations": "أوامر التغيير", "tab_schedule": "الجدول الزمني",
         "original_short": "الأصلية", "variations_short": "أوامر التغيير", "variation_chip": "أمر تغيير {n}",
         "boq_locked_note": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة، فتعديل الكميات والفئات وإضافة البنود ومسحها بيتم بأمر تغيير.",
         "new_variation": "أمر تغيير جديد", "words_only": "الكمية والفئة ثابتين هنا، وتعديلهم بأمر تغيير.",
@@ -72,7 +72,7 @@ WORDS = {
     },
     "en": {
         "tab_overview": "Overview", "tab_boq": "Bill of quantities", "tab_certificates": "Certificates", "tab_payments": "Payments & retention",
-        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders",
+        "tab_subcontracts": "Subcontractors", "tab_budget": "Budget & cost", "tab_reports": "Daily reports", "tab_documents": "Documents", "tab_variations": "Variation orders", "tab_schedule": "Schedule",
         "original_short": "Original", "variations_short": "Variation orders", "variation_chip": "Variation order {n}",
         "boq_locked_note": "This project has certificates or approved variation orders, so quantities, rates, new items and deletions go through a variation order.",
         "new_variation": "New variation order", "words_only": "The quantity and the rate are fixed here; a variation order changes them.",
@@ -129,6 +129,9 @@ def _context(request, project, tab, **extra):
     context["page_title"] = f"{project.name} — {WORDS[lang]['tab_' + tab]}"
     # Contracting C1 (HG-103): the original value and the approved variation orders, under the contract value, once there are any.
     context["variation"] = variations.figures(project) if can_view_sales and variations.in_reach(project) else None
+    from .views_schedule import header_flag
+
+    context["schedule_flag"] = header_flag(project, request.user, lang)  # Contracting C3 (HG-124): the delay line under the title
     context.update(extra)
     return context
 

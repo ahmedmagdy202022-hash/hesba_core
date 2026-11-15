@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import contract_views, views, views_documents, views_reports, views_variations
+from . import contract_views, views, views_documents, views_reports, views_schedule, views_variations
 
 
 app_name = "projects"
@@ -35,4 +35,7 @@ urlpatterns = [
     path("<int:pk>/variations/<int:oid>/edit/", views_variations.variation_form, name="variation_edit"),
     path("<int:pk>/variations/<int:oid>/files/", views_variations.variation_files, name="variation_files"),
     path("<int:pk>/variations/<int:oid>/print/", views_variations.variation_print, name="variation_print"),
+    # Contracting C3 (HG-124): the schedule and its delay alerts
+    path("<int:pk>/schedule/", views_schedule.schedule_tab, name="schedule"),
+    path("<int:pk>/schedule/<int:tid>/", views_schedule.task_page, name="schedule_task"),
 ]
