@@ -129,9 +129,11 @@ def save_dish_groups(request, dish, lang):
     return redirect(f"{reverse('restaurant:dish', args=[dish.pk])}?lang={lang}")
 
 
-def sheets(items, lang):
-    """The order page's choice sheets: [{item, groups: [{group, label, rule, required, radio, options}]}] for the dishes that ask."""
+def sheets(items, lang, price_of=None):
+    """The order page's choice sheets: [{item, groups: [{group, label, rule, required, radio, options}]}] for the dishes that ask.
+    R14 (HG-120): ``price_of(item)`` is what an item costs on this order (its customer's list); the menu price when not given."""
 
+    price_of = price_of or _menu_price
     result = []
     asked = modifiers.menu_groups(items)
     for item in items:
@@ -144,9 +146,9 @@ def sheets(items, lang):
             groups.append({"group": group, "label": group.label(lang), "rule": rule, "required": low > 0, "min": low, "max": high,
                            "message": MODIFIER_WORDS[lang]["pick_more"].format(group=group.label(lang), rule=rule),
                            "radio": low >= 1 and high == 1,
-                           "options": [{"option": option, "label": option.label(lang), "price": option.item.default_sale_price if option.item_id else None}
+                           "options": [{"option": option, "label": option.label(lang), "price": price_of(option.item) if option.item_id else None}
                                        for option in group.live_options]})
-        result.append({"item": item, "groups": groups})
+        result.append({"item": item, "groups": groups, "price": price_of(item)})
     return result
 
 
@@ -160,7 +162,11 @@ def posted_options(post):
     return values
 
 
-def menu_entries(items, sheet_items, lang):
+def _menu_price(item):
+    return item.default_sale_price
+
+
+def menu_entries(items, sheet_items, lang, price_of=None):
     """R1a step 5: the menu with each size family (``variants.VariantGroup``) under one tile that asks the size.
 
     [{"item": item}] for a plain tile, [{"sizes": {...}}] for a family, at the place of its first size. A family needs two
@@ -168,6 +174,7 @@ def menu_entries(items, sheet_items, lang):
 
     from variants.models import Variant
 
+    price_of = price_of or _menu_price  # R14 (HG-120): the order's customer's list prices, when it has one
     families = {}
     for variant in Variant.objects.filter(item__in=items, group__active=True).select_related("group", "item").order_by("group_id", "pk"):
         families.setdefault(variant.group_id, []).append(variant)
@@ -177,7 +184,7 @@ def menu_entries(items, sheet_items, lang):
             continue
         group = variants[0].group
         sizes = [{"item": variant.item, "label": " · ".join(part for part in (variant.size, variant.color) if part) or variant.item.item_name,
-                  "price": variant.item.default_sale_price} for variant in variants]
+                  "price": price_of(variant.item)} for variant in variants]
         prices = [size["price"] for size in sizes]
         first[variants[0].item_id] = {"group": group, "name": group.name, "sizes": sizes, "low": min(prices), "same_price": len(set(prices)) == 1,
                                       "category_id": variants[0].item.category_id or "",
