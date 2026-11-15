@@ -441,6 +441,10 @@ def receive_cheque(project, user, *, data, kind=ProjectPaymentKind.COLLECTION, l
     if not user_has_permission(user, cheques.RECEIVE):
         raise PermissionDenied(f"Receiving a cheque needs {cheques.RECEIVE}.")
     project = _locked(project, lang)
+    from master_data.models import Customer
+
+    # The engine's lock order (the customer, then the entity in ``box``), so a cheque for the same owner saved on the cheques screen at once waits, never deadlocks.
+    Customer.objects.select_for_update().filter(pk=project.customer_id).first()
     if (kind or ProjectPaymentKind.COLLECTION) != ProjectPaymentKind.COLLECTION:
         raise ValidationError(words["cheque_open"])  # owner question 6: an advance only once its cheque has cleared
     # The cheque sits in the box of the entity being worked in (the whole group: the main entity's); the project's money stays in one entity.
