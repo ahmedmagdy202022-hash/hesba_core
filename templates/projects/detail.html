@@ -1,6 +1,6 @@
 {% extends "operations/base.html" %}
-{% load static hesba_format %}
-{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1">{% endblock %}
+{% load static hesba_format guarantees_tags %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/guarantees.css' %}?v=c4-1">{% endblock %}
 {% block operation_content %}
 {% include "projects/_head.html" %}
 {% include "projects/_site_cta.html" with at="top" %}
@@ -13,6 +13,7 @@
 <article><small>{{ words.status }}</small><strong><span class="op-status op-status-{% if project.status == 'done' %}posted{% elif project.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-project-status="{{ project.status }}">{{ status_label }}</span></strong></article>
 </section>
 {% if figures.drafts %}<p class="op-muted">{{ words.drafts }}: {{ figures.drafts|money }}</p>{% endif %}
+{% project_guarantees project %}{# Contracting C4 (HG-123): the project's letters of guarantee; amounts for managers only #}
 
 {% if can_view_sales %}<h2>{{ words.bills }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.invoice }}</th><th>{{ cwords.description }}</th><th>{{ words.date }}</th><th>{{ words.total }}</th><th>{{ words.due }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>

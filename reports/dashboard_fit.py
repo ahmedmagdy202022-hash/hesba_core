@@ -164,14 +164,18 @@ WORDS = {
            "vat": "ضريبة مبيعات الشهر", "vat_sub": "صافي ضريبة القيمة المضافة على المبيعات المرحّلة",
            "einvoice": "فواتير الشهر لسه ماتبعتتش للضرايب", "einvoice_sub": "من {total} فاتورة مرحّلة",
            "assets": "إهلاك الشهر", "assets_sub": "{count} أصل",
-           "shifts": "ورديات مفتوحة دلوقتي", "serials": "أجهزة بسيريال في المخزن"},
+           "shifts": "ورديات مفتوحة دلوقتي", "serials": "أجهزة بسيريال في المخزن",
+           "guarantees": "خطابات ضمان محتاجة متابعة", "guarantees_sub": "{expired} انتهت وهي سارية · {expiring} هتنتهي خلال {days} يوم",
+           "guarantees_none": "مفيش خطاب قرّب ينتهي"},
     "en": {"title": "What you switched on in setup", "open": "Open",
            "instalments": "Overdue instalments", "instalments_sub": "{amount} from {plans} customers", "instalments_none": "No overdue instalments",
            "batches_expired": "Expired batches still in stock", "batches_soon": "Batches expiring soon",
            "vat": "This month's sales VAT", "vat_sub": "Net output VAT on posted sales",
            "einvoice": "This month's invoices not sent to the tax authority", "einvoice_sub": "of {total} posted invoices",
            "assets": "This month's depreciation", "assets_sub": "{count} assets",
-           "shifts": "Shifts open now", "serials": "Serial-numbered units in stock"},
+           "shifts": "Shifts open now", "serials": "Serial-numbered units in stock",
+           "guarantees": "Letters of guarantee to follow up", "guarantees_sub": "{expired} expired but active · {expiring} expiring within {days} days",
+           "guarantees_none": "No letter is close to expiry"},
 }
 
 
@@ -235,6 +239,18 @@ def option_tiles(fit, user, lang="ar"):
         from serials.services import available_serials
 
         tiles.append(_tile("opt_serials", words["serials"], available_serials().count(), reverse("serials:index")))
+    if "projects" in fit.modules:  # C4 (HG-123): letters of guarantee, once there is an active one to watch
+        from guarantees import services as guarantees
+
+        if guarantees.can_manage(user):
+            days = guarantees.alert_days()
+            due = guarantees.counts(today, days)
+            if due["active"]:
+                total = due["expired"] + due["expiring"]
+                tiles.append(_tile("opt_guarantees", words["guarantees"], total, reverse("guarantees:list"),
+                                   tone="bad" if due["expired"] else ("warn" if due["expiring"] else "good"),
+                                   sub=words["guarantees_sub"].format(expired=due["expired"], expiring=due["expiring"], days=days) if total
+                                   else words["guarantees_none"]))
     return tiles
 
 
