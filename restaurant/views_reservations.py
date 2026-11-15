@@ -171,7 +171,7 @@ def _cards(rows, user, lang):
             "can_take_deposit": deposits_on and live and held is None and receives and row.customer_id is not None,
             "needs_customer": deposits_on and live and held is None and receives and row.customer_id is None,
             "can_forfeit": held is not None and not live and row.status != ReservationStatus.SEATED and sells,
-            "can_refund": held is not None and not live and row.status != ReservationStatus.SEATED and receives,
+            "can_refund": held is not None and not live and (row.status != ReservationStatus.SEATED or reservations.deposit_released(row)) and receives,
             "cashboxes": list(reservations.cashboxes(row)) if deposits_on and live and held is None and receives and row.customer_id else [],
             "can_order": row.order_id is not None, "branch": row.entity.display(lang),
         })
@@ -308,7 +308,8 @@ def _deposit_action(request, reservation, action, lang, words):
     deposit = deposits.held_for(reservation)
     if deposit is None:
         raise ValidationError(deposits.MESSAGES[lang]["not_held"].format(status=""))
-    if reservation.status in reservations.OPEN or reservation.status == ReservationStatus.SEATED:
+    released = action == "deposit_refund" and reservations.deposit_released(reservation)  # a cancelled order or bill: refund only
+    if reservation.status in reservations.OPEN or (reservation.status == ReservationStatus.SEATED and not released):
         raise ValidationError(reservations.MESSAGES[lang]["state"].format(status=reservations.status_label(reservation, lang)))
     if action == "deposit_forfeit":
         if not user_has_permission(request.user, TAKE):

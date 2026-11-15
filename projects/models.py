@@ -389,3 +389,38 @@ class VariationLine(models.Model):
 
     class Meta:
         ordering = ["position", "pk"]
+
+
+# ---- Contracting C3 (HG-124): the schedule. A task is a plan: dates, a predecessor and how much of the work it is. It holds no
+# money and moves nothing; its progress is read from the posted certificates of the bill-of-quantities items linked to it, or
+# typed on site when none is linked.
+
+
+class ProjectTask(models.Model):
+    """One piece of the work on the project's schedule (الجدول الزمني), with its planned start and end."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="tasks")
+    sort = models.PositiveIntegerField(default=0)
+    name = models.CharField(max_length=160)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    # Finish-to-start only: this task should start once its predecessor is done. A task that is someone's predecessor is not deleted.
+    predecessor = models.ForeignKey("self", on_delete=models.PROTECT, null=True, blank=True, related_name="successors")
+    # How much of the project this task is, when it is linked to no bill-of-quantities item. NULL: its duration in days.
+    weight = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True)
+    boq_lines = models.ManyToManyField(BoqLine, blank=True, related_name="tasks")
+    # Percent done as typed on site; read only when no bill-of-quantities item is linked (otherwise the certificates say it).
+    progress = models.PositiveSmallIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort", "pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(end_date__gte=models.F("start_date")), name="projects_task_end_after_start"),
+            models.CheckConstraint(condition=models.Q(progress__lte=100), name="projects_task_progress_max_100"),
+            models.CheckConstraint(condition=models.Q(weight__isnull=True) | models.Q(weight__gt=0), name="projects_task_weight_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.project.code} {self.name}"

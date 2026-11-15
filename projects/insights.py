@@ -6,6 +6,8 @@ only, in the entity being worked in) and the contract module:
 - *billed %* is billed against the contract value;
 - *time %* is the share of the project's planned span already gone, so a
   project billing behind its calendar shows as behind;
+- Contracting C3 (HG-124): a project with tasks on its schedule is behind when
+  its schedule has an alert (``schedule.behind``) instead;
 - *retention held* is what the client keeps until handover.
 
 A progress certificate is *overdue* when its posted invoice still has money
@@ -43,9 +45,10 @@ def time_share(project, today=None):
 
 
 def portfolio(status=ProjectStatus.ACTIVE, today=None):
-    """[{project, figures, time_pct, behind, retention}] and the totals."""
+    """[{project, figures, time_pct, behind, schedule, retention}] and the totals (``schedule``: the C3 snapshot, or None without tasks)."""
 
     from .contract import position
+    from .schedule import behind
     from .services import summary
 
     today = today or timezone.localdate()
@@ -57,8 +60,9 @@ def portfolio(status=ProjectStatus.ACTIVE, today=None):
     for project in projects[:200]:
         figures = summary(project)
         share = time_share(project, today)
-        rows.append({"project": project, "figures": figures, "time_pct": share,
-                     "behind": share is not None and figures["contract"] > 0 and figures["progress"] + BEHIND_POINTS < share,
+        # Contracting C3 (HG-124): a project with a schedule is behind when its schedule has an alert; one without keeps the billing-based rule
+        late, plan = behind(project, figures, share, today)
+        rows.append({"project": project, "figures": figures, "time_pct": share, "behind": late, "schedule": plan,
                      "retention": position(project)["retention_held"]})  # in the entity being worked in, like the rest of the row
     keys = ("contract", "billed", "cost", "profit", "due")
     totals = {key: money_round(sum((row["figures"][key] for row in rows), ZERO)) for key in keys}
@@ -77,7 +81,7 @@ def certificate_owed(project):
 
     Everything the client was billed is lined up by date: each linked posted invoice at what it left owed after its
     returns (a certificate also less the retention it holds and the advance it recovers), and each retention release
-    on its own date. The project's collections then pay the oldest first. So money owed on another invoice, or on
+    on its own date. The project's collections (and its cheques under collection, C9) then pay the oldest first. So money owed on another invoice, or on
     released retention, is never put on an old certificate, and a returned certificate owes only what is left."""
 
     from django.db.models import Sum
@@ -102,7 +106,8 @@ def certificate_owed(project):
     if in_reach(project):
         for release in project.retention_releases.filter(reversed_on__isnull=True):
             items.append((release.release_date, 1, release.pk, Decimal(release.amount), None))
-    paid = position(project)["collections"]
+    figures = position(project)
+    paid = figures["collections"] + figures["under_collection"]  # C9 (HG-122): a cheque in hand pays it until it bounces
     owed = {}
     for *_, amount, certificate in sorted(items, key=lambda item: item[:3]):  # the oldest is paid first
         share = min(amount, paid)

@@ -117,6 +117,7 @@ urlpatterns = [
     path("shipping/", include("shipping.urls")),
     path("payments/", include("payments.urls")),  # S4 (HG-070): the staff side of payment links
     path("giftcards/", include("giftcards.urls")),  # S6 (HG-071): gift cards
+    path("guarantees/", include("guarantees.urls")),  # C4 (HG-123): letters of guarantee (memo only, no money moves)
     path("approvals/", include("approvals.urls")),  # FB-27
     path("ereceipt/", include("ereceipt.urls")),
     path("expenses/", include("expenses.urls")),
