@@ -148,14 +148,14 @@ class ReturnCostTests(ReturnSetup):
         with self.assertRaises(ValidationError) as caught:
             before_stock_operation_reversal(issued.pk)
         message = caught.exception.messages[0]
-        self.assertEqual(message, f"This operation is a material issue to project {self.project.code} and 20 of it already came back from the site. "
-                                  "Reverse the return first, then the issue.")
-        self.assertEqual(translate(message), f"الحركة دي صرف خامات لمشروع {self.project.code}، ورجع منها 20 من الموقع قبل كده. اعكس الارتجاع الأول، وبعدين الصرف.")
+        self.assertEqual(message, f"This operation is a material issue to project {self.project.code} and 20 of it came back from the site after it. "
+                                  "Reverse those returns first, then the issue.")
+        self.assertEqual(translate(message), f"الحركة دي صرف خامات لمشروع {self.project.code}، ورجع من الصنف ده 20 من الموقع بعدها. اعكس الارتجاع ده الأول، وبعدين الصرف.")
         self.client.force_login(self.owner)
         cancel = lambda operation: self.client.post(reverse("inventory:operation_cancel", args=[operation.pk]),
                                                     {"lang": "ar", "reversal_date": TODAY.isoformat(), "reason": "اتصرف بالغلط"}, follow=True)
         response = cancel(issued)
-        self.assertContains(response, "اعكس الارتجاع الأول")
+        self.assertContains(response, "اعكس الارتجاع ده الأول")
         self.assertEqual((self.materials(), gl("project_cost"), StockOperation.objects.exclude(status=StockOperationStatus.POSTED).count()), (D("6400.00"), D("6400.00"), 0))
         cancel(back)  # the return first: the 20 leave the store again and the project's cost goes back to 8,000.00
         self.assertEqual(self.materials(), D("8000.00"))
@@ -163,16 +163,35 @@ class ReturnCostTests(ReturnSetup):
         self.assertEqual((self.materials(), gl("project_cost"), get_item_location_stock_quantity(self.cement, self.store)), (D("0.00"), D("0.00"), D("100")))
         ledger_ok(self)
 
-    def test_an_issue_whose_reversal_still_covers_the_returns_is_reversed_as_before(self):
+    def test_an_issue_a_later_return_was_priced_from_is_refused_even_when_the_quantity_balances(self):
+        """Codex #434: 100 at 80.00 and 100 at 100.00, 100 back at 90.00; reversing the 100.00 issue alone would leave
+        −1,000.00 in the project and in 5103 with nothing left to return."""
+        from manufacturing.guards import before_stock_operation_reversal
+
+        stock_in(self.cement, self.store, 100, "80.00", movement_date=TODAY)
+        self.issue("100")
+        stock_in(self.cement, self.store, 100, "100.00", movement_date=TODAY)
+        dearer = self.issue("100")
+        back = self.give_back("100")
+        self.assertEqual((back.unit_cost, self.materials()), (D("90.00"), D("9000.00")))
+        with self.assertRaisesMessage(ValidationError, "100 of it came back from the site after it"):
+            before_stock_operation_reversal(dearer.pk)
+        cancel_stock_operation(back.pk, TODAY, "x", self.owner)  # the return first
+        before_stock_operation_reversal(dearer.pk)
+        cancel_stock_operation(dearer.pk, TODAY, "x", self.owner)
+        self.assertEqual((self.materials(), gl("project_cost")), (D("8000.00"), D("8000.00")))
+        ledger_ok(self)
+
+    def test_an_issue_made_after_the_returns_and_a_return_are_reversed_as_before(self):
         from manufacturing.guards import before_stock_operation_reversal
 
         stock_in(self.cement, self.store, 100, "80.00", movement_date=TODAY)
         self.issue("60")
-        second = self.issue("40")
         back = self.give_back("30")
-        before_stock_operation_reversal(second.pk)  # 100 − 40 − 30 = 30 still issued: allowed
+        later = self.issue("40")
+        before_stock_operation_reversal(later.pk)  # no return was priced from it: allowed
         before_stock_operation_reversal(back.pk)  # a return is never held back here
-        cancel_stock_operation(second.pk, TODAY, "x", self.owner)
+        cancel_stock_operation(later.pk, TODAY, "x", self.owner)
         self.assertEqual(self.materials(), D("2400.00"))  # 60 × 80.00 − 30 × 80.00
 
     def test_refusals_in_both_languages(self):

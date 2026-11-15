@@ -100,16 +100,20 @@ def net_issued(project, item):
 
 
 #: In English, as the engine's own refusals are; ``settings_core.ui_messages`` holds the Arabic.
-REVERSAL_MESSAGE = ("This operation is a material issue to project {code} and {returned} of it already came back from the site. "
-                    "Reverse the return first, then the issue.")
+REVERSAL_MESSAGE = ("This operation is a material issue to project {code} and {returned} of it came back from the site after it. "
+                    "Reverse those returns first, then the issue.")
 
 
 def reversal_refusal(operation_id):
-    """HG-127: the refusal for reversing a project issue whose returns would then exceed what is left issued, or None.
+    """HG-127: the refusal for reversing a project issue that a later return of the same item was priced from, or None.
 
-    Reversing the issue alone left the project's materials negative and the returned units in stock on top of the
-    reversed issue. The two places that reverse an operation a person names ask ``manufacturing.guards`` first, and it
-    asks here. A return, an issue with nothing returned against it, and any other operation pass as before."""
+    A return comes in at the project's net issued cost as it stood when it was made, so every issue before it is part of
+    that price. Reversing such an issue alone left the project's materials (and 5103) negative or off, with the returned
+    units in stock on top of the reversed issue, even when the quantity still balanced (100 at 80.00 and 100 at 100.00,
+    100 back at 90.00, then the 100.00 issue reversed: −1,000.00 with nothing left to return; Codex #434). So the returns
+    made after it are reversed first. The two places that reverse an operation a person names ask
+    ``manufacturing.guards`` first, and it asks here. A return, an issue with no later return of its item, and any other
+    operation pass as before."""
 
     from inventory.models import StockAdjustmentDirection, StockOperation, StockOperationStatus
 
@@ -121,11 +125,10 @@ def reversal_refusal(operation_id):
     operation = link.operation
     if operation.adjustment_direction == StockAdjustmentDirection.IN:
         return None
-    quantity, _value = net_issued(link.project, operation.item)
-    if quantity - operation.quantity >= 0:
+    later = [op for op in posted_operations(link.project, scoped=False) if op.item_id == operation.item_id and is_return(op) and op.pk > operation.pk]
+    if not later:
         return None
-    returned = sum((op.quantity for op in posted_operations(link.project, scoped=False) if op.item_id == operation.item_id and is_return(op)), Decimal("0"))
-    return REVERSAL_MESSAGE.format(code=link.project.code, returned=_plain(returned))
+    return REVERSAL_MESSAGE.format(code=link.project.code, returned=_plain(sum((op.quantity for op in later), Decimal("0"))))
 
 
 def _plain(quantity):
