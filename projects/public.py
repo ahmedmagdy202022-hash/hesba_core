@@ -249,16 +249,16 @@ def _company(lang):
 
 
 def _posted(project):
-    return contract.live_certificates(project).filter(invoice__status="posted").select_related("invoice").order_by("number")
+    return contract.live_certificates(project).filter(invoice__status="posted").select_related("invoice").prefetch_related("invoice__returns").order_by("number")
 
 
-def _statement(certificate, lang):
+def _statement(certificate, lang, to_date=None):
     """One posted certificate as its printed statement shows it, plus the deductions to date."""
 
     words = _words(lang)
     invoice = certificate.invoice
     return {"certificate": certificate, "invoice": invoice, "lines": contract.certificate_rows(certificate), "net": contract.net_payable(certificate),
-            "to_date": contract.to_date(certificate), "title": words["cert_n"].format(n=certificate.number),
+            "to_date": contract.to_date(certificate) if to_date is None else to_date, "title": words["cert_n"].format(n=certificate.number),
             "ret_label": words["ret_line"].format(rate=format(certificate.retention_rate.normalize(), "f"))}
 
 
@@ -270,16 +270,17 @@ def _orders(project, lang):
     words = _words(lang)
     rows = []
     for order in project.variation_orders.filter(status__in=(VariationStatus.APPROVED, VariationStatus.DRAFT)).select_related("decided_by").order_by("number"):
+        loaded = list(order.lines.select_related("boq_line"))  # one reading: what the page shows is what the fingerprint seals
         lines = []
-        for row in variations.line_rows(order):
+        for row in variations.line_rows(order, loaded):
             line = row["line"]
             lines.append({"line": line, "kind": words["kind_new" if row["new"] else "kind_change"], "change_text": signed_qty(line.quantity_change),
                           "rate": row["rate"], "amount_text": signed_money(row["amount"])})
         draft = order.status == VariationStatus.DRAFT
         rows.append({"order": order, "title": words["vo_n"].format(n=order.number), "draft": draft, "lines": lines,
-                     "value_text": signed_money(variations.order_value(order)),
+                     "value_text": signed_money(variations.order_value(order, loaded)),
                      "days_text": words["days_n"].format(n=order.extension_days) if order.extension_days else "",
-                     "fingerprint": variations.owner_fingerprint(order) if draft else "",
+                     "fingerprint": variations.owner_fingerprint(order, loaded) if draft else "",
                      "by_owner": order.decided_by is not None and order.decided_by.username == variations.OWNER_LINK_USERNAME})
     return rows
 
@@ -289,9 +290,11 @@ def _context(request, token, project, lang, message="", message_ok=False):
     other = "ar" if lang == "en" else "en"
     figures = variations.figures(project)
     position = contract.position(project)
+    posted = list(_posted(project))
+    running = contract.to_date_running(posted)
     data = {**_company(lang), "project": project, "switch_url": f"{here}?lang={other}", "here": f"{here}?lang={lang}", "message": message,
             "message_ok": message_ok, "contract": {"original": figures["original"], "approved": figures["approved"], "revised": figures["revised"]},
-            "position": position, "statements": [_statement(c, lang) for c in _posted(project)], "orders": _orders(project, lang),
+            "position": position, "statements": [_statement(c, lang, running[c.pk]) for c in posted], "orders": _orders(project, lang),
             "can_approve": project.status in OPEN, "planned_end": figures["planned_end"], "token": token}
     data["waiting"] = [row for row in data["orders"] if row["draft"]]
     data["approved_orders"] = [row for row in data["orders"] if not row["draft"]]

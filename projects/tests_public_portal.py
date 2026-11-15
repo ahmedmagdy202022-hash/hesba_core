@@ -149,6 +149,17 @@ class PageFiguresTests(PortalSetup):
                 for word in BANNED:
                     self.assertNotIn(word, html)
 
+    def test_the_figures_to_date_are_read_once_per_certificate(self):
+        """The page reads each posted certificate once for its running figures, not once per pair (Codex on #442)."""
+
+        posted = list(public._posted(self.project))
+        with mock.patch.object(contract, "effective", wraps=contract.effective) as reading:
+            running = contract.to_date_running(posted)
+        self.assertEqual(reading.call_count, len(posted))
+        self.assertEqual(running, {c.pk: contract.to_date(c) for c in posted})
+        with mock.patch.object(contract, "to_date", side_effect=AssertionError("the page must use the running figures")):
+            self.assertEqual(self.get().status_code, 200)
+
     def test_the_statement_carries_the_deductions_to_date(self):
         self.assertEqual(contract.to_date(self.first), {"gross": D("200000.00"), "retention": D("10000.00"), "recovery": D("20000.00")})
         self.assertEqual(contract.to_date(self.second), {"gross": D("450000.00"), "retention": D("22500.00"), "recovery": D("45000.00")})
@@ -325,6 +336,33 @@ class OwnerApprovalTests(PortalSetup):
         # the page shows the order as it is now, with its new fingerprint
         self.assertEqual(fingerprint_of(response.content.decode(), order), variations.owner_fingerprint(order))
         self.assertNotEqual(seen, variations.owner_fingerprint(order))
+
+    def test_an_edit_landing_while_the_page_renders_cannot_be_approved_unseen(self):
+        """The lines the page shows and the fingerprint it carries come from one reading: an office edit that lands between
+        them leaves the page sealing what it showed, so the approval is refused (Codex on #442)."""
+
+        order, real, done = self.draft_order(), variations.owner_fingerprint, []
+
+        def edit_then_seal(order_now, lines=None):
+            if not done:  # the office saves +5 m³ more on A after the page read the lines, before it sealed them
+                done.append(True)
+                variations.save_order(self.project, self.owner, order=order, order_date=DAY, title="تعديلات الدور الأخير",
+                                      reason="طلب المالك في محضر الاجتماع", extension_days="0",
+                                      changes=[(self.a.pk, "25"), (self.b.pk, "-100")], new_items=[dict(NEW_C)])
+            return real(order_now, lines)
+
+        with mock.patch.object(variations, "owner_fingerprint", side_effect=edit_then_seal):
+            page = self.get().content.decode()
+        self.assertEqual(done, [True])
+        seen = fingerprint_of(page, order)
+        self.assertNotEqual(seen, variations.owner_fingerprint(order))
+        money_before = footprint()
+        response = self.anon.post(self.approve_url(order), {"name": "م. أحمد سامي", "fingerprint": seen, "lang": "ar",
+                                                            "csrfmiddlewaretoken": self.anon.cookies["csrftoken"].value})
+        self.assertEqual(response.status_code, 409)
+        order.refresh_from_db()
+        self.assertEqual((order.status, order.decided_by_id), (VariationStatus.DRAFT, None))
+        self.assertEqual(footprint(), money_before)
 
     def test_approving_the_unchanged_order_records_the_owner_and_moves_no_money(self):
         order = self.draft_order()

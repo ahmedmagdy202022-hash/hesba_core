@@ -571,12 +571,13 @@ def order_value(order, lines=None):
     return money_round(sum((change_value(line.boq_line, line.quantity_change) if line.boq_line_id else line.amount for line in lines), ZERO))
 
 
-def line_rows(order):
-    """The order's lines as a reader sees them. For a draft, a changed item also shows its quantity now and after."""
+def line_rows(order, lines=None):
+    """The order's lines as a reader sees them. For a draft, a changed item also shows its quantity now and after. ``lines``
+    (already loaded) lets a caller show and fingerprint the very same rows (the owner's page, C10)."""
 
     rows = []
     draft = order.status == VariationStatus.DRAFT
-    for line in order.lines.select_related("boq_line"):
+    for line in (order.lines.select_related("boq_line") if lines is None else lines):
         item = line.boq_line
         row = {"line": line, "new": item is None, "amount": line.amount, "rate": line.rate, "now": None, "after": None}
         if item is not None and draft:
