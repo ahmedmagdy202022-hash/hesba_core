@@ -74,6 +74,7 @@ MESSAGES = {
         "boq_after_lump": "المشروع ده اتعمل عليه مستخلص مقطوعية؛ مينفعش تضيف مقايسة بعده عشان الأعمال اللي اتفوترت متتفوترش تاني.", "date_order": "تاريخ المستخلص لازم ميكونش قبل آخر مستخلص ({date}).",
         "boq_locked": "المشروع عليه مستخلصات أو أوامر تغيير معتمدة؛ تعديل الكميات والفئات وإضافة البنود ومسحها يتم بأمر تغيير من «أوامر التغيير».",
         "boq_in_order": "البند ده مذكور في أمر تغيير؛ مينفعش يتمسح.",
+        "boq_in_request": "البند ده مذكور في طلب شراء من الموقع؛ مينفعش يتمسح.",
         "reversed": "الإفراج ده اتلغى بالفعل.", "rates_total": "مجموع نسبة ضمان الأعمال ونسبة استرداد الدفعة المقدمة لازم ميزيدش عن 100%.", "instalment": "التحصيل ده قسط على خطة تقسيط؛ يتربط بالمشروع كتحصيل بس، ولو فاتورته مربوطة بالمشروع ده.", "entity": "مستخلصات المشروع ده بتتعمل من كيان تاني؛ اشتغل من الكيان ده عشان ضمان الأعمال والدفعة المقدمة يفضلوا في مكان واحد.",
     },
     "en": {
@@ -90,6 +91,7 @@ MESSAGES = {
         "boq_after_lump": "This project already has a lump-sum certificate; a bill of quantities cannot be added after it, so billed work is never billed twice.", "date_order": "A certificate cannot be dated before the latest one ({date}).",
         "boq_locked": "This project has certificates or approved variation orders; quantities, rates, new items and deletions go through a variation order (the Variation orders tab).",
         "boq_in_order": "This item is on a variation order and cannot be deleted.",
+        "boq_in_request": "This item is named on a site purchase request and cannot be deleted.",
         "reversed": "This release is already reversed.", "rates_total": "Retention and advance recovery together cannot exceed 100%.", "instalment": "This collection pays an instalment plan; it can be linked only as a collection, and only when its invoice is on this project.", "entity": "This project's certificates are billed from another entity; work in that entity so its retention and advance stay in one place.",
     },
 }
@@ -309,6 +311,8 @@ def delete_boq_line(project, line, user, lang="ar"):
         raise ValidationError(words["boq_locked"])
     if line.variation_lines.exists():  # a variation order (a draft, or one kept as a record) names this item
         raise ValidationError(words["boq_in_order"])
+    if line.purchase_request_lines.exists():  # C7 (HG-125): a purchase request from the site names this item (Codex)
+        raise ValidationError(words["boq_in_request"])
     _audit(project, user, "delete_boq_line", {"line": line.line_number, "description": line.description}, AuditEventType.DELETE)
     line.delete()
 

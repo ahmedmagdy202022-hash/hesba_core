@@ -286,7 +286,7 @@ class ScreenTests(RequestSetup):
         response = self.client.post(self.url("purchase_request_new"), {
             "lang": "ar", "needed_by": (DAY + timedelta(days=7)).isoformat(), "note": "للدور الثالث",
             "item": [str(self.cement.pk), str(self.steel.pk), ""], "description": ["", "", ""], "unit": ["", "", ""],
-            "quantity": ["200", "5", ""], "boq_line": [str(self.a.pk), "", ""], "note": ["", "", ""]})
+            "quantity": ["200", "5", ""], "boq_line": [str(self.a.pk), "", ""], "line_note": ["", "", ""]})
         request = PurchaseRequest.objects.get()
         self.assertRedirects(response, self.url("purchase_request", request.pk, lang="ar"), fetch_redirect_response=False)
         self.assertEqual(request.lines.count(), 2)
@@ -320,7 +320,7 @@ class ScreenTests(RequestSetup):
     def test_a_refusal_is_shown_in_words_with_what_was_typed(self):
         self.client.force_login(self.engineer)
         page = self.client.post(self.url("purchase_request_new"), {"lang": "ar", "item": [""], "description": ["سقالات معدن"], "unit": ["عدد"],
-                                                                   "quantity": ["صفر"], "boq_line": [""], "note": [""]})
+                                                                   "quantity": ["صفر"], "boq_line": [""], "line_note": [""]})
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "data-form-error")
         self.assertContains(page, "السطر 1: الكمية لازم تكون رقم أكبر من صفر.")
@@ -487,6 +487,27 @@ class ScreenTests(RequestSetup):
         self.assertNotContains(tab, "data-new-request")
         self.assertNotContains(self.client.get(self.url("purchase_request", request.pk)), "data-submit-form")
         self.assertContains(self.client.get(self.url("purchase_request_new")), "data-project-closed")
+
+
+class CodexFindingsTests(RequestSetup):
+    """Codex on #430: the document note and the line notes shared one field name; a BOQ line named on a request could not be
+    deleted cleanly (a server error instead of a message)."""
+
+    def test_the_document_note_and_each_lines_note_land_where_they_were_typed(self):
+        self.client.force_login(self.engineer)
+        self.client.post(self.url("purchase_request_new"), {
+            "lang": "ar", "needed_by": (DAY + timedelta(days=7)).isoformat(), "note": "التوريد على البوابة الشمالية",
+            "item": [str(self.cement.pk), "", ""], "description": ["", "", ""], "unit": ["", "", ""], "quantity": ["200", "", ""],
+            "boq_line": ["", "", ""], "line_note": ["مقاوم للكبريتات", "", ""]})
+        request = PurchaseRequest.objects.get()
+        self.assertEqual(request.note, "التوريد على البوابة الشمالية")
+        self.assertEqual([line.note for line in request.lines.all()], ["مقاوم للكبريتات"])
+
+    def test_a_boq_line_named_on_a_request_is_refused_with_a_message_not_a_server_error(self):
+        self.draft()
+        with self.assertRaisesMessage(ValidationError, "طلب شراء"):
+            contract.delete_boq_line(self.project, self.a, self.owner)
+        self.assertTrue(type(self.a).objects.filter(pk=self.a.pk).exists())
 
 
 class DashboardTests(RequestSetup):

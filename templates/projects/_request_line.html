@@ -5,5 +5,5 @@
 <div class="op-field prq-line__qty"><label>{{ pw.f_quantity }}<input name="quantity" inputmode="decimal" dir="ltr" value="{{ row.quantity }}" autocomplete="off"></label></div>
 <div class="op-field prq-line__unit"><label>{{ pw.f_unit }} <small>({{ pw.f_unit_hint }})</small><input name="unit" maxlength="50" value="{{ row.unit }}" list="prq-units" autocomplete="off"></label></div>
 {% if boq %}<div class="op-field prq-line__boq"><label>{{ pw.f_boq }}<select name="boq_line"><option value="">{{ pw.f_no_boq }}</option>{% for line in boq %}<option value="{{ line.pk }}"{% if row.boq_line == line.pk|stringformat:"s" %} selected{% endif %}>{{ line.code|default:line.line_number }} {{ line.description }}</option>{% endfor %}</select></label></div>{% else %}<input type="hidden" name="boq_line" value="">{% endif %}
-<div class="op-field prq-line__note"><label>{{ pw.f_line_note }}<input name="note" maxlength="255" value="{{ row.note }}" autocomplete="off"></label></div>
+<div class="op-field prq-line__note"><label>{{ pw.f_line_note }}<input name="line_note" maxlength="255" value="{{ row.note }}" autocomplete="off"></label></div>
 </fieldset>

@@ -178,7 +178,8 @@ def _items():
 
 def _typed_rows(post):
     keys = ("item", "description", "unit", "quantity", "boq_line", "note")
-    columns = {key: post.getlist(key) for key in keys}
+    # a line's note posts as ``line_note``: ``note`` is the request's own note (Codex: one name shifted every line's note)
+    columns = {key: post.getlist("line_note" if key == "note" else key) for key in keys}
     count = max((len(values) for values in columns.values()), default=0)
     return [{key: (columns[key][index] if index < len(columns[key]) else "") for key in keys} for index in range(count)]
 
