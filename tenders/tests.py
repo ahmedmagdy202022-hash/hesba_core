@@ -253,6 +253,16 @@ class WinTests(TenderSetup):
         self.assertEqual((tender.customer, tender.prospect_name, project.contract_value), (self.customer, "", D("44000.00")))  # 50 × 880.00
         self.assertEqual({line.heading: line.amount for line in project.budget.all()}, {"materials": D("40000.00")})
 
+    def test_a_total_larger_than_a_project_can_hold_is_refused_before_anything_is_made(self):
+        tender = services.save_tender({"name": "عطاء كبير", "customer": self.customer, "overhead_percent": "10", "profit_percent": "12"}, self.owner)
+        item = services.save_item(tender, self.owner, {"description": "خرسانة", "unit": "م³", "quantity": "1000000"})
+        services.save_cost(item, self.owner, {"heading": "materials", "unit_cost": "1000000"})
+        self.assertEqual(services.analysis(tender)["total"], D("1232000000000.00"))  # 1,000,000 × 1,232,000.00
+        with self.assertRaisesMessage(ValidationError, "أكبر من أقصى قيمة"):
+            services.win(tender, self.owner)
+        tender.refresh_from_db()
+        self.assertEqual((tender.status, Project.objects.count()), (TenderStatus.STUDYING, 0))
+
     def test_lost_and_withdrawn_need_a_reason_and_close_the_tender(self):
         lost = self.reference()
         services.close(lost, self.owner, TenderStatus.LOST, "منافس سعره أقل 4%", on=date(2027, 1, 10))

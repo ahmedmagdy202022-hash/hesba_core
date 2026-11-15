@@ -41,6 +41,8 @@ PROFIT = "reports.view_profit_report"
 MAX_ITEMS = 500
 MAX_COSTS = 30
 LIMIT = Decimal("1000000000")
+#: The largest amount a project's money fields hold (14 digits, 2 after the point): the won total and each heading must fit.
+FIELD_MAX = Decimal("999999999999.99")
 
 LABELS = {
     "ar": {
@@ -62,7 +64,7 @@ MESSAGES = {
         "qty": "الكمية لازم تكون رقم أكبر من صفر.", "too_big": "الرقم أكبر من المسموح.", "items_limit": "العطاء وصل لأقصى عدد بنود ({max}).",
         "heading": "اختار بند التكلفة (خامات، عمالة، معدات، ...).", "unit_cost": "تكلفة الوحدة لازم تكون رقم مش سالب.",
         "costs_limit": "البند وصل لأقصى عدد سطور تكلفة ({max}).", "no_items": "العطاء مافيهوش بنود لسه.",
-        "unpriced": "البند {line} ({description}) مالوش تكلفة لسه؛ سعّره الأول.", "win_customer": "اختار العميل اللي هيتعمل له المشروع.",
+        "unpriced": "البند {line} ({description}) مالوش تكلفة لسه؛ سعّره الأول.", "win_customer": "اختار العميل اللي هيتعمل له المشروع.", "too_big": "إجمالي العطاء أو أحد بنود التكلفة أكبر من أقصى قيمة يشيلها المشروع (999,999,999,999.99)؛ راجع الكميات والتكاليف.",
         "reason": "اكتب السبب.", "not_studying": "العطاء اتقدّم بالفعل.",
     },
     "en": {
@@ -73,7 +75,7 @@ MESSAGES = {
         "qty": "The quantity must be a number above zero.", "too_big": "The number is larger than allowed.", "items_limit": "The tender has reached the most items allowed ({max}).",
         "heading": "Choose the cost heading (materials, labour, equipment, ...).", "unit_cost": "The unit cost must be a number, not negative.",
         "costs_limit": "The item has reached the most cost lines allowed ({max}).", "no_items": "The tender has no items yet.",
-        "unpriced": "Item {line} ({description}) has no cost yet; price it first.", "win_customer": "Choose the customer the project is for.",
+        "unpriced": "Item {line} ({description}) has no cost yet; price it first.", "win_customer": "Choose the customer the project is for.", "too_big": "The tender total or one cost heading is larger than a project can hold (999,999,999,999.99); check the quantities and costs.",
         "reason": "Type the reason.", "not_studying": "The tender has already been submitted.",
     },
 }
@@ -410,6 +412,8 @@ def win(tender, user, customer=None, on=None, lang="ar"):
         if figures["unpriced"]:
             row = figures["unpriced"][0]
             raise ValidationError(words["unpriced"].format(line=row["item"].line_number, description=row["item"].description))
+        if figures["total"] > FIELD_MAX or any(amount > FIELD_MAX for amount in figures["by_heading"].values()):
+            raise ValidationError(words["too_big"])  # refused here, before the database would refuse the project's money fields
         project = project_services.save_project({"name": tender.name, "customer": customer, "contract_value": figures["total"],
                                                  "notes": f"{label('statuses', 'won', lang)}: {tender.name}"[:255]}, user, lang=lang)
         for row in figures["rows"]:
