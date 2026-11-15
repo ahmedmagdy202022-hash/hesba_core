@@ -252,6 +252,33 @@ class MoneyPathTests(PlatformSetup):
         with self.assertRaises(ValidationError):
             platforms.open_order(self.owner, self.platform, "  ")
 
+    def test_an_order_collected_or_settled_is_not_handed_over_again_so_the_commission_is_charged_once(self):
+        order = self.platform_order()
+        self.pay(order)
+        first = platforms.hand_over(Order.objects.get(pk=order.pk), self.owner)
+        platforms.collected(Order.objects.get(pk=order.pk), self.owner)
+        with self.assertRaises(ValidationError) as caught:
+            platforms.hand_over(Order.objects.get(pk=order.pk), self.owner)
+        self.assertIn("اتحصّل قبل كده", caught.exception.messages[0])
+        settlement = shipping.settle([first], self.bank(), self.owner)
+        with self.assertRaises(ValidationError):
+            platforms.hand_over(Order.objects.get(pk=order.pk), self.owner)
+        self.assertEqual((Shipment.objects.count(), settlement.fees, shipping.held(self.courier)), (1, D("22.57"), D("0.00")))
+        response = self.order_post(Order.objects.get(pk=order.pk), "platform_hand_over")  # a stale page sends it again
+        self.assertEqual(Shipment.objects.count(), 1)
+        self.assert_balanced()
+
+    def test_the_platform_number_check_and_the_new_order_run_under_one_lock(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as queries:
+            platforms.open_order(self.owner, self.platform, "TB-91")
+        locked = [q["sql"] for q in queries if "FOR UPDATE" in q["sql"].upper()]
+        if connection.features.has_select_for_update:  # PostgreSQL: the platform's customer row is locked first
+            self.assertTrue(any("customer" in sql.lower() for sql in locked), locked)
+        self.assertEqual(Order.objects.filter(notes="طلبات #TB-91").count(), 1)
+
     def test_handing_over_before_paying_or_collecting_before_handing_over_is_refused(self):
         order = self.platform_order()
         with self.assertRaises(ValidationError):

@@ -38,7 +38,7 @@ MESSAGES = {
         "not_its_order": "حساب {name} لطلبات {name} بس؛ افتح الطلب من «طلب منصة» على شاشة الطاولات.",
         "dispatch": "طلب {name} بيستلمه مندوب {name}؛ مفيش طيار ولا رسوم توصيل من عندنا.",
         "not_paid": "الطلب لازم يتدفع (يتسجّل على المنصة) الأول.", "not_platform": "ده مش طلب منصة.",
-        "no_shipment": "الطلب ده لسه ما اتسلّمش لمندوب المنصة.", "note": "{name} #{number}", "receiver": "يستلمه مندوب {name}",
+        "no_shipment": "الطلب ده لسه ما اتسلّمش لمندوب المنصة.", "handed_done": "الطلب ده اتسلّم لمندوب {name} واتحصّل قبل كده؛ مش هيتسلّم تاني.", "note": "{name} #{number}", "receiver": "يستلمه مندوب {name}",
     },
     "en": {
         "customer": "Choose the platform's customer (a named customer, not the walk-in).", "courier": "Choose the courier that stands for the platform.",
@@ -51,7 +51,7 @@ MESSAGES = {
         "not_its_order": "{name}'s account is for {name} orders only; open the order from “Platform order” on the tables board.",
         "dispatch": "A {name} order is picked up by {name}'s rider; there is no driver or delivery fee of ours.",
         "not_paid": "The order must be paid (posted on the platform) first.", "not_platform": "This is not a platform order.",
-        "no_shipment": "This order has not been handed to the platform's rider yet.", "note": "{name} #{number}", "receiver": "Picked up by {name}'s rider",
+        "no_shipment": "This order has not been handed to the platform's rider yet.", "handed_done": "This order was already handed to {name}'s rider and collected; it is not handed over again.", "note": "{name} #{number}", "receiver": "Picked up by {name}'s rider",
     },
 }
 
@@ -252,11 +252,15 @@ def open_order(user, platform, number, *, address="", phone="", brand=None, lang
     if working is not None:
         check_branch(platform, working, lang)
     marked = note(platform, number, "ar")
-    taken = Order.objects.filter(customer=platform.customer, notes=marked).exclude(status=OrderStatus.CANCELLED).first()
-    if taken is not None:
-        raise ValidationError(text["twice"].format(name=platform.name, order=taken.number))
-    return services.open_order(user, kind=OrderKind.DELIVERY, customer=platform.customer, address=(address or "").strip() or text["receiver"].format(name=platform.name),
-                               phone=phone, notes=marked, lang=lang, delivery_fee=None, entity=entity, brand=brand)
+    with transaction.atomic():
+        # The platform's customer row is locked for the check and the creation, so two clerks typing the same platform
+        # number at once cannot both pass the check and open two payable orders (Codex #425).
+        type(platform.customer).objects.select_for_update().filter(pk=platform.customer.pk).first()
+        taken = Order.objects.filter(customer=platform.customer, notes=marked).exclude(status=OrderStatus.CANCELLED).first()
+        if taken is not None:
+            raise ValidationError(text["twice"].format(name=platform.name, order=taken.number))
+        return services.open_order(user, kind=OrderKind.DELIVERY, customer=platform.customer, address=(address or "").strip() or text["receiver"].format(name=platform.name),
+                                   phone=phone, notes=marked, lang=lang, delivery_fee=None, entity=entity, brand=brand)
 
 
 def check_payer(order, customer, *, tendered, tenders, gift, points, lang="ar"):
@@ -316,9 +320,17 @@ def hand_over(order, user, lang="ar"):
 
     from shipping import services as shipping
 
+    from sales.models import SalesInvoice
+    from shipping.models import Shipment, ShipmentStatus
+
     platform = _paid_platform_order(order, lang)
-    invoice = order.invoice
-    return shipping.ship(invoice, platform.courier, user, {"tracking_number": number_of(order), "fee": str(platform.commission_on(invoice.total_amount))}, lang)
+    with transaction.atomic():
+        # Under the invoice's lock: an order already collected or settled is not handed over again, or a second shipment
+        # would carry the commission a second time (Codex #425). After a return or a loss it may go out again.
+        invoice = SalesInvoice.objects.select_for_update().get(pk=order.invoice_id)
+        if Shipment.objects.filter(invoice=invoice, status__in=(ShipmentStatus.DELIVERED, ShipmentStatus.SETTLED)).exists():
+            raise ValidationError(words(lang)["handed_done"].format(name=platform.name))
+        return shipping.ship(invoice, platform.courier, user, {"tracking_number": number_of(order), "fee": str(platform.commission_on(invoice.total_amount))}, lang)
 
 
 def collected(order, user, lang="ar"):
