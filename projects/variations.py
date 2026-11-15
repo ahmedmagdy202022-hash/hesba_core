@@ -28,14 +28,17 @@ Nothing here moves money: no invoice, no payment, no stock, cashbox, customer-le
 certificate is touched. Every rule lives in this module; the views only call it.
 """
 
+import hmac
+import json
 from datetime import date as date_type
 from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 
 from audit.models import AuditEventType, AuditLog
 from config.money import money_round
@@ -74,6 +77,10 @@ MESSAGES = {
         "approved_on": "تاريخ اعتماد المالك مش صحيح.", "approved_future": "تاريخ اعتماد المالك لازم يكون النهارده أو قبله.",
         "approved_before": "تاريخ اعتماد المالك مينفعش يكون قبل تاريخ الأمر ({date}).",
         "mismatch": "قيمة العقد بعد الاعتماد مش مساوية للقيمة الأصلية زائد أوامر التغيير المعتمدة، فالاعتماد ما اتسجّلش. تواصل مع الدعم الفني.",
+        # C10 (HG-135): the owner's approval from the project's link
+        "owner_changed": "أمر التغيير ده اتعدّل بعد ما فتحت الصفحة. راجع الأمر بعد التعديل، وبعدين اعتمده.",
+        "owner_name": "اكتب اسم حضرتك عشان يتسجّل مع الاعتماد.", "owner_name_long": "الاسم أطول من المسموح ({limit} حرف).",
+        "owner_note": "اعتمده المالك من رابط المشروع: {name}",
     },
     "en": {
         "denied": "Only the site engineer, or someone who may create invoices, can record a variation order.",
@@ -97,6 +104,9 @@ MESSAGES = {
         "approved_on": "The date of the owner's approval is not valid.", "approved_future": "The date of the owner's approval must be today or earlier.",
         "approved_before": "The owner's approval cannot be dated before the order ({date}).",
         "mismatch": "The contract value after the approval would not equal the original value plus the approved variation orders, so nothing was recorded. Contact support.",
+        "owner_changed": "This variation order was changed after you opened the page. Review the order as it is now, then approve it.",
+        "owner_name": "Type your name so it is recorded with the approval.", "owner_name_long": "The name is longer than allowed ({limit} characters).",
+        "owner_note": "Approved by the owner from the project link: {name}",
     },
 }
 
@@ -355,11 +365,27 @@ def approve(project, order, user, *, approved_on=None, owner_reference="", lang=
     words = _words(lang)
     if not can_decide(user):
         raise PermissionDenied(words["decide_denied"])
+    return _approve(project, order, user, approved_on=approved_on, owner_reference=owner_reference, lang=lang)
+
+
+@transaction.atomic
+def _approve(project, order, user, *, approved_on=None, owner_reference="", lang="ar", by_owner=None):
+    """The approval itself, shared by the office (``approve``) and the owner's link (``approve_by_owner``, C10, HG-135).
+
+    ``by_owner`` is None for the office: the signed copy must be attached. From the owner's link it is
+    ``{"name": the typed name, "fingerprint": the one the owner's page showed}``: the order must still be exactly the one
+    the owner saw (compared here, after the order row is locked), and the typed name stands in for the signed copy.
+    Everything else (the locks, the omission floor, the writes into the bill of quantities, the original value and the
+    closing check) is the same code for both."""
+
+    words = _words(lang)
     given = project
     project = contract._locked(project, lang)
     order = VariationOrder.objects.select_for_update().get(pk=order.pk, project=project)
     if order.status != VariationStatus.DRAFT:
-        raise ValidationError(words["not_draft"])
+        raise ValidationError(words["not_draft"], code="not_draft")
+    if by_owner is not None and not hmac.compare_digest(str(by_owner.get("fingerprint") or ""), owner_fingerprint(order)):
+        raise ValidationError(words["owner_changed"], code="owner_changed")  # the order changed since the owner's page was shown
     today = timezone.localdate()
     day = today if approved_on in (None, "") else parse_date(approved_on)
     if day is None:
@@ -370,7 +396,7 @@ def approve(project, order, user, *, approved_on=None, owner_reference="", lang=
         from settings_core.templatetags.hesba_format import day_text
 
         raise ValidationError(words["approved_before"].format(date=day_text(order.order_date, "en" if lang == "en" else "ar")))
-    if not signed_copies(order):
+    if by_owner is None and not signed_copies(order):
         raise ValidationError(words["signed_copy"])
 
     before = contract.contract_value(project)
@@ -409,16 +435,76 @@ def approve(project, order, user, *, approved_on=None, owner_reference="", lang=
     project.save(update_fields=["contract_value", "original_value"])
     order.status, order.value, order.approved_on = VariationStatus.APPROVED, money_round(total), day
     order.owner_reference, order.decided_by, order.decided_at = str(owner_reference or "").strip()[:80], user, timezone.now()
+    if by_owner is not None:
+        order.decision_note = words["owner_note"].format(name=order.owner_reference)[:255]
     order.save()
     after = contract.contract_value(project)
     if after != money_round(before + total) or revised_value(project) != after:
         raise ValidationError(words["mismatch"])  # the arithmetic must close, or the whole approval is undone
     _audit(order, user, "approve_variation_order",
            {**_snapshot(order), "approved_on": day.isoformat(), "contract_before": str(before), "contract_after": str(after),
-            "original_value": str(project.original_value), "signed_copies": signed_copies(order)},
+            "original_value": str(project.original_value), "signed_copies": signed_copies(order),
+            **({"via": "owner_link"} if by_owner is not None else {})},
            {"status": VariationStatus.DRAFT, "contract_before": str(before)})
     given.contract_value, given.original_value = project.contract_value, project.original_value  # the caller's copy reads the new figures too
     return order
+
+
+# ---- the owner's approval from the project's link (C10, HG-135) ----
+
+OWNER_LINK_USERNAME = "hesba-owner-link"
+OWNER_NAME_MAX = 80
+FINGERPRINT_SALT = "hesba.projects.variation.owner.v1"
+
+
+def owner_link_user():
+    """The account an approval from the owner's link is recorded under (``decided_by``, the new items' ``created_by`` and the
+    audit row need a user). It cannot sign in: inactive, no usable password, no role and no permission. The staff page shows
+    it by its first name, «رابط المالك»; the owner's typed name is on the order itself."""
+
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    found = User.objects.filter(username=OWNER_LINK_USERNAME).first()
+    if found is not None:
+        return found
+    try:
+        with transaction.atomic():
+            user = User(username=OWNER_LINK_USERNAME, first_name="رابط المالك", is_active=False, is_staff=False, is_superuser=False)
+            user.set_unusable_password()
+            user.save()
+            return user
+    except IntegrityError:
+        return User.objects.get(username=OWNER_LINK_USERNAME)
+
+
+def owner_fingerprint(order, lines=None):
+    """A keyed hash of the order as the owner's page shows it: its number, date, title, reason, extension, lump amount, status,
+    value and every line (item, code, description, unit, change, rate, amount). Any edit to a draft changes it."""
+
+    lines = list(order.lines.select_related("boq_line")) if lines is None else lines
+    rows = [[line.boq_line_id, line.code, line.description, line.unit, str(line.quantity_change), str(line.rate), str(line.amount)] for line in lines]
+    data = json.dumps([order.project_id, order.pk, order.number, order.order_date.isoformat(), order.title, order.reason, order.extension_days,
+                       str(order.lump_amount) if order.lump_amount is not None else "", order.status, str(order_value(order, lines)), rows],
+                      ensure_ascii=False)
+    return salted_hmac(FINGERPRINT_SALT, data, algorithm="sha256").hexdigest()[:32]
+
+
+def approve_by_owner(project, order, *, name, fingerprint, lang="ar"):
+    """The owner approves a draft order from the project's link (no account): the same approval as the office's, through the
+    same ``_approve``, recorded under ``owner_link_user`` with the typed name as the owner's reference.
+
+    The link is the authority and it can do only this. It is refused when the order changed since the owner's page showed
+    it (``fingerprint``), when it is no longer a draft, and for anything the office's approval would refuse (the omission
+    floor, a closed project, the money in another entity). Writes no money, as the office's approval."""
+
+    words = _words(lang)
+    name = " ".join(str(name or "").split())
+    if not name:
+        raise ValidationError(words["owner_name"], code="owner_name")
+    if len(name) > OWNER_NAME_MAX:
+        raise ValidationError(words["owner_name_long"].format(limit=OWNER_NAME_MAX), code="owner_name")
+    return _approve(project, order, owner_link_user(), owner_reference=name, lang=lang, by_owner={"name": name, "fingerprint": fingerprint})
 
 
 @transaction.atomic
