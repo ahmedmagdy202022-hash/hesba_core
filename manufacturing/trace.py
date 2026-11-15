@@ -99,28 +99,34 @@ def sales_after(lot):
     # not counted as ahead of a sale made before it existed; a lot registered by hand has none and counts from its date.
     ahead = [(batch, _arrival(batch)) for batch in counted_batches().filter(item_id=lot.item_id, location_id=lot.location_id).select_related("production_run")
              if batch.pk != lot.pk and _rank(batch) > _rank(lot)]
-    on_hand, end_pk, end_date = ZERO, None, None
-    for pk, moved_on, kind, quantity, _invoice, _reversal in movements:
+    # Replay every movement. The lot holds stock while what is on hand is more than the lots ahead of it hold; a sale made
+    # while it does is listed. A lot used up can hold stock again (a cancelled sale or a return brings units back, and the
+    # positions hand them to it), so the replay never stops at the first time it runs out (Codex #438): later sales from the
+    # restored stock are listed too, and "open" / "to" describe the last state.
+    def ahead_of(pk, moved_on):
+        return sum((batch.quantity for batch, arrived in ahead if (arrived < pk if arrived is not None else batch.received_on <= moved_on)), ZERO)
+
+    on_hand, end_date, invoice_ids, holding = ZERO, None, [], True
+    for pk, moved_on, kind, quantity, invoice_id, reversal in movements:
+        before = on_hand
         if kind in IN_MOVEMENT_TYPES:
             on_hand += quantity
         elif kind in OUT_MOVEMENT_TYPES:
             on_hand -= quantity
         if pk <= made.pk:
             continue
-        if on_hand <= sum((batch.quantity for batch, arrived in ahead if (arrived < pk if arrived is not None else batch.received_on <= moved_on)), ZERO):
-            end_pk, end_date = pk, moved_on
-            break
-    invoice_ids = []
-    for pk, _moved_on, kind, _quantity, invoice_id, reversal in movements:
-        if pk <= made.pk or (end_pk is not None and pk > end_pk):
-            continue
-        if kind == StockMovementType.SALE_OUT and invoice_id and reversal is None and invoice_id not in invoice_ids:
+        ahead_now = ahead_of(pk, moved_on)
+        if (kind == StockMovementType.SALE_OUT and invoice_id and reversal is None and before > ahead_now
+                and invoice_id not in invoice_ids):
             invoice_ids.append(invoice_id)
+        was_holding, holding = holding, on_hand > ahead_now
+        if was_holding and not holding:
+            end_date = moved_on  # the last time it ran out
     invoices = (SalesInvoice.objects.filter(pk__in=invoice_ids, status=SalesInvoiceStatus.POSTED, selling_location_id=lot.location_id)
                 .select_related("customer").order_by("invoice_date", "pk"))
     sold = dict(SalesLine.objects.filter(invoice__in=invoices, item_id=lot.item_id).order_by().values_list("invoice_id").annotate(total=Sum("quantity")))
     sales = [{"invoice": invoice, "customer": invoice.customer, "quantity": sold.get(invoice.pk, ZERO)} for invoice in invoices]
-    return {"sales": sales, "open": end_pk is None, "from": run.run_date, "to": end_date}
+    return {"sales": sales, "open": holding, "from": run.run_date, "to": None if holding else end_date}
 
 
 def forward(lot):
