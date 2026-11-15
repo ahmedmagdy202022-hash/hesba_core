@@ -37,13 +37,13 @@
   <p class="td-p-internal" data-print-internal>{{ words.p_internal }}</p>
   <table class="pr-lines td-p-analysis" data-print-lines>
     <thead><tr><th>{{ words.code }}</th><th>{{ words.description }}</th><th>{{ words.heading }}</th><th class="pr-num">{{ words.unit_cost }}</th><th class="pr-num">{{ words.qty }}</th><th class="pr-num">{{ words.amount }}</th></tr></thead>
-    {% for row in rows %}<tbody data-print-item="{{ row.item.line_number }}">
-      <tr class="td-p-item"><td><bdi>{{ row.item.code|default:row.item.line_number }}</bdi></td><td class="pr-item" colspan="3">{{ row.item.description }}</td><td class="pr-num">{{ row.item.quantity|qty }} <bdi>{{ row.item.unit }}</bdi></td><td></td></tr>
+    {% for row in rows %}{% with line=row.item %}<tbody data-print-item="{{ line.line_number }}">
+      <tr class="td-p-item"><td><bdi>{{ line.code|default:line.line_number }}</bdi></td><td class="pr-item" colspan="3">{{ line.description }}</td><td class="pr-num">{{ line.quantity|qty }} <bdi>{{ line.unit }}</bdi></td><td></td></tr>
       {% for c in row.cost_rows %}<tr><td></td><td>{{ c.c.description }}</td><td>{{ c.heading }}</td><td class="pr-num">{{ c.c.unit_cost|money }}</td><td></td><td></td></tr>{% endfor %}
       <tr class="td-p-sum"><td></td><td colspan="2">{{ words.direct }}</td><td class="pr-num">{{ row.direct|money }}</td><td></td><td></td></tr>
       <tr class="td-p-sum"><td></td><td colspan="2">{{ words.after_overhead }}</td><td class="pr-num">{{ row.with_overhead|money }}</td><td></td><td></td></tr>
       <tr class="td-p-sum td-p-rate"><td></td><td colspan="2">{{ words.rate }}</td><td class="pr-num">{{ row.rate|money }}</td><td></td><td class="pr-num">{{ row.total|money }}</td></tr>
-    </tbody>{% endfor %}
+    </tbody>{% endwith %}{% endfor %}
   </table>
   <section class="pr-totals"><dl>
     {% for h in figures.headings %}<div data-print-heading-amount="{{ h.heading }}"><dt>{{ h.label }} (<bdi dir="ltr">{{ h.share }}%</bdi>)</dt><dd>{{ h.amount|money }}</dd></div>{% endfor %}

@@ -35,7 +35,7 @@
   <section class="pr-party"><span class="pr-party__label">{{ words.p_to }}</span><strong class="pr-party__name">{{ party }}</strong></section>
   <table class="pr-lines" data-print-lines>
     <thead><tr><th class="pr-col-no">{{ words.p_no }}</th><th>{{ words.code }}</th><th>{{ words.description }}</th><th>{{ words.unit }}</th><th class="pr-num">{{ words.qty }}</th><th class="pr-num">{{ words.rate }}</th><th class="pr-num">{{ words.amount }}</th></tr></thead>
-    <tbody>{% for row in figures.rows %}<tr data-print-item="{{ row.item.line_number }}"><td class="pr-col-no">{{ row.item.line_number }}</td><td><bdi>{{ row.item.code }}</bdi></td><td class="pr-item">{{ row.item.description }}</td><td><bdi>{{ row.item.unit }}</bdi></td><td class="pr-num">{{ row.item.quantity|qty }}</td><td class="pr-num">{{ row.rate|money }}</td><td class="pr-num">{{ row.total|money }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for row in figures.rows %}{% with line=row.item %}<tr data-print-item="{{ line.line_number }}"><td class="pr-col-no">{{ line.line_number }}</td><td><bdi>{{ line.code }}</bdi></td><td class="pr-item">{{ line.description }}</td><td><bdi>{{ line.unit }}</bdi></td><td class="pr-num">{{ line.quantity|qty }}</td><td class="pr-num">{{ row.rate|money }}</td><td class="pr-num">{{ row.total|money }}</td></tr>{% endwith %}{% endfor %}</tbody>
   </table>
   <section class="pr-totals"><dl><div class="pr-totals__grand"><dt>{{ words.total }}</dt><dd data-print-total>{{ figures.total|money }} <small>{{ company.currency }}</small></dd></div></dl></section>
   <section class="pr-signatures"><div>{{ words.p_signature }}</div></section>

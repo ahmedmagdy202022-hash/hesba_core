@@ -20,17 +20,17 @@
 
 <h2 class="td-h2">{{ words.items }}</h2>
 <div class="td-items" data-tender-items>
-{% for row in rows %}{% with item=row.item %}<article class="td-item{% if row.direct <= 0 %} is-unpriced{% endif %}" data-item="{{ item.line_number }}">
-<header class="td-item__head"><span class="td-item__no"><bdi dir="ltr">{{ item.code|default:item.line_number }}</bdi></span><h3>{{ item.description }}</h3>{% if row.direct <= 0 %}<span class="td-chip" data-unpriced>{{ words.unpriced }}</span>{% endif %}</header>
+{% for row in rows %}{% with line=row.item %}<article class="td-item{% if row.direct <= 0 %} is-unpriced{% endif %}" data-item="{{ line.line_number }}">
+<header class="td-item__head"><span class="td-item__no"><bdi dir="ltr">{{ line.code|default:line.line_number }}</bdi></span><h3>{{ line.description }}</h3>{% if row.direct <= 0 %}<span class="td-chip" data-unpriced>{{ words.unpriced }}</span>{% endif %}</header>
 <dl class="td-item__figures">
-<div><dt>{{ words.qty }}</dt><dd><bdi>{{ item.quantity|qty }}</bdi> <bdi>{{ item.unit }}</bdi></dd></div>
-<div><dt>{{ words.rate }}</dt><dd><bdi data-item-rate="{{ item.line_number }}">{{ row.rate|money }}</bdi></dd></div>
-<div><dt>{{ words.amount }}</dt><dd><strong><bdi data-item-total="{{ item.line_number }}">{{ row.total|money }}</bdi></strong></dd></div>
+<div><dt>{{ words.qty }}</dt><dd><bdi>{{ line.quantity|qty }}</bdi> <bdi>{{ line.unit }}</bdi></dd></div>
+<div><dt>{{ words.rate }}</dt><dd><bdi data-item-rate="{{ line.line_number }}">{{ row.rate|money }}</bdi></dd></div>
+<div><dt>{{ words.amount }}</dt><dd><strong><bdi data-item-total="{{ line.line_number }}">{{ row.total|money }}</bdi></strong></dd></div>
 </dl>
-{% if can_costs %}<ul class="td-costs" data-item-costs="{{ item.line_number }}">{% for c in row.cost_rows %}<li><span>{{ c.heading }}{% if c.c.description %} · {{ c.c.description }}{% endif %}</span><bdi data-cost-amount>{{ c.c.unit_cost|money }}</bdi></li>{% empty %}<li class="td-costs__none">{{ words.no_costs }}</li>{% endfor %}
-{% if row.costs %}<li class="td-costs__sum"><span>{{ words.direct }}</span><bdi data-item-direct="{{ item.line_number }}">{{ row.direct|money }}</bdi></li>
-<li class="td-costs__sum"><span>{{ words.after_overhead }}</span><bdi data-item-overhead="{{ item.line_number }}">{{ row.with_overhead|money }}</bdi></li>{% endif %}</ul>{% endif %}
-<a class="td-item__link" href="{% url 'tenders:item' t.pk item.pk %}?lang={{ lang }}" data-item-link="{{ item.line_number }}">{% if is_open %}{{ words.edit_item }}{% else %}{{ words.open }}{% endif %}</a>
+{% if can_costs %}<ul class="td-costs" data-item-costs="{{ line.line_number }}">{% for c in row.cost_rows %}<li><span>{{ c.heading }}{% if c.c.description %} · {{ c.c.description }}{% endif %}</span><bdi data-cost-amount>{{ c.c.unit_cost|money }}</bdi></li>{% empty %}<li class="td-costs__none">{{ words.no_costs }}</li>{% endfor %}
+{% if row.costs %}<li class="td-costs__sum"><span>{{ words.direct }}</span><bdi data-item-direct="{{ line.line_number }}">{{ row.direct|money }}</bdi></li>
+<li class="td-costs__sum"><span>{{ words.after_overhead }}</span><bdi data-item-overhead="{{ line.line_number }}">{{ row.with_overhead|money }}</bdi></li>{% endif %}</ul>{% endif %}
+<a class="td-item__link" href="{% url 'tenders:item' t.pk line.pk %}?lang={{ lang }}" data-item-link="{{ line.line_number }}">{% if is_open %}{{ words.edit_item }}{% else %}{{ words.open }}{% endif %}</a>
 </article>{% endwith %}
 {% empty %}<p class="op-empty td-empty">{{ words.no_items }}</p>{% endfor %}
 </div>

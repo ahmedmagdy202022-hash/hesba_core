@@ -271,7 +271,7 @@ def item_detail(request, pk, iid):
     can_costs = services.can_see_costs(request.user)
     row = services.price_item(item, tender.overhead_percent, tender.profit_percent)
     return render(request, "tenders/item.html", _context(
-        request, t=tender, item=item, row=row, can_costs=can_costs, is_open=tender.is_open,
+        request, t=tender, line=item, row=row, can_costs=can_costs, is_open=tender.is_open,
         cost_rows=[{"c": cost, "heading": services.label("headings", cost.heading, lang)} for cost in row["costs"]],
         headings=[(value, services.label("headings", value, lang)) for value in services.CostHeading.values],
         item_title=words["item_title"].format(line=item.code or item.line_number),
