@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import mrp_views, order_views, trace_views, views
+from . import costs_views, mrp_views, order_views, trace_views, views
 
 
 app_name = "manufacturing"
@@ -14,5 +14,6 @@ urlpatterns = [
     path("orders/<int:pk>/", order_views.order_detail, name="order"),
     path("mrp/", mrp_views.screen, name="mrp"),
     path("trace/", trace_views.trace_screen, name="trace"),
+    path("costs/", costs_views.costs_screen, name="costs"),
     path("orders/for-sale/<int:line_pk>/", order_views.make_for_sale, name="make_for_sale"),
 ]
