@@ -4926,7 +4926,7 @@ HG-100 is reserved by another open task and is not in this tree: the gap is on p
   3. **The signed copy is not required on the owner path.** The typed name and the link replace it; whether that suffices legally for Ahmed's customers is a business question.
   4. **The throttles are per process** (no shared cache in production), as on the other public pages: the real limits are 2–3 times the stated ones.
   5. **«To date» uses `effective` (after posted returns).** A certificate later reduced by a return shows its own stored deductions beside a «to date» that already took the return into account; it agrees with the project's own position, not with the paper printed before the return.
-  6. **The approval actor** is one shared inactive account; the staff page reads «رابط المالك» and the typed name sits in the owner's reference. Anything that lists all users will list it, as it lists the online-booking account.
+  6. **The approval actor** is one shared inactive account; the staff page reads «رابط المالك» and the typed name sits in the owner's reference. Anything that lists all users will list it, as it lists the online-booking account (the users screen and the user's edit page render with it, checked). Its first name is Arabic, so the English staff page reads «Approval recorded by رابط المالك»; the typed name beside it is the owner's.
   7. The screens have not been seen by Ahmed.
 - **Open questions for Ahmed (the default built in brackets):**
   1. Who may make the owner's link? (**Whoever may approve variation orders on the staff side**, because the link can approve as the owner.)
