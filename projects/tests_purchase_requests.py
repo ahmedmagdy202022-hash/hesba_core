@@ -444,6 +444,17 @@ class ScreenTests(RequestSetup):
         self.assertEqual(PurchaseRequest.objects.get(pk=done.pk).purchase_order.status, "draft")
         self.assertEqual(PurchaseOrder.objects.count(), 2)
 
+    def test_the_default_unit_reads_in_the_pages_language(self):
+        nails = make_item(item_code="NL-1", item_name="مسامير 3 بوصة")  # Item.unit stays the stored default "unit"
+        request = self.submitted(rows=[{"item": str(nails.pk), "quantity": "40"}])
+        self.client.force_login(self.owner)
+        arabic = self.client.get(self.url("purchase_request", request.pk)).content.decode()
+        self.assertIn("<bdi>قطعة</bdi>", arabic)
+        self.assertIn("مسامير 3 بوصة (قطعة)", self.client.get(self.url("purchase_request_new")).content.decode())
+        self.assertIn("<bdi>piece</bdi>", self.client.get(self.url("purchase_request", request.pk, lang="en")).content.decode())
+        done = prq.approve(self.project, request, self.owner, supplier=self.supplier, quantities={request.lines.get().pk: "30"})
+        self.assertEqual(done.decision_note, "«مسامير 3 بوصة»: اتطلب 40 واتوافق على 30 قطعة")
+
     def test_a_closed_project_is_read_only(self):
         request = self.draft()
         self.project.status = "done"

@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from permissions.decorators import require_any_permission
-from settings_core.templatetags.hesba_format import day_text
+from settings_core.templatetags.hesba_format import day_text, unit_label
 from settings_core.ui_messages import translate
 
 from . import purchase_requests as prq
@@ -307,7 +307,7 @@ def request_detail(request, pk, rid):
     lines = []
     for line in item.lines.select_related("item", "boq_line"):
         lines.append({"line": line, "what": line.item.item_name if line.item_id else line.description, "code": line.item.item_code if line.item_id else "",
-                      "qty": _qty(line.quantity), "asked": words["asked"].format(qty=_qty(line.requested_quantity)) if line.requested_quantity is not None else "",
+                      "unit": unit_label(line.unit, lang) if line.item_id else line.unit, "qty": _qty(line.quantity), "asked": words["asked"].format(qty=_qty(line.requested_quantity)) if line.requested_quantity is not None else "",
                       "boq": f"{line.boq_line.code or line.boq_line.line_number} {line.boq_line.description}" if line.boq_line_id else ""})
     deciding = is_open and can_decide and not mine
     decided = ""

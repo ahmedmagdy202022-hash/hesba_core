@@ -13,7 +13,7 @@
 <h3 class="sr-sub">{{ pw.lines }}</h3>
 <ul class="prq-sheet" data-request-lines>{% for row in lines %}<li data-request-line="{{ forloop.counter }}">
 <div class="prq-sheet__what"><b>{{ row.what }}</b>{% if row.code %} <small dir="ltr">{{ row.code }}</small>{% endif %}{% if row.boq %}<small class="prq-sheet__boq">{{ pw.boq }} {{ row.boq }}</small>{% endif %}{% if row.line.note %}<small>{{ row.line.note }}</small>{% endif %}</div>
-<div class="prq-sheet__qty"><b><span dir="ltr" data-line-qty>{{ row.qty }}</span> <bdi>{{ row.line.unit }}</bdi></b>{% if row.asked %}<small data-line-asked>{{ row.asked }}</small>{% endif %}</div>
+<div class="prq-sheet__qty"><b><span dir="ltr" data-line-qty>{{ row.qty }}</span> <bdi>{{ row.unit }}</bdi></b>{% if row.asked %}<small data-line-asked>{{ row.asked }}</small>{% endif %}</div>
 </li>{% endfor %}</ul>
 {% if item.decision_note %}<h3 class="sr-sub">{% if item.status == 'rejected' %}{{ pw.reason }}{% else %}{{ pw.decision }}{% endif %}</h3><p class="sr-text" data-text="decision">{{ item.decision_note|linebreaksbr }}</p>{% endif %}
 <p class="sr-meta" data-request-author>{{ written }}{% if sent %}<br>{{ sent }}{% endif %}{% if decided %}<br>{{ decided }}{% endif %}</p>
@@ -29,8 +29,8 @@
 <h2>{{ pw.approve_title }}</h2><p class="op-muted">{{ pw.approve_hint }}</p>
 <div class="op-field"><label for="prq-supplier">{{ pw.supplier }}</label><select id="prq-supplier" name="supplier"><option value="">{{ pw.choose }}</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}">{{ supplier.name }}</option>{% endfor %}</select></div>
 <div class="prq-approve" data-approve-lines>{% for row in lines %}<div class="prq-approve__row" data-approve-line="{{ row.line.pk }}">
-<div class="prq-approve__what"><b>{{ row.what }}</b><small>{% if row.line.unit %}<bdi>{{ row.line.unit }}</bdi>{% endif %}</small></div>
-{% if not row.line.item_id %}<div class="op-field"><label for="prq-i{{ row.line.pk }}">{{ pw.pick_item }}</label><select id="prq-i{{ row.line.pk }}" name="i_{{ row.line.pk }}"><option value="">{{ pw.f_free }}</option>{% for choice in items %}<option value="{{ choice.pk }}">{{ choice.item_name }} ({{ choice.unit }})</option>{% endfor %}</select></div>{% endif %}
+<div class="prq-approve__what"><b>{{ row.what }}</b><small>{% if row.unit %}<bdi>{{ row.unit }}</bdi>{% endif %}</small></div>
+{% if not row.line.item_id %}<div class="op-field"><label for="prq-i{{ row.line.pk }}">{{ pw.pick_item }}</label><select id="prq-i{{ row.line.pk }}" name="i_{{ row.line.pk }}"><option value="">{{ pw.f_free }}</option>{% for choice in items %}<option value="{{ choice.pk }}">{{ choice.item_name }} ({{ choice.unit|unit_label:lang }})</option>{% endfor %}</select></div>{% endif %}
 <div class="op-field"><label for="prq-q{{ row.line.pk }}">{{ pw.approved_qty }}</label><input id="prq-q{{ row.line.pk }}" name="q_{{ row.line.pk }}" value="{{ row.qty }}" inputmode="decimal" dir="ltr" autocomplete="off"></div>
 </div>{% endfor %}</div>
 <div class="op-field"><label for="prq-approve-note">{{ pw.approve_note }}</label><input id="prq-approve-note" name="note" maxlength="1000" autocomplete="off"></div>

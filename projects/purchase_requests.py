@@ -33,6 +33,7 @@ from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
 from permissions.services import user_has_permission
+from settings_core.templatetags.hesba_format import unit_label
 
 from . import access, contract, services
 from .models import BoqLine, Project, PurchaseRequest, PurchaseRequestLine, PurchaseRequestStatus as Status
@@ -216,7 +217,7 @@ def _item(raw):
 
 
 def _text(value):
-    return f"{value.normalize():f}" if value == value.to_integral() else f"{value.normalize():f}"
+    return f"{value.normalize():f}"
 
 
 def _what(line):
@@ -465,7 +466,8 @@ def approve(project, request, user, *, supplier=None, quantities=None, items=Non
             if quantity is None:
                 raise ValidationError(words["quantity"].format(what=what))
             if quantity != line.quantity:
-                changes.append(words["changed_qty"].format(what=_what(line), before=_text(line.quantity), after=_text(quantity), unit=line.unit).strip())
+                unit = unit_label(line.unit, lang) if line.item_id else line.unit
+                changes.append(words["changed_qty"].format(what=_what(line), before=_text(line.quantity), after=_text(quantity), unit=unit).strip())
                 line.requested_quantity, line.quantity = line.quantity, quantity
                 fields += ["requested_quantity", "quantity"]
         if fields:
