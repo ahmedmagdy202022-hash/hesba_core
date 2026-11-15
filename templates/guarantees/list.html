@@ -26,6 +26,6 @@
 </tr>{% endwith %}
 {% empty %}<tr><td colspan="8" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
 </tbody></table></div>
-<form class="lg-days" method="post" data-alert-days>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="alert_days">
-<label for="lg-days">{{ words.alert_days }}</label><input id="lg-days" name="days" value="{{ days }}" inputmode="numeric" dir="ltr" required><span>{{ words.days }}</span><button class="op-secondary" type="submit">{{ words.save_days }}</button></form>
+{% if can_set_days %}<form class="lg-days" method="post" data-alert-days>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="alert_days">
+<label for="lg-days">{{ words.alert_days }}</label><input id="lg-days" name="days" value="{{ days }}" inputmode="numeric" dir="ltr" required><span>{{ words.days }}</span><button class="op-secondary" type="submit">{{ words.save_days }}</button></form>{% endif %}
 {% endblock %}

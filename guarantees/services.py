@@ -31,6 +31,7 @@ from .models import EventKind, Guarantee, GuaranteeEvent, GuaranteeKind, Guarant
 ZERO = Decimal("0")
 MANAGE = ("cashboxes.manage_cashboxes", "sales.create_sales_invoice")
 VIEW_PROJECTS = "projects.view_projects"
+SET_DAYS = "cashboxes.manage_cashboxes"
 ALERT_DAYS_KEY = "guarantees.alert_days"
 DEFAULT_ALERT_DAYS = 30
 MAX_ALERT_DAYS = 365
@@ -108,6 +109,12 @@ def can_see_card(user):
     return can_manage(user) or user_has_permission(user, VIEW_PROJECTS)
 
 
+def can_set_days(user):
+    """The alert days are one setting for the whole business: the owner's and the manager's (cashbox master data)."""
+
+    return user_has_permission(user, SET_DAYS)
+
+
 def _require(user, lang):
     if not can_manage(user):
         raise PermissionDenied(MESSAGES[_lang(lang)]["denied"])
@@ -145,7 +152,8 @@ def alert_days():
 def save_alert_days(raw, user, lang="ar"):
     from settings_core.models import SystemSetting
 
-    _require(user, lang)
+    if not can_set_days(user):
+        raise PermissionDenied(MESSAGES[_lang(lang)]["denied"])
     words = MESSAGES[_lang(lang)]
     try:
         days = int(str(raw or "").strip())

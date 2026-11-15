@@ -152,7 +152,7 @@ def guarantee_list(request):
         expiring_count=services.expiring(base, on, days).count(), expired_count=services.expired(base, on).count(),
         active_count=active.count(), banks=services.banks(), projects=_projects()[:300],
         shows=[(key, words[f"show_{key}"]) for key in SHOW],
-        expiring_label=words["expiring_n"].format(days=days)))
+        expiring_label=words["expiring_n"].format(days=days), can_set_days=services.can_set_days(request.user)))
 
 
 def _form_data(request):

@@ -319,8 +319,16 @@ class ScreenTests(GuaranteeSetup):
         self.assertEqual(contract.position(self.project)["retention_held"], held)
         self.assertEqual(counts(), before)
 
-    def test_the_alert_days_form(self):
+    def test_the_alert_days_form_is_the_owners_and_the_managers(self):
+        cashier = person(RoleCode.CASHIER, "days_cashier")  # manages guarantees, but not a business-wide setting
+        self.client.force_login(cashier)
+        self.assertNotContains(self.client.get(self.url("list")), "data-alert-days")
+        self.client.post(self.url("list"), {"lang": "ar", "action": "alert_days", "days": "60"})
+        self.assertEqual(services.alert_days(), 30)
+        with self.assertRaises(PermissionDenied):
+            services.save_alert_days("60", cashier)
         self.client.force_login(self.owner)
+        self.assertContains(self.client.get(self.url("list")), "data-alert-days")
         self.client.post(self.url("list"), {"lang": "ar", "action": "alert_days", "days": "60"})
         self.assertEqual(services.alert_days(), 60)
 
