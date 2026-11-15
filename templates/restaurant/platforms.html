@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b"><link rel="stylesheet" href="{% static 'hesba/css/restaurant_platforms.css' %}?v=r14-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ pw.back }}</a><h1>{{ pw.title }}</h1><p>{{ pw.intro }}</p></div></section>
+{% if prices_off %}<p class="op-message op-message-error" role="status" data-platform-warning="price_lists">{{ pw.prices_off }}</p>{% endif %}
+{% if shipping_off %}<p class="op-message op-message-error" role="status" data-platform-warning="shipping">{{ pw.shipping_off }}</p>{% endif %}
+<h2 class="pf-steps-title">{{ pw.how }}</h2>
+<ol class="pf-steps" data-platform-steps><li>{{ pw.step1 }}</li><li>{{ pw.step2 }}</li><li>{{ pw.step3 }}</li></ol>
+<p class="pf-links"><a class="op-secondary" href="{% url 'pricing:list' %}?lang={{ lang }}" data-platform-link="pricing">{{ pw.to_prices }}</a><a class="op-secondary" href="{% url 'shipping:board' %}?lang={{ lang }}" data-platform-link="shipping">{{ pw.to_shipping }}</a></p>
+<div class="op-table-wrap"><table class="op-table" data-platforms><thead><tr><th>{{ pw.platform }}</th>{% if grouped %}<th>{{ pw.branch }}</th>{% endif %}<th>{{ pw.price_list }}</th><th>{{ pw.courier }}</th><th>{{ pw.commission }}</th><th>{{ pw.held }}</th>{% if can_edit %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}<tr data-platform-row="{{ row.platform.customer.pk }}"><td class="op-cell-text">{{ row.platform.name }}{% if row.off %} <span class="rs-tag">{{ pw.off }}</span>{% endif %}</td>{% if grouped %}<td>{{ row.branch }}</td>{% endif %}<td class="op-cell-text" data-platform-list>{% if row.price_list %}{{ row.price_list }}{% else %}{{ pw.menu_prices }}{% endif %}</td><td class="op-cell-text">{{ row.platform.courier.name }}</td><td><bdi dir="ltr" data-platform-commission>{{ row.commission }}%</bdi></td><td><bdi dir="ltr" data-platform-held>{{ row.held|money }}</bdi></td>{% if can_edit %}<td class="op-cell-actions"><a class="op-secondary" href="?lang={{ lang }}&edit={{ row.platform.customer.pk }}">{{ pw.edit }}</a><form method="post" class="op-inline-form" data-confirm="{{ pw.remove_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="customer" value="{{ row.platform.customer.pk }}"><button class="op-danger" type="submit" data-platform-remove>{{ pw.remove }}</button></form></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="{% if grouped %}7{% else %}6{% endif %}" class="op-empty">{{ pw.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_edit %}<form class="op-form" method="post" data-platform-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<h2>{% if editing %}{{ pw.edit }} · {{ editing.name }}{% else %}{{ pw.new }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-platform-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="pf-customer">{{ pw.platform }}</label><select id="pf-customer" name="customer" required><option value="">{{ pw.pick_customer }}</option>{% for customer in customers %}<option value="{{ customer.pk }}"{% if form.customer == customer.pk|stringformat:'s' %} selected{% endif %}>{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pf-courier">{{ pw.courier }}</label><select id="pf-courier" name="courier" required><option value="">{{ pw.pick_courier }}</option>{% for courier in couriers %}<option value="{{ courier.pk }}"{% if form.courier == courier.pk|stringformat:'s' %} selected{% endif %}>{{ courier.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pf-commission">{{ pw.commission }} (%)</label><input id="pf-commission" name="commission" value="{{ form.commission }}" inputmode="decimal" dir="ltr" placeholder="18"><small class="op-muted">{{ pw.commission_hint }}</small></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-platform-save>{{ pw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}">{{ pw.new }}</a>{% endif %}</div></form>{% endif %}
+{% endblock %}

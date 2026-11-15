@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_brands, views_callcentre, views_combos, views_kds, views_modifiers, views_preorders, views_qr, views_reservations
+from . import views, views_brands, views_callcentre, views_combos, views_kds, views_modifiers, views_platforms, views_preorders, views_qr, views_reservations
 
 
 app_name = "restaurant"
@@ -30,4 +30,5 @@ urlpatterns = [
     path("brands/", views_brands.setup, name="brands"),  # R11 (HG-117): several brands from one kitchen
     path("reservations/", views_reservations.reservations_view, name="reservations"),  # R8 (HG-118): table reservations
     path("preorders/", views_preorders.preorders_view, name="preorders"),  # R10 (HG-119): pre-orders with a pick-up time and a deposit
+    path("platforms/", views_platforms.setup, name="platforms"),  # R14 (HG-120): delivery platforms by hand (Talabat, elmenus)
 ]
