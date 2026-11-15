@@ -17,7 +17,8 @@ from reports.aging import whatsapp_number
 
 
 SALT = "hesba.share.v1"
-KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order", "appointment")
+KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order", "appointment",
+         "project")  # C10 (HG-135): the owner's project page, always bound to the project's customer
 
 
 def max_age():
