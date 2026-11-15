@@ -290,10 +290,24 @@ class ScreenTests(RoutedPlant):
 
     def test_a_routed_order_has_its_own_column_on_the_board(self):
         order = self.cake_order("20")
-        orders.advance(order, self.owner)
-        page = self.client.get(reverse("manufacturing:orders"))
-        self.assertContains(page, "خَبز")
-        self.assertContains(page, order.number)
+        orders.advance(order, self.owner)                                           # mixing done: the order waits at baking
+        columns = {chunk.split('"', 1)[0]: chunk for chunk in self.client.get(reverse("manufacturing:orders")).content.decode().split('data-column="')[1:]}
+        self.assertIn("baking:خَبز", columns)
+        self.assertIn(order.number, columns["baking:خَبز"])
+        self.assertNotIn(order.number, columns["planned"])                         # not dumped into «لسه مبدأش» as before
+        self.assertNotIn(order.number, columns["cooking"])
+        self.assertTrue(list(columns).index("baking:خَبز") < list(columns).index("ready"))
+        other = self.cake_order("20")                                              # an order not started yet is in «planned»
+        columns = {chunk.split('"', 1)[0]: chunk for chunk in self.client.get(reverse("manufacturing:orders")).content.decode().split('data-column="')[1:]}
+        self.assertIn(other.number, columns["planned"])
+
+    def test_the_routing_names_the_centre_in_the_page_language(self):
+        order = self.cake_order("20")
+        orders.advance(order, self.owner, minutes="70")
+        english = self.client.get(reverse("manufacturing:order", args=[order.pk]), {"lang": "en"}).content.decode()
+        self.assertIn("Mixer", english)
+        self.assertNotIn("الخلاط", english)
+        self.assertIn("الخلاط", self.client.get(reverse("manufacturing:order", args=[order.pk]), {"lang": "ar"}).content.decode())
 
     def test_the_load_page_marks_the_day_over_capacity(self):
         day = TODAY + timedelta(days=2)

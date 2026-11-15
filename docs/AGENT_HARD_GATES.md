@@ -5355,9 +5355,10 @@ The product now enters stock at what the order really used (issues + extras − 
 - **Holidays are global** (`attendance.Holiday` has no entity), and weekends are not read: a factory that is closed on Fridays shows capacity on them until F6b brings a calendar per centre.
 - **The load assumes the due date is the day the stages are worked.** A long routing due on one day loads all its stages on that day; F6b's real dates replace this.
 - **Suggestion needs a recorded minute.** Stages with no minutes typed price nothing; F8's floor screen will measure them.
+- **`WorkCentre.code` is unique across the whole group,** so a branch cannot reuse a code another entity holds (the refusal «كود مركز العمل ده مستخدم قبل كده» is the only hint that it exists elsewhere).
 - **Old orders and recipes are unchanged:** no data migration, no routing is created for anything that exists.
 
-### Tests (`manufacturing/tests_workcentres.py`, 25)
+### Tests (`manufacturing/tests_workcentres.py`, 26)
 
 - The reference plant: mixer 60.00 an hour, oven 120.00 an hour, 8 hours a day, the cake routing (30 and 45 minutes per batch).
 - Routing: an order of 2 batches gets mixing 60 and baking 90 planned minutes and a planned conversion of 240.00 with `labor_cost` still 0.00; setup minutes and fractional batches; a recipe without steps keeps the food list (and clearing a routing returns to it); an open order keeps its stages; every validation of a row and of a centre; the asset link; a unique stage key and position.
