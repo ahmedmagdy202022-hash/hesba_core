@@ -3,6 +3,39 @@ from django.core.validators import MinValueValidator
 from django.db import models
 
 
+class WorkCentreKind(models.TextChoices):
+    MACHINE = "machine", "Machine"
+    LINE = "line", "Production line"
+    MANUAL = "manual", "Manual table"
+
+
+class WorkCentre(models.Model):
+    """Manufacturing F6a (HG-133): a place where a stage is done (a machine, a line, a manual table), with the hours it can
+    work in a day and one fully loaded rate per hour (labour, power and the machine's wear; owner question 15)."""
+
+    code = models.CharField(max_length=20, unique=True)
+    name_ar = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True)
+    kind = models.CharField(max_length=10, choices=WorkCentreKind.choices, default=WorkCentreKind.MACHINE)
+    fixed_asset = models.ForeignKey("fixed_assets.FixedAsset", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    hours_per_day = models.DecimalField(max_digits=4, decimal_places=2, default=8)
+    rate_per_hour = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    active = models.BooleanField(default=True)
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["code"]
+        constraints = [models.CheckConstraint(condition=models.Q(hours_per_day__gt=0) & models.Q(hours_per_day__lte=24), name="mfg_workcentre_hours"),
+                       models.CheckConstraint(condition=models.Q(rate_per_hour__gte=0), name="mfg_workcentre_rate")]
+
+    def __str__(self):
+        return f"{self.code} - {self.name_ar}"
+
+    def name(self, lang="ar"):
+        return (self.name_en or self.name_ar) if lang == "en" else self.name_ar
+
+
 class Recipe(models.Model):
     """MFG-001: what one batch of a product takes (a bill of materials)."""
 
@@ -22,6 +55,26 @@ class Recipe(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.name or self.product.item_name}"
+
+
+class RecipeStep(models.Model):
+    """Manufacturing F6a (HG-133): one step of a recipe's routing. Its orders copy the steps as their stages (a work centre
+    and the planned minutes = setup + minutes per batch x batches); a recipe with no step keeps the factory's stage list."""
+
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="steps")
+    order = models.PositiveSmallIntegerField()
+    stage_key = models.CharField(max_length=30)
+    name_ar = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True)
+    work_centre = models.ForeignKey(WorkCentre, on_delete=models.PROTECT, related_name="steps")
+    minutes_per_batch = models.DecimalField(max_digits=10, decimal_places=2)
+    setup_minutes = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["order", "pk"]
+        constraints = [models.UniqueConstraint(fields=["recipe", "order"], name="mfg_one_step_per_position"),
+                       models.UniqueConstraint(fields=["recipe", "stage_key"], name="mfg_one_step_per_key"),
+                       models.CheckConstraint(condition=models.Q(minutes_per_batch__gt=0) & models.Q(setup_minutes__gte=0), name="mfg_step_minutes")]
 
 
 class RecipeLine(models.Model):
@@ -146,6 +199,8 @@ class OrderStageLog(models.Model):
     good_quantity = models.DecimalField(max_digits=14, decimal_places=3)
     defect_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     note = models.CharField(max_length=255, blank=True)
+    # Manufacturing F6a (HG-133): how long the stage took, in minutes (typed on the floor; F8 may measure it). NULL = not recorded.
+    minutes = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     done_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     done_at = models.DateTimeField(auto_now_add=True)
 
@@ -206,6 +261,10 @@ class OrderCostLine(models.Model):
     kind = models.CharField(max_length=10, choices=CostLineKind.choices)
     description = models.CharField(max_length=255, blank=True)
     employee = models.ForeignKey("staff.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    # Manufacturing F6a (HG-133): a line confirmed from a work centre's suggestion carries the centre and the stage log whose
+    # minutes it priced (so one stage is confirmed once); both NULL on every other line.
+    work_centre = models.ForeignKey("WorkCentre", on_delete=models.PROTECT, null=True, blank=True, related_name="cost_lines")
+    stage_log = models.ForeignKey("OrderStageLog", on_delete=models.PROTECT, null=True, blank=True, related_name="cost_lines")
     hours = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     rate = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
