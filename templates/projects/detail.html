@@ -12,6 +12,7 @@
 <article><small>{{ words.profit }} ({{ words.margin }} {{ figures.margin }}%)</small><strong data-figure="profit">{% include "projects/_profit.html" with value=figures.profit loss=words.loss %}</strong></article>{% endif %}
 <article><small>{{ words.status }}</small><strong><span class="op-status op-status-{% if project.status == 'done' %}posted{% elif project.status == 'cancelled' %}cancelled{% else %}open{% endif %}" data-project-status="{{ project.status }}">{{ status_label }}</span></strong></article>
 </section>
+{% if equipment_memo %}<p class="op-muted" data-equipment-memo>{{ cwords.eq_memo }}: <strong dir="ltr" data-memo="amount">{{ equipment_memo.amount|money }}</strong> · {{ cwords.eq_profit_after }}: <span data-memo="profit_after">{% include "projects/_profit.html" with value=equipment_memo.profit_after loss=words.loss %}</span> · <a class="hs-notice-link" href="{% url 'projects:equipment' project.pk %}?lang={{ lang }}">{{ cwords.eq_open }}</a><br><small>{{ cwords.eq_memo_note }}</small></p>{% endif %}
 {% if figures.drafts %}<p class="op-muted">{{ words.drafts }}: {{ figures.drafts|money }}</p>{% endif %}
 {% project_guarantees project %}{# Contracting C4 (HG-123): the project's letters of guarantee; amounts for managers only #}
 {% if owner_link %}{% include "projects/_owner_link.html" with box=owner_link %}{% endif %}
