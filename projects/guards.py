@@ -33,3 +33,15 @@ def after_purchase_invoice_change(invoice):
     bill = SubcontractBill.objects.select_related("subcontract").filter(invoice_id=invoice.pk).first()
     if bill is not None:
         ensure_consistent(bill.subcontract)
+
+
+def after_supplier_payment_change(payment):
+    """Contracting C11 (HG-128): a cancelled supplier payment that was a subcontractor's advance must not leave the
+    subcontract's bills recovering more than was paid (``purchases.services.cancel_supplier_payment`` calls this)."""
+
+    from .costs import ensure_consistent
+    from .models import SubcontractPayment
+
+    link = SubcontractPayment.objects.select_related("subcontract").filter(payment_id=payment.pk).first()
+    if link is not None:
+        ensure_consistent(link.subcontract)
