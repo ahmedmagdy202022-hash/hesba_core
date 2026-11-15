@@ -112,10 +112,10 @@ class LotSetup(TestCase):
         rows = LotUse.objects.filter(item=self.flour, **filters).select_related("batch")
         return {(row.batch.batch_no if row.batch else None): row.quantity for row in rows}
 
-    def sell(self, quantity, customer):
+    def sell(self, quantity, customer, item=None):
         from sales.pos import checkout
 
-        invoice, _ = checkout(lines=[{"item": self.cake, "quantity": D(quantity), "unit_sale_price": D("120"), "line_discount_amount": D("0"),
+        invoice, _ = checkout(lines=[{"item": item or self.cake, "quantity": D(quantity), "unit_sale_price": D("120"), "line_discount_amount": D("0"),
                                       "description": ""}], customer=customer, location=self.plant, cashbox=self.cashbox, discount=D("0"),
                               tendered=D(quantity) * D("120"), user=self.owner)
         return invoice
@@ -176,9 +176,9 @@ class IngredientLotTests(LotSetup):
         self.assertEqual(self.uses(run=run), {"LOT-A": D("10.000"), "LOT-B": D("10.000")})
         self.assertEqual(run.product_lot.quantity, D("20.000"))
 
-    def test_the_restaurant_kitchen_and_the_demo_keep_calling_the_service_and_record_no_lot(self):
+    def test_the_restaurant_kitchen_keeps_calling_the_service_and_records_no_lot(self):
         stock_in(self.flour, self.plant, 60, "20.00", movement_date=TODAY)
-        run = services.produce(self.recipe, self.owner, batches="2", location=self.plant)   # what restaurant/kitchen.py does
+        run = services.produce(self.recipe, self.owner, batches="2", location=self.plant)   # what restaurant/kitchen.py does; a restaurant checkout is never refused for a flour lot
         self.assertFalse(Batch.objects.filter(production_run=run).exists())
         self.assertFalse(LotUse.objects.exists())
 
@@ -484,6 +484,72 @@ class TraceTests(LotSetup):
         self.assertContains(bare, "LOT-A")
         for text in ("PI-A", "PI-B", "مطاحن الأمل", "شركة الدلتا"):
             self.assertNotContains(bare, text)
+
+
+class MultiLevelTraceTests(LotSetup):
+    """Flour makes dough (2 kg of flour make 3 kg), dough makes layer cakes (3 kg of dough make 10): a recall goes through both."""
+
+    def setUp(self):
+        super().setUp()
+        self.dough = make_item(item_code="SF-DOUGH", item_name="عجينة (كيلو)", is_stock_tracked=True)
+        self.layer = make_item(item_code="FG-LAYER", item_name="كيكة طبقات", is_stock_tracked=True, default_sale_price="150")
+        self.dough_recipe = services.save_recipe({"product": self.dough, "output_quantity": "3"}, [(self.flour, "2")], self.owner)
+        self.layer_recipe = services.save_recipe({"product": self.layer, "output_quantity": "10"}, [(self.dough, "3")], self.owner)
+        self.flour_lot = self.lot("LOT-A", A_EXPIRES, "100")
+        stock_in(self.flour, self.plant, 100, "20.00", movement_date=TODAY)
+        self.dough_run = lots.produce(self.dough_recipe, self.owner, batches="3", location=self.plant)           # 6 kg flour, 9 kg dough
+        self.layer_order = self.walk(self.order("10", recipe=self.layer_recipe))                               # 3 kg of the dough
+        self.layer_run = self.layer_order.run
+        self.client.force_login(self.owner)
+
+    def test_the_dough_lot_leads_to_the_cake_run_its_lot_and_the_customers(self):
+        dough_lot = self.dough_run.product_lot
+        self.assertEqual(self.uses(run=self.dough_run), {"LOT-A": D("6.000")})
+        self.assertEqual(LotUse.objects.get(run=self.layer_run, item=self.dough).batch, dough_lot)
+        nadia = make_customer("C-NADIA", name="نادية")
+        sale = self.sell("4", nadia, item=self.layer)
+        page = self.client.get(reverse("manufacturing:trace"), {"lang": "ar", "lot": dough_lot.pk})
+        paths = page.context["paths"]
+        self.assertEqual([path["run"] for path in paths], [self.dough_run, self.layer_run])      # its own, then the run that took it
+        cake_path = paths[1]
+        self.assertEqual(cake_path["product_lot"], self.layer_run.product_lot)
+        self.assertEqual([(row["invoice"], row["customer"].name, row["quantity"]) for row in cake_path["sold"]["sales"]], [(sale, "نادية", D("4.000"))])
+        self.assertContains(page, "نادية")
+        self.assertContains(page, sale.invoice_number)
+        # And from the flour lot, the dough run is the first step of the chain, whose lot links on.
+        flour_page = self.client.get(reverse("manufacturing:trace"), {"lang": "ar", "lot": self.flour_lot.pk})
+        self.assertIn(self.dough_run, [path["run"] for path in flour_page.context["paths"]])
+        self.assertContains(flour_page, f"?lot={dough_lot.pk}")
+
+    def test_the_trace_is_one_click_from_the_manufacturing_home(self):
+        self.assertContains(self.client.get(reverse("manufacturing:home")), "data-trace-nav")
+
+
+class DemoStepTests(LotSetup):
+    """prepare_demo starts orders with ``orders.advance``; with batches on that records lots and can never crash the build."""
+
+    def test_the_demo_orders_step_records_lots_and_swallows_a_refusal(self):
+        from settings_core.management.commands.prepare_demo import Command
+
+        stock_in(self.flour, self.plant, 100, "20.00", movement_date=TODAY)
+        customers = [make_customer(f"C-D{n}", name=f"عميل {n}") for n in range(4)]
+        master = {"items": [self.cake, self.flour], "location": self.plant, "customers": customers}
+        self.lot("LOT-A", A_EXPIRES, "100")
+        Command()._orders(master, self.owner)
+        started = ProductionOrderOf(self.recipe)
+        self.assertEqual((started.status, self.uses(order=started)), (OrderStatus.IN_PROGRESS, {"LOT-A": D("10.000")}))
+        self.assertFalse(Batch.objects.filter(production_run__isnull=False).exists())            # it never finishes an order
+        # An expired lot: the step's own «except ValidationError: break» keeps the order planned and the build going.
+        Batch.objects.filter(batch_no="LOT-A").update(expiry_date=TODAY - timedelta(days=1))
+        ProductionOrderOf(self.recipe).delete()
+        Command()._orders(master, self.owner)
+        self.assertEqual(ProductionOrderOf(self.recipe).status, OrderStatus.PLANNED)
+
+
+def ProductionOrderOf(recipe):
+    from .models import ProductionOrder
+
+    return ProductionOrder.objects.filter(recipe=recipe).latest("pk")
 
 
 class RunPageTests(LotSetup):

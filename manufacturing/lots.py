@@ -19,8 +19,8 @@ stock never refuses. The product's expiry is never capped by its ingredients' (o
 a warning instead.
 
 The inventory engine, average cost and ``services.issue`` / ``services.produce`` are not edited. These wrappers call
-them unchanged, and the restaurant kitchen and the demo seed keep calling ``services.produce`` directly, so they record
-no lots by design.
+them unchanged. The restaurant kitchen keeps calling ``services.produce`` directly, so it records no lots by design.
+The demo seed starts orders through ``orders.advance`` (never finishes one), so it records the lots its orders use.
 """
 
 from datetime import timedelta

@@ -2,8 +2,8 @@
 
 * **Backward** from a product lot: its run, the ingredient lots the run used (``LotUse``, written at the issue) and the
   purchase invoice and supplier each came on.
-* **Forward** from an ingredient lot: the posted runs that used it, the product lots they made, and the sales of that
-  product from that location between the run and the moment the lot was used up.
+* **Forward** from a lot: the posted runs that used it as an ingredient, the product lots they made, and the sales of that
+  product from that location between the run and the moment the lot was used up; a lot made by a run also shows its own sales.
 
 Sales do not record a lot (HG-019), so the forward half cannot say which customer got which lot. It says who bought
 that product from that place while the lot was the one the batch screens count as being sold: the batches' own rule
@@ -124,12 +124,16 @@ def sales_after(lot):
 
 
 def forward(lot):
-    """[{"run", "order", "product_lot", "sold"}]: where an ingredient lot went. A product lot is its own single path."""
+    """[{"label", "run", "order", "product_lot", "sold"}]: where a lot went.
 
-    if lot.production_run_id:
-        run = lot.production_run
-        return [{"label": run.number, "run": run, "order": None, "product_lot": lot, "sold": sales_after(lot)}] if run.status == RunStatus.POSTED else []
+    A lot made by a posted run is first its own path (who bought it). Every lot, a made one included, then lists the
+    posted runs that used it, and an unfinished order that did. A semi-finished lot (dough) is both: it shows its own
+    sales and the runs that took it as an ingredient, so a recall can go flour lot, dough lot, cake lot, customers."""
+
     paths, seen = [], set()
+    own = lot.production_run
+    if own is not None and own.status == RunStatus.POSTED:
+        paths.append({"label": own.number, "run": own, "order": None, "product_lot": lot, "sold": sales_after(lot)})
     uses = (LotUse.objects.filter(batch=lot).select_related("run", "run__recipe__product", "order", "order__recipe__product")
             .order_by("pk"))
     for use in uses:
@@ -138,7 +142,8 @@ def forward(lot):
                 continue
             seen.add(use.run_id)
             product_lot = Batch.objects.filter(production_run=use.run).first()
-            paths.append({"label": use.run.number, "run": use.run, "order": use.order, "product_lot": product_lot, "sold": sales_after(product_lot) if product_lot else None})
+            paths.append({"label": use.run.number, "run": use.run, "order": use.order, "product_lot": product_lot,
+                          "sold": sales_after(product_lot) if product_lot else None})
         elif use.run_id is None and use.order_id and use.order.status == OrderStatus.IN_PROGRESS and ("o", use.order_id) not in seen:
             seen.add(("o", use.order_id))
             paths.append({"label": use.order.number, "run": None, "order": use.order, "product_lot": None, "sold": None})
