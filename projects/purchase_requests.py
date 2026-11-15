@@ -70,6 +70,7 @@ MESSAGES = {
         "cancel_decide": "إلغاء طلب اتوافق عليه للي بيوافق على طلبات الشراء بس.",
         "changed_qty": "«{what}»: اتطلب {before} واتوافق على {after} {unit}",
         "chose_item": "«{what}»: اتحدد له الصنف «{item}»",
+        "chose_item_unit": "«{what}» ({typed}): اتحدد له الصنف «{item}» ({unit})، والكمية بقت بوحدة الصنف",
         "not_ordered": "مش في أمر الشراء (من غير صنف): {names}",
         "po_note": "طلب شراء {number} · {project}",
     },
@@ -97,6 +98,7 @@ MESSAGES = {
         "cancel_decide": "Only someone who approves purchase requests can cancel an approved one.",
         "changed_qty": "«{what}»: asked {before}, approved {after} {unit}",
         "chose_item": "«{what}»: item «{item}» chosen",
+        "chose_item_unit": "«{what}» ({typed}): item «{item}» ({unit}) chosen; the quantity now counts in the item's unit",
         "not_ordered": "Not on the purchase order (no item): {names}",
         "po_note": "Purchase request {number} · {project}",
     },
@@ -457,9 +459,13 @@ def approve(project, request, user, *, supplier=None, quantities=None, items=Non
             item = _item(raw_item)
             if item is None:
                 raise ValidationError(words["item"].format(what=what))
+            typed, kept = line.unit, unit_label(item.unit, lang)
             line.item, line.unit = item, item.unit
             fields += ["item", "unit"]
-            changes.append(words["chose_item"].format(what=what, item=item.item_name))
+            if typed and typed != kept:  # the quantity now counts in the item's unit: say so, never swap it silently
+                changes.append(words["chose_item_unit"].format(what=what, item=item.item_name, typed=typed, unit=kept))
+            else:
+                changes.append(words["chose_item"].format(what=what, item=item.item_name))
         raw_quantity = quantities.get(line.pk, quantities.get(str(line.pk)))
         if raw_quantity not in (None, ""):
             quantity = _quantity(raw_quantity)

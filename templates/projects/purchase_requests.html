@@ -4,7 +4,8 @@
 {% block operation_content %}
 {# Contracting C7 (HG-125): the project's purchase requests. A request holds no money and moves no stock; approving one makes a draft purchase order. #}
 {% include "projects/_head.html" %}
-<section class="prq-intro"><h2 class="prj-h">{{ pw.page_title }}</h2><p>{{ pw.intro }}</p></section>
+<section class="prq-intro"><h2 class="prj-h">{{ pw.page_title }}</h2><p>{{ pw.intro }}</p>
+{% if can_draft or can_decide %}<p class="prq-links">{% if can_draft %}<a class="hs-notice-link" href="{% url 'projects:purchase_requests_mine' %}?lang={{ lang }}" data-my-requests>{{ pw.show_mine }}</a>{% endif %}{% if can_decide %}<a class="hs-notice-link" href="{% url 'projects:purchase_requests_all' %}?lang={{ lang }}" data-all-requests>{{ pw.all_requests }}</a>{% endif %}</p>{% endif %}</section>
 {% if new_url %}<div class="sr-cta sr-cta--top" data-request-cta><a class="op-primary" href="{{ new_url }}" data-new-request>{{ pw.new }}</a></div>
 {% elif other_entity %}{% elif not is_open %}<p class="op-message" data-project-closed>{{ pw.closed }}</p>
 {% elif not can_draft and not can_decide %}<p class="op-muted" data-view-only>{{ pw.view_only }}</p>{% endif %}

@@ -62,7 +62,7 @@ WORDS = {
         "no_money": "الطلب وأمر الشراء ميحرّكوش فلوس ولا مخزون. الاستلام بيتم بفاتورة شراء عادية على أمر الشراء.",
         # across projects
         "inbox_title": "طلبات الشراء", "inbox_intro": "طلبات الشراء من كل المشاريع.", "show_waiting": "مستنية موافقة", "show_to_order": "مستنية أمر شراء",
-        "show_mine": "طلباتي", "show_all": "الكل", "project": "المشروع", "inbox_none": "مفيش طلبات هنا.", "mine_title": "طلباتي",
+        "show_mine": "طلباتي", "show_all": "الكل", "all_requests": "طلبات الشراء من كل المشاريع", "project": "المشروع", "inbox_none": "مفيش طلبات هنا.", "mine_title": "طلباتي",
     },
     "en": {
         "page_title": "Purchase requests",
@@ -95,7 +95,7 @@ WORDS = {
         "open_order": "Open the purchase order", "order_state": "Purchase order status",
         "no_money": "Neither the request nor the purchase order moves money or stock. Goods are received on an ordinary purchase invoice against the order.",
         "inbox_title": "Purchase requests", "inbox_intro": "Purchase requests from every project.", "show_waiting": "Waiting for approval", "show_to_order": "Waiting for a purchase order",
-        "show_mine": "My requests", "show_all": "All", "project": "Project", "inbox_none": "No requests here.", "mine_title": "My requests",
+        "show_mine": "My requests", "show_all": "All", "all_requests": "Purchase requests from every project", "project": "Project", "inbox_none": "No requests here.", "mine_title": "My requests",
     },
 }
 

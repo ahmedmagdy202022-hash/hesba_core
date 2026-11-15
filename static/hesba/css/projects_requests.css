@@ -43,3 +43,5 @@
 .prq-approve__what b{color:var(--hs-navy);overflow-wrap:anywhere}
 .prq-approve__what small{color:var(--hs-muted);font-size:var(--hs-text-sm)}
 @media (min-width:720px){.prq-approve__row{grid-template-columns:minmax(0,2fr) minmax(0,2fr) minmax(0,1fr);align-items:end}}
+.prq-links{display:flex;flex-wrap:wrap;gap:var(--hs-space-4)}
+.prq-links a{display:inline-flex;align-items:center;min-height:var(--hs-control-height)}

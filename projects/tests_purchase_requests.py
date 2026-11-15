@@ -174,13 +174,19 @@ class RuleTests(RequestSetup):
     def test_free_text_lines_join_the_order_only_once_an_item_is_chosen(self):
         wood = {"description": "خشب موسكي للشدات", "quantity": "3", "unit": "م³"}
         sand = {"description": "رمل", "quantity": "10", "unit": "م³"}
-        request = self.submitted(rows=[{"item": str(self.cement.pk), "quantity": "200"}, wood, sand])
+        gravel = {"description": "زلط", "quantity": "12", "unit": "م³"}
+        request = self.submitted(rows=[{"item": str(self.cement.pk), "quantity": "200"}, wood, sand, gravel])
         free = request.lines.get(description="رمل")
-        brick = make_item(item_code="SND-1", item_name="رمل مغسول", unit="م³")
-        done = prq.approve(self.project, request, self.owner, supplier=self.supplier, items={free.pk: str(brick.pk)})
+        washed = make_item(item_code="SND-1", item_name="رمل مغسول", unit="م³")
+        graded = make_item(item_code="GRV-1", item_name="زلط فرز أول", unit="طن")
+        done = prq.approve(self.project, request, self.owner, supplier=self.supplier,
+                           items={free.pk: str(washed.pk), request.lines.get(description="زلط").pk: str(graded.pk)})
         self.assertEqual(list(PurchaseOrderLine.objects.filter(order=done.purchase_order).values_list("item__item_code", "quantity").order_by("pk")),
-                         [("CEM-50", D("200.000")), ("SND-1", D("10.000"))])
-        self.assertIn("«رمل»: اتحدد له الصنف «رمل مغسول»", done.decision_note)
+                         [("CEM-50", D("200.000")), ("SND-1", D("10.000")), ("GRV-1", D("12.000"))])
+        self.assertIn("«رمل»: اتحدد له الصنف «رمل مغسول»\n", done.decision_note)  # same unit: nothing more to say
+        # Another unit: the quantity now counts in tonnes, and the note says so instead of swapping the unit silently.
+        self.assertIn("«زلط» (م³): اتحدد له الصنف «زلط فرز أول» (طن)، والكمية بقت بوحدة الصنف", done.decision_note)
+        self.assertEqual(request.lines.get(description="زلط").unit, "طن")
         self.assertIn("مش في أمر الشراء (من غير صنف): خشب موسكي للشدات", done.decision_note)
         only_free = self.submitted(rows=[wood])
         approved = prq.approve(self.project, only_free, self.owner)
@@ -342,7 +348,8 @@ class ScreenTests(RequestSetup):
         tab = self.client.get(self.url("purchase_requests"))
         self.assertEqual(tab.status_code, 200)
         self.assertContains(tab, "data-view-only")
-        self.assertNotContains(tab, "data-new-request")
+        for absent in ("data-new-request", "data-my-requests", "data-all-requests"):
+            self.assertNotContains(tab, absent)
         page = self.client.get(self.url("purchase_request", request.pk)).content.decode()
         for form in ("data-approve-form", "data-reject-form", "data-submit-form", "data-cancel-form", "data-order-form"):
             self.assertNotIn(form, page)
@@ -402,6 +409,21 @@ class ScreenTests(RequestSetup):
         english = self.client.get(self.url("purchase_request_new", lang="en")).content.decode()
         self.assertIn("Not in the catalogue (describe it)", english)
         self.assertNotIn("مش في الأصناف", english)
+
+    def test_the_engineer_and_the_office_find_the_lists(self):
+        mine = reverse("projects:purchase_requests_mine")
+        self.client.force_login(self.engineer)
+        tab = self.client.get(self.url("purchase_requests")).content.decode()
+        self.assertIn(f'href="{mine}?lang=ar" data-my-requests', tab)  # «طلباتي»
+        self.assertNotIn("data-all-requests", tab)
+        self.assertIn(f'href="{reverse("projects:purchase_requests_all")}?lang=ar" data-purchase-requests-link', self.client.get(reverse("projects:list")).content.decode())
+        self.client.force_login(self.owner)
+        tab = self.client.get(self.url("purchase_requests")).content.decode()
+        self.assertIn("data-all-requests", tab)
+        self.assertIn("data-my-requests", tab)
+        nobody = view_only(self.owner, "c7_lister", codes=("inventory.view_stock",))
+        self.client.force_login(nobody)
+        self.assertEqual(self.client.get(reverse("projects:list")).status_code, 403)
 
     def test_every_project_page_links_to_the_tab(self):
         self.client.force_login(self.engineer)
