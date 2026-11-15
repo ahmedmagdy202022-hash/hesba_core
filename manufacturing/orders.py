@@ -33,7 +33,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
-from . import actuals, lots, services, workcentres
+from . import actuals, lots, schedule, services, workcentres
 from inventory.models import StockOperationStatus
 
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
@@ -90,6 +90,7 @@ def create_order(data, user, lang="ar"):
         stages=workcentres.stages_for(recipe, quantity, location) or [list(stage) for stage in current_stages()],
         labor_cost=_money(data.get("labor_cost"), words), overhead_cost=_money(data.get("overhead_cost"), words),
         notes=(data.get("notes") or "")[:255], created_by=user)
+    schedule.ensure_steps(order)  # Manufacturing F6b (HG-134): one schedule step per stage; planned dates stay empty until «رتّب» or a move
     _audit(order, user, "create_production_order", {"number": order.number, "recipe": recipe.code, "quantity": str(quantity)})
     return order
 
@@ -167,6 +168,7 @@ def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang=
         actuals.write_standard(order, operations)  # F12 (HG-132): what the variance report measures this order against
     stage = order.stages[order.stage_index]
     OrderStageLog.objects.create(order=order, stage_key=stage[0], good_quantity=good_qty, defect_quantity=defect_qty, note=(note or "")[:255], minutes=minutes, done_by=user)
+    schedule.step_done(order, order.stage_index)  # Manufacturing F6b (HG-134): the stage's schedule step is finished now
     order.stage_index += 1
     order.save(update_fields=["status", "started_at", "stage_index"])
     _audit(order, user, "advance_production_order", {"stage": stage[0], "good": str(good_qty), "defect": str(defect_qty), "minutes": str(minutes or "")})
