@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from master_data.models import Customer, Location
+from batches.services import batches_enabled
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
@@ -32,6 +33,7 @@ WORDS = {
            "created": "اتفتح أمر الإنتاج.", "advanced": "المرحلة اتسجلت.", "finished": "الأمر خلص والمنتج دخل المخزن.", "cancelled_msg": "الأمر اتلغى.",
            "empty": "مفيش أوامر هنا.", "all_done": "كل المراحل خلصت — جاهز للإنهاء.", "for": "لـ", "materials_short": "الخامات مش كفاية حاليًا",
            "recipes_link": "الوصفات والتشغيلات", "no_recipes": "لازم تعمل وصفة للمنتج الأول من صفحة التصنيع.",
+           "lot_no": "رقم تشغيلة المنتج (اختياري)", "lot_expiry": "تاريخ صلاحية المنتج (اختياري)", "lot_hint": "لو سيبتهم فاضيين: رقم التشغيلة هو رقم الإنتاج، والصلاحية من مدة صلاحية الوصفة.", "lot_date": "تاريخ صلاحية المنتج مش صحيح.",
            "for_sale": "لطلب", "delivery": "تسليم للعميل", "delivery_short": "تسليم", "open_sale": "افتح أمر البيع"},
     "en": {"title": "Production orders", "intro": "Each production order moves through the factory's stages: the first stage issues the materials from stock to work in progress, and when the order finishes the good units go into stock at the cost of materials, labour and overhead.",
            "new": "New production order", "recipe": "Product (recipe)", "quantity": "Quantity", "location": "Made at", "customer": "For customer (optional)",
@@ -44,6 +46,7 @@ WORDS = {
            "created": "Production order opened.", "advanced": "Stage recorded.", "finished": "Order finished and the product is in stock.", "cancelled_msg": "Order cancelled.",
            "empty": "No orders here.", "all_done": "All stages done — ready to finish.", "for": "for", "materials_short": "Not enough materials right now",
            "recipes_link": "Recipes and runs", "no_recipes": "Make a recipe for the product first on the manufacturing page.",
+           "lot_no": "Product lot number (optional)", "lot_expiry": "Product expiry date (optional)", "lot_hint": "Left empty, the lot number is the run number and the expiry comes from the recipe's shelf life.", "lot_date": "The product's expiry date is not valid.",
            "for_sale": "For order", "delivery": "Delivery to the customer", "delivery_short": "Delivery", "open_sale": "Open the sales order"},
 }
 
@@ -51,7 +54,8 @@ WORDS = {
 def _ctx(request, **extra):
     lang = _lang(request)
     return {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": WORDS[lang], "page_title": WORDS[lang]["title"],
-            "can_produce": user_has_permission(request.user, PRODUCE), "can_cost": user_has_permission(request.user, COST), **extra}
+            "can_produce": user_has_permission(request.user, PRODUCE), "can_cost": user_has_permission(request.user, COST),
+            "lots_on": batches_enabled(), **extra}
 
 
 def _can_open_sale(user):
@@ -135,7 +139,11 @@ def order_detail(request, pk):
             elif action == "finish":
                 if not user_has_permission(request.user, COST):
                     raise PermissionDenied("Finishing posts cost; it needs inventory.view_cost.")
-                orders.finish(order, request.user, lang)
+                try:
+                    lot_expiry = date.fromisoformat(request.POST.get("lot_expiry", "")) if request.POST.get("lot_expiry") else None
+                except ValueError:
+                    raise ValidationError(words["lot_date"])
+                orders.finish(order, request.user, lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry)
                 messages.success(request, words["finished"])
             elif action == "cancel":
                 orders.cancel(order, request.user, request.POST.get("reason", ""), lang)

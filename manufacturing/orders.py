@@ -27,7 +27,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
-from . import services
+from . import lots, services
 from inventory.models import StockOperationStatus
 
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
@@ -129,7 +129,8 @@ def advance(order, user, *, good=None, defect=None, note="", lang="ar"):
         raise ValidationError(words["yield"].format(units=services.fmt_qty(units_in)))
     if order.status == OrderStatus.PLANNED:
         order.status, order.started_at = OrderStatus.IN_PROGRESS, timezone.now()
-        operations = services.issue(order.recipe, user, batches=_batches(order), location=order.location, reference=order.number, lang=lang)
+        # Manufacturing F3 (HG-131): the same issue, plus the ingredient lots it used (and a refusal for an expired one).
+        operations = lots.issue(order.recipe, user, batches=_batches(order), location=order.location, reference=order.number, lang=lang, order=order)
         OrderMaterialIssue.objects.bulk_create([OrderMaterialIssue(order=order, operation=operation) for operation in operations])
     stage = order.stages[order.stage_index]
     OrderStageLog.objects.create(order=order, stage_key=stage[0], good_quantity=good_qty, defect_quantity=defect_qty, note=(note or "")[:255], done_by=user)
@@ -140,10 +141,14 @@ def advance(order, user, *, good=None, defect=None, note="", lang="ar"):
 
 
 @transaction.atomic
-def finish(order, user, lang="ar"):
-    """All stages done: post the production run for the order's quantity."""
+def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
+    """All stages done: post the production run for the order's quantity.
+
+    Manufacturing F3 (HG-131): ``lot_no`` and ``lot_expiry`` are the product lot's own number and expiry when the person
+    typed them (otherwise the run number and run date + the recipe's shelf life)."""
 
     words = MESSAGES[lang]
+    lot_no, lot_expiry = lots.check_lot(lot_no, lot_expiry, lang)
     order = _locked(order)
     if order.status != OrderStatus.IN_PROGRESS:
         raise ValidationError(words["state"])
@@ -162,6 +167,7 @@ def finish(order, user, lang="ar"):
                            issued=issued or None, output=good)
     order.run, order.status, order.finished_at = run, OrderStatus.DONE, timezone.now()
     order.save(update_fields=["run", "status", "finished_at"])
+    lots.after_finish(order, run, user, lot_no, lot_expiry)
     _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost)})
     return order
 
