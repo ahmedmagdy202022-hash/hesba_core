@@ -4906,6 +4906,9 @@ The product now enters stock at what the order really used (issues + extras − 
 6. The variance of an order finished before F12 with no standard rows reads its start's issue rows (identical by construction).
 7. Screens not yet seen at 390 px in a browser.
 8. Migration numbering: any other branch adding a `manufacturing` migration and merging first makes this one renumber.
+9. **No second-person hold (trap 15):** the approvals screen holds reversals (`inventory.reverse_operation`, `manufacturing.cancel_run`), not adjustments. An extra issue or a return goes straight through `adjust_stock`, as the start's issue always did, and cancelling an order on the floor (which now also reverses its extras and returns) is not held either. Not wired here.
+10. **Reversing a return can leave a component at a cost nobody paid** (HG-100's defect 2, for a component): `orders.cancel` and `cancel_run` take a returned quantity out again at the return's own cost. If that returned stock was used elsewhere and refilled at another price meanwhile, the reversal still goes through (the engine refuses only on a shortage) and moves the component's average. A «left since» check for components is a separate task.
+11. The variance report's actual materials are the sum of each movement's journal value (`money_round` per movement); `run.total_cost` rounds the unrounded sum once, so the two can differ by a piastre on a mixed-cost order. The report uses the former, so its header equals the sum of its lines and matches what work in progress received.
 
 ### Tests (`manufacturing/tests_actuals.py`, 37, both charts where money moves)
 

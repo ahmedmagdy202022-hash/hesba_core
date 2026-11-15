@@ -68,7 +68,8 @@ def order_variance(order):
         line["diff_qty"], line["diff_value"] = line["qty"] - line["std_qty"], line["value"] - line["std_value"]
     spent = conversion(order)
     std_material = sum((line["std_value"] for line in materials.values()), ZERO)
-    material = order.run.total_cost if order.run_id else sum((line["value"] for line in materials.values()), ZERO)
+    # The sum of the lines (each at its own journal value), so the header's variance is the sum of the lines' variances.
+    material = sum((line["value"] for line in materials.values()), ZERO)
     good = order.run.output_quantity if order.run_id else ZERO
     standard_unit = cost_round((std_material + order.labor_cost + order.overhead_cost) / order.quantity) if order.quantity else ZERO
     unit = order.run.output_operation.unit_cost if order.run_id else ZERO
