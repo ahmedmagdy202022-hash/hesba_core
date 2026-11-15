@@ -52,6 +52,7 @@ MODULE_ROUTES = (
     ("/appointments/", "appointments_visits"),
     ("/restaurant/", "tables_orders"),
     ("/projects/", "projects"),
+    ("/guarantees/", "projects"),  # C4 (HG-123): letters of guarantee follow the projects module
     ("/manufacturing/", "manufacturing"),
 )
 
