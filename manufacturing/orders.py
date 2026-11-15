@@ -33,7 +33,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
-from . import actuals, lots, services
+from . import actuals, lots, services, workcentres
 from inventory.models import StockOperationStatus
 
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
@@ -85,7 +85,9 @@ def create_order(data, user, lang="ar"):
     today = timezone.localdate()
     order = ProductionOrder.objects.create(
         number=services._next(ProductionOrder, "number", f"PO-{today:%Y%m%d}-", 3), recipe=recipe, quantity=quantity, location=location,
-        customer=data.get("customer"), due_date=data.get("due_date"), stages=[list(stage) for stage in current_stages()],
+        customer=data.get("customer"), due_date=data.get("due_date"),
+        # Manufacturing F6a (HG-133): the recipe's routing when it has one (a work centre and planned minutes per stage), else the factory's list as ever.
+        stages=workcentres.stages_for(recipe, quantity) or [list(stage) for stage in current_stages()],
         labor_cost=_money(data.get("labor_cost"), words), overhead_cost=_money(data.get("overhead_cost"), words),
         notes=(data.get("notes") or "")[:255], created_by=user)
     _audit(order, user, "create_production_order", {"number": order.number, "recipe": recipe.code, "quantity": str(quantity)})
@@ -126,10 +128,13 @@ def _locked(order):
 
 
 @transaction.atomic
-def advance(order, user, *, good=None, defect=None, note="", lang="ar"):
-    """Close the current stage (starting the order if needed) and move to the next."""
+def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang="ar"):
+    """Close the current stage (starting the order if needed) and move to the next.
+
+    Manufacturing F6a (HG-133): ``minutes`` is how long the stage took (optional, above zero); it prices a suggested labour line."""
 
     words = MESSAGES[lang]
+    minutes = workcentres.parse_minutes(minutes, lang)
     order = _locked(order)
     if order.status not in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) or order.stage_index >= len(order.stages):
         raise ValidationError(words["state"])
@@ -161,10 +166,10 @@ def advance(order, user, *, good=None, defect=None, note="", lang="ar"):
         OrderMaterialIssue.objects.bulk_create([OrderMaterialIssue(order=order, operation=operation) for operation in operations])
         actuals.write_standard(order, operations)  # F12 (HG-132): what the variance report measures this order against
     stage = order.stages[order.stage_index]
-    OrderStageLog.objects.create(order=order, stage_key=stage[0], good_quantity=good_qty, defect_quantity=defect_qty, note=(note or "")[:255], done_by=user)
+    OrderStageLog.objects.create(order=order, stage_key=stage[0], good_quantity=good_qty, defect_quantity=defect_qty, note=(note or "")[:255], minutes=minutes, done_by=user)
     order.stage_index += 1
     order.save(update_fields=["status", "started_at", "stage_index"])
-    _audit(order, user, "advance_production_order", {"stage": stage[0], "good": str(good_qty), "defect": str(defect_qty)})
+    _audit(order, user, "advance_production_order", {"stage": stage[0], "good": str(good_qty), "defect": str(defect_qty), "minutes": str(minutes or "")})
     return order
 
 

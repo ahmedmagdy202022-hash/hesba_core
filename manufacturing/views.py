@@ -242,7 +242,7 @@ def recipe_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     recipe = get_object_or_404(Recipe.objects.select_related("product"), pk=pk)
-    error = ""
+    error, routing_error, routing_rows = "", "", None
     locations = entity_scope.locations(Location.objects).filter(active=True)
     location = _pick(Location, request.GET.get("location") or request.POST.get("location"), active=True) or locations.filter(is_default=True).first() or locations.first()
     batches = services._decimal(request.GET.get("batches") or request.POST.get("batches") or "1") or Decimal("1")
@@ -268,6 +268,19 @@ def recipe_detail(request, pk):
                                    notes=request.POST.get("notes", ""), lang=lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry)
                 messages.success(request, words["produced"].format(number=run.number, output=fmt_qty(run.output_quantity), product=recipe.product.item_name))
                 return redirect(f"{reverse('manufacturing:run', args=[run.pk])}?lang={lang}")
+            if action == "routing":  # F6a (HG-133): the recipe's stages and their work centres
+                from . import workcentre_views
+
+                try:
+                    workcentre_views.routing_post(request, recipe, lang)
+                except ValidationError as exc:
+                    from settings_core.ui_messages import translate
+
+                    routing_error, routing_rows = translate(" ".join(exc.messages), lang), workcentre_views.posted_rows(request)
+                else:
+                    messages.success(request, workcentre_views.WORDS[lang]["routing_saved"])
+                    return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
+                return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows)
             if not user_has_permission(request.user, RECIPES):
                 raise PermissionDenied("Recipes need master_data.manage_items.")
             data, lines = _recipe_post(request)
@@ -278,6 +291,12 @@ def recipe_detail(request, pk):
             from settings_core.ui_messages import translate
 
             error = translate(" ".join(exc.messages), lang)
+    return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows)
+
+
+def _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error="", routing_rows=None):
+    from . import workcentre_views
+
     lines = list(recipe.lines.select_related("component"))
     form = {"product": str(recipe.product_id), "name": recipe.name, "output_quantity": _plain(recipe.output_quantity), "active": recipe.active, "notes": recipe.notes,
             "shelf_life_days": recipe.shelf_life_days or ""}
@@ -285,6 +304,7 @@ def recipe_detail(request, pk):
         request, recipe=recipe, lines=lines, plan=services.plan(recipe, batches, location), batches=_plain(batches), location=location,
         locations=locations, items=_stock_items(), form=form, rows=_rows([(str(line.component_id), _plain(line.quantity)) for line in lines]), error=error,
         runs=[{"run": run, "status_label": choice_label(run, "status", lang)} for run in recipe.runs.select_related("location")[:20]],
+        routing_error=routing_error, **workcentre_views.routing_context(request, recipe, routing_rows),
     ))
 
 
