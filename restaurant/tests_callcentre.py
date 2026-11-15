@@ -589,6 +589,15 @@ class ZoneSetupTests(CallSetup):
         self.assertFalse(DeliveryZone.objects.filter(pk=spare.pk).exists())
         self.assertTrue(AuditLog.objects.filter(action="delete_zone").exists())
 
+    def test_deleting_a_row_while_another_zone_is_open_for_editing_deletes_the_row_clicked(self):
+        """Codex (on R11's brands, the same page shape): the row's delete form keeps the page's ``?edit=``."""
+        open_one = callcentre.save_zone({"name_ar": "مفتوحة"}, self.owner, entity=self.main)
+        clicked = callcentre.save_zone({"name_ar": "اتداس عليها"}, self.owner, entity=self.main)
+        self.enter(self.manager)
+        self.client.post(f"{reverse('restaurant:zones')}?lang=ar&edit={open_one.pk}", {"lang": "ar", "action": "delete", "pk": clicked.pk})
+        self.assertFalse(DeliveryZone.objects.filter(pk=clicked.pk).exists())
+        self.assertTrue(DeliveryZone.objects.filter(pk=open_one.pk).exists())
+
     def test_the_zones_form_saves_a_zone_with_its_fee_and_time(self):
         self.enter(self.manager)
         response = self.client.post(reverse("restaurant:zones"), {"lang": "ar", "name_ar": "التجمع", "name_en": "New Cairo", "fee": "45.5", "minutes": "55", "active": "on"}, follow=True)
