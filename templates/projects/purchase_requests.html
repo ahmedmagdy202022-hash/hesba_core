@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_requests.css' %}?v=c7-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C7 (HG-125): the project's purchase requests. A request holds no money and moves no stock; approving one makes a draft purchase order. #}
+{% include "projects/_head.html" %}
+<section class="prq-intro"><h2 class="prj-h">{{ pw.page_title }}</h2><p>{{ pw.intro }}</p></section>
+{% if new_url %}<div class="sr-cta sr-cta--top" data-request-cta><a class="op-primary" href="{{ new_url }}" data-new-request>{{ pw.new }}</a></div>
+{% elif other_entity %}{% elif not is_open %}<p class="op-message" data-project-closed>{{ pw.closed }}</p>
+{% elif not can_draft and not can_decide %}<p class="op-muted" data-view-only>{{ pw.view_only }}</p>{% endif %}
+{% if other_entity %}<p class="op-message" data-other-entity>{{ pw.other_entity }}</p>{% else %}
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-purchase-requests><thead><tr><th>{{ pw.number }}</th><th>{{ pw.needed_by }}</th><th>{{ pw.requester }}</th><th>{{ pw.status }}</th><th>{{ pw.order }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-purchase-request="{{ row.label }}" data-status="{{ row.state }}">
+<td data-row="title"><a href="{{ row.url }}" data-row-link><bdi dir="ltr">{{ row.label }}</bdi></a> <small class="prq-names">{{ row.count }} · {{ row.names }}</small></td>
+<td data-row="sub">{{ row.needed_by }}</td>
+<td data-row="sub">{{ row.requester }}</td>
+<td data-row="meta"><span class="op-status op-status-{{ row.status_class }}" data-request-status>{{ row.status_label }}</span></td>
+<td data-row="meta">{% if row.order %}<bdi dir="ltr" data-request-order{% if row.order_cancelled %} data-order-was-cancelled class="prq-struck"{% endif %}>{{ row.order }}</bdi>{% else %}{{ pw.ph }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty" data-row="empty"><span class="hs-empty" data-empty-none><b>{{ pw.none }}</b></span></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% if new_url %}<div class="sr-cta sr-cta--bar" data-request-cta="bar"><a class="op-primary" href="{{ new_url }}">{{ pw.new }}</a></div>{% endif %}
+{% endblock %}

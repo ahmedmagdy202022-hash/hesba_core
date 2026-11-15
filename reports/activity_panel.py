@@ -44,7 +44,7 @@ WORDS = {
         "runs": "تشغيلات", "units": "وحدات اتنتجت", "prod_cost": "تكلفة الإنتاج", "short_recipes": "وصفات ناقصها خامات", "open_orders_mfg": "أوامر إنتاج شغالة", "late_orders": "متأخر عن ميعاده", "late_none": "مفيش تأخير",
         "short_none": "كل الوصفات خاماتها كفاية لتشغيلة", "short_list": "ناقصها خامات:",
         "active_projects": "مشاريع شغالة", "contract_total": "قيمة العقود", "billed_pct": "اتفوتر من العقود", "losing": "مشاريع خسرانة",
-        "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "behind_schedule": "متأخرة عن الجدول", "open": "افتح", "of": "من",
+        "project_dues": "مستحقات على المشاريع", "overdue_certs": "مستخلصات متأخرة", "behind_schedule": "متأخرة عن الجدول", "requests_waiting": "طلبات شراء مستنية موافقة", "open": "افتح", "of": "من",
         "queue_waiting": "مستنيين في الاستقبال دلوقتي", "follow_missed": "متابعات فاتت", "follow_coming": "متابعات جاية (7 أيام)",
         "insurers_owe": "على شركات التأمين", "hours_unbilled": "ساعات لسه ماتفوترتش", "contracts_due": "فترات عقود مستحقة الفوترة",
     },
@@ -57,15 +57,15 @@ WORDS = {
         "runs": "Runs", "units": "Units produced", "prod_cost": "Production cost", "short_recipes": "Recipes short of materials", "open_orders_mfg": "Open production orders", "late_orders": "past their due date", "late_none": "nothing late",
         "short_none": "Every recipe has materials for a batch", "short_list": "Short:",
         "active_projects": "Active projects", "contract_total": "Contract value", "billed_pct": "Billed of contracts", "losing": "Projects losing money",
-        "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "behind_schedule": "Behind schedule", "open": "Open", "of": "of",
+        "project_dues": "Owed on projects", "overdue_certs": "Overdue certificates", "behind_schedule": "Behind schedule", "requests_waiting": "Purchase requests waiting for approval", "open": "Open", "of": "of",
         "queue_waiting": "Waiting at reception now", "follow_missed": "Missed follow-ups", "follow_coming": "Follow-ups due (7 days)",
         "insurers_owe": "Owed by insurers", "hours_unbilled": "Hours not billed yet", "contracts_due": "Contract periods due to bill",
     },
 }
 
 
-def _tile(key, label, value, kind="count", tone="", sub=""):
-    return {"key": key, "label": label, "value": value, "kind": kind, "tone": tone, "sub": sub}
+def _tile(key, label, value, kind="count", tone="", sub="", url=""):
+    return {"key": key, "label": label, "value": value, "kind": kind, "tone": tone, "sub": sub, "url": url}
 
 
 def _kitchen(words, today):
@@ -191,7 +191,7 @@ def _production(words, today):
     ], []
 
 
-def _projects(words, today):
+def _projects(words, today, user=None):
     from projects.models import Project, ProjectStatus
     from projects.services import summary
 
@@ -214,7 +214,18 @@ def _projects(words, today):
         _tile("losing", words["losing"], len(losing), tone="bad" if losing else "good", sub="، ".join(losing[:3])),
         _tile("behind_schedule", words["behind_schedule"], len(late), tone="bad" if late else "good", sub="، ".join(late[:3])),
         _overdue_tile(words, today),
-    ], []
+    ] + _requests_tile(words, user), []
+
+
+def _requests_tile(words, user):
+    """Contracting C7 (HG-125): the site's purchase requests waiting for approval, for whoever approves them; it opens the list."""
+
+    from projects import purchase_requests
+
+    if user is None or not purchase_requests.can_decide(user):
+        return []
+    waiting = purchase_requests.waiting_count(user)
+    return [_tile("requests_waiting", words["requests_waiting"], waiting, tone="bad" if waiting else "good", url=reverse("projects:purchase_requests_all"))]
 
 
 def _overdue_tile(words, today):
@@ -290,6 +301,6 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None, user
         title = WORKSHOP_WORDS["en" if lang == "en" else "ar"]["title"]
         return {"kind": kind, "title": title, "tiles": tiles, "lists": lists, "link": reverse("workorders:list"), "open": words["open"]}
     else:
-        tiles, lists = _projects(words, today)
+        tiles, lists = _projects(words, today, user)
     link = {"kitchen": "restaurant:board", "bookings": "appointments:agenda", "production": "manufacturing:home", "projects": "projects:list"}[kind]
     return {"kind": kind, "title": words[kind], "tiles": tiles, "lists": lists, "link": reverse(link), "open": words["open"]}

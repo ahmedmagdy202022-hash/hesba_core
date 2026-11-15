@@ -1,0 +1,57 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_requests.css' %}?v=c7-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C7 (HG-125): one purchase request: its lines, the engineer's submit, and the approver's decision. Approving makes a draft purchase order; nothing here moves money or stock. #}
+{% include "projects/_head.html" %}
+{% if form_error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ form_error }}</div>{% endif %}
+<section class="prj-card sr-sheet" data-request-page>
+<header class="sr-sheet__head"><div><a class="op-back" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ pw.back }}</a><h2 class="prj-h" data-request-heading><bdi dir="ltr">{{ label }}</bdi></h2>{% if item.note %}<p class="prq-note" data-request-note>{{ item.note }}</p>{% endif %}</div>
+{% if can_edit %}<div class="sr-sheet__acts"><a class="op-secondary" href="{% url 'projects:purchase_request_edit' project.pk item.pk %}?lang={{ lang }}" data-request-edit>{{ pw.edit }}</a></div>{% endif %}</header>
+<p class="sr-facts"><span class="op-status op-status-{{ status_class }}" data-request-state="{{ state }}">{{ status_label }}</span>{% if needed_by %}<span class="sr-fact" data-fact="needed_by"><small>{{ pw.needed_by }}</small><b>{{ needed_by }}</b></span>{% endif %}{% if order %}<span class="sr-fact" data-fact="order"><small>{{ pw.order }}</small><b>{% if order_url %}<a href="{{ order_url }}?lang={{ lang }}" data-request-order-link><bdi dir="ltr">{{ order.number }}</bdi></a>{% else %}<bdi dir="ltr" data-request-order>{{ order.number }}</bdi>{% endif %}</b><small data-order-status>{{ order_status }}</small></span>{% endif %}</p>
+{% if cancelled_text %}<p class="op-message" data-order-cancelled>{{ cancelled_text }}</p>{% endif %}
+<h3 class="sr-sub">{{ pw.lines }}</h3>
+<ul class="prq-sheet" data-request-lines>{% for row in lines %}<li data-request-line="{{ forloop.counter }}">
+<div class="prq-sheet__what"><b>{{ row.what }}</b>{% if row.code %} <small dir="ltr">{{ row.code }}</small>{% endif %}{% if row.boq %}<small class="prq-sheet__boq">{{ pw.boq }} {{ row.boq }}</small>{% endif %}{% if row.line.note %}<small>{{ row.line.note }}</small>{% endif %}</div>
+<div class="prq-sheet__qty"><b><span dir="ltr" data-line-qty>{{ row.qty }}</span> <bdi>{{ row.line.unit }}</bdi></b>{% if row.asked %}<small data-line-asked>{{ row.asked }}</small>{% endif %}</div>
+</li>{% endfor %}</ul>
+{% if item.decision_note %}<h3 class="sr-sub">{% if item.status == 'rejected' %}{{ pw.reason }}{% else %}{{ pw.decision }}{% endif %}</h3><p class="sr-text" data-text="decision">{{ item.decision_note|linebreaksbr }}</p>{% endif %}
+<p class="sr-meta" data-request-author>{{ written }}{% if sent %}<br>{{ sent }}{% endif %}{% if decided %}<br>{{ decided }}{% endif %}</p>
+<p class="prq-money" data-no-money>{{ pw.no_money }}</p>
+</section>
+{% if can_submit or can_reopen %}
+<form class="op-form prq-decide" method="post" data-submit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-actions">{% if can_submit %}<button class="op-primary" type="submit" name="action" value="submit" data-submit>{{ pw.submit }}</button>{% endif %}{% if can_reopen %}<button class="op-secondary" type="submit" name="action" value="reopen" data-reopen>{{ pw.reopen }}</button>{% endif %}</div></form>
+{% endif %}
+{% if not_yours %}<p class="op-message" data-not-yours>{{ pw.not_yours }}</p>{% elif decide_only %}<p class="op-muted" data-decide-only>{{ pw.decide_only }}</p>{% endif %}
+{% if can_approve %}
+<form class="op-form prq-decide" method="post" data-approve-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="approve">
+<h2>{{ pw.approve_title }}</h2><p class="op-muted">{{ pw.approve_hint }}</p>
+<div class="op-field"><label for="prq-supplier">{{ pw.supplier }}</label><select id="prq-supplier" name="supplier"><option value="">{{ pw.choose }}</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}">{{ supplier.name }}</option>{% endfor %}</select></div>
+<div class="prq-approve" data-approve-lines>{% for row in lines %}<div class="prq-approve__row" data-approve-line="{{ row.line.pk }}">
+<div class="prq-approve__what"><b>{{ row.what }}</b><small>{% if row.line.unit %}<bdi>{{ row.line.unit }}</bdi>{% endif %}</small></div>
+{% if not row.line.item_id %}<div class="op-field"><label for="prq-i{{ row.line.pk }}">{{ pw.pick_item }}</label><select id="prq-i{{ row.line.pk }}" name="i_{{ row.line.pk }}"><option value="">{{ pw.f_free }}</option>{% for choice in items %}<option value="{{ choice.pk }}">{{ choice.item_name }} ({{ choice.unit }})</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="prq-q{{ row.line.pk }}">{{ pw.approved_qty }}</label><input id="prq-q{{ row.line.pk }}" name="q_{{ row.line.pk }}" value="{{ row.qty }}" inputmode="decimal" dir="ltr" autocomplete="off"></div>
+</div>{% endfor %}</div>
+<div class="op-field"><label for="prq-approve-note">{{ pw.approve_note }}</label><input id="prq-approve-note" name="note" maxlength="1000" autocomplete="off"></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-approve>{{ pw.approve_btn }}</button></div></form>
+{% endif %}
+{% if can_reject %}
+<form class="op-form prq-decide" method="post" data-reject-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="reject">
+<h2>{{ pw.reject_title }}</h2>
+<div class="op-field"><label for="prq-reason">{{ pw.reject_reason }}</label><input id="prq-reason" name="reason" maxlength="1000" placeholder="{{ pw.reject_reason_ph }}" autocomplete="off"></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit" data-reject>{{ pw.reject_btn }}</button></div></form>
+{% endif %}
+{% if can_order %}
+<form class="op-form prq-decide" method="post" data-order-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="order">
+<h2>{{ pw.order_title }}</h2><p class="op-muted">{{ pw.order_hint }}</p>
+<div class="op-field"><label for="prq-order-supplier">{{ pw.supplier }}</label><select id="prq-order-supplier" name="supplier"><option value="">{{ pw.choose }}</option>{% for supplier in suppliers %}<option value="{{ supplier.pk }}">{{ supplier.name }}</option>{% endfor %}</select></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-order>{{ pw.order_btn }}</button></div></form>
+{% endif %}
+{% if can_cancel %}
+<form class="op-form prq-decide" method="post" data-cancel-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel">
+<h2>{{ pw.cancel_req }}</h2>
+<div class="op-field"><label for="prq-cancel-note">{{ pw.cancel_note }}</label><input id="prq-cancel-note" name="note" maxlength="255" autocomplete="off"></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit" data-cancel>{{ pw.cancel_req }}</button></div></form>
+{% endif %}
+{% endblock %}
