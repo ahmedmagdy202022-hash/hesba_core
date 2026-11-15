@@ -27,7 +27,7 @@ ACTIVITY_LEAD = {
     "education": ("education", "classes", "appointments"),
     "services": ("my_day", "workorders", "appointments", "packages", "hours", "contracts"),
     "manufacturing": ("manufacturing",),
-    "contracting": ("projects",),
+    "contracting": ("projects", "tenders"),  # C8 (HG-126): the tenders sit right after the projects (the tab bar takes the first only)
 }
 
 
@@ -40,7 +40,7 @@ def _activity():
 #: ENT-002: sections that belong to one activity. While working in an entity
 #: that has its own activity, the others' sections step aside (the whole-group
 #: view keeps every enabled section).
-ACTIVITY_OWNED = {"manufacturing": "manufacturing", "projects": "contracting", "guarantees": "contracting", "restaurant": "restaurants"}
+ACTIVITY_OWNED = {"manufacturing": "manufacturing", "projects": "contracting", "guarantees": "contracting", "tenders": "contracting", "restaurant": "restaurants"}
 
 
 def _hidden_for_entity(key):
@@ -106,6 +106,8 @@ NAV_ITEMS = (
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
      "permission": ("sales.view_sales_invoices", "projects.view_projects")},
+    # C8 (HG-126): the tender study, for the project office (the site engineer does not open it).
+    {"key": "tenders", "ar": "العطاءات", "en": "Tenders", "url_name": "tenders:list", "module": "projects", "permission": "sales.create_sales_invoice"},
     {"key": "restaurant", "ar": "الطاولات", "en": "Tables", "url_name": "restaurant:board", "module": "tables_orders",
      "permission": ("sales.view_sales_invoices", "restaurant.take_orders")},
     {"key": "education", "ar": "الطلاب والمجموعات", "en": "Students & groups", "url_name": "education:students", "module": "customers", "activity": "education",
@@ -160,7 +162,7 @@ NAV_ITEMS = (
 # final «إضافات» group.
 NAV_GROUPS = (
     {"key": "sales", "ar": "البيع", "en": "Sales",
-     "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "beds", "projects", "contracts", "packages", "hours")},
+     "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "beds", "projects", "tenders", "contracts", "packages", "hours")},
     {"key": "stock", "ar": "المخزون", "en": "Stock",
      "keys": ("items", "inventory", "warehouses", "purchases", "suppliers", "drugs", "manufacturing")},
     {"key": "people", "ar": "الناس", "en": "People",
@@ -295,6 +297,7 @@ TAB_LABELS = {
     "banks": {"ar": "البنوك", "en": "Banks"},
     "cheques": {"ar": "الشيكات", "en": "Cheques"},
     "guarantees": {"ar": "الضمانات", "en": "Guarantees"},
+    "tenders": {"ar": "العطاءات", "en": "Tenders"},
     "contracts": {"ar": "العقود", "en": "Contracts"},
     "packages": {"ar": "الباكدجات", "en": "Packages"},
     "hours": {"ar": "الساعات", "en": "Hours"},
