@@ -277,9 +277,12 @@ def _weight(raw, words):
     if not text:
         return None
     number = contract._decimal(text)
-    if number is None or number <= 0 or number > MAX_WEIGHT:
+    if number is None:
         raise ValidationError(words["weight"])
-    return number.quantize(Decimal("0.01"))
+    number = number.quantize(Decimal("0.01"))  # checked as it is stored: 0.001 rounds to 0.00, which the table refuses (Codex)
+    if number <= 0 or number > MAX_WEIGHT:
+        raise ValidationError(words["weight"])
+    return number
 
 
 def _progress(raw, words):
@@ -311,6 +314,8 @@ def save_task(project, user, data, task=None, lang="ar"):
 
     words = _words(lang)
     project = _locked(project, lang)
+    if task is not None:  # re-read under the project's lock, so a percent the site saved meanwhile is not written back (Codex)
+        task = ProjectTask.objects.select_for_update().get(pk=task.pk, project=project)
     if task is None and ProjectTask.objects.filter(project=project).count() >= MAX_TASKS:
         raise ValidationError(words["too_many"].format(max=MAX_TASKS))
     name = str(data.get("name") or "").strip()

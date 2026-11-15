@@ -27,7 +27,7 @@
 <ul class="sch-legend" aria-hidden="true"><li><i></i>{{ sw.legend_progress }}</li><li class="is-late"><i></i>{{ sw.legend_late }}</li><li class="is-done"><i></i>{{ sw.done_chip }}</li></ul>
 </section>
 {% endif %}
-<div class="op-table-wrap"><table class="op-table" data-list-rows data-schedule-tasks><thead><tr><th>{{ sw.task }}</th><th>{{ sw.start }}</th><th>{{ sw.end }}</th><th>{{ sw.predecessor }}</th><th>{{ sw.progress }}</th><th>{{ sw.planned_short }}</th><th>{{ sw.share }}</th><th>{{ sw.boq }}</th></tr></thead><tbody>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-schedule-tasks><thead><tr><th>{{ sw.task }}</th><th>{{ sw.start }} – {{ sw.end }}</th><th>{{ sw.progress }}</th><th>{{ sw.predecessor }}</th><th>{{ sw.status }}</th><th>{{ sw.planned_short }}</th><th>{{ sw.share }}</th><th>{{ sw.boq }}</th></tr></thead><tbody>
 {% for row in rows %}<tr data-schedule-task="{{ row.task.pk }}"{% if row.late %} data-late{% endif %}>
 <td data-row="title"><a href="{{ row.url }}" data-row-link>{{ row.task.name }}</a></td>
 <td data-row="sub">{{ row.start }} – {{ row.end }} · {{ row.days }}</td>

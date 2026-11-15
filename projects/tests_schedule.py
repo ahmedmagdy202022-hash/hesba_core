@@ -323,6 +323,35 @@ class PortfolioTests(ReferenceContract):
 
 # ---- the screens ----
 
+class CodexFindingsTests(SchoolSetup):
+    """Codex on #429: a weight that rounds to zero, a plan save that wrote back a stale percent, and the table's headers."""
+
+    def test_a_weight_that_rounds_to_zero_is_refused_with_a_message(self):
+        with self.assertRaises(ValidationError):
+            task(self.project, self.owner, "تشطيبات", date(2026, 7, 1), date(2026, 8, 1), weight="0.001")
+        self.client.force_login(self.owner)
+        page = self.client.post(self.url("schedule"), {"lang": "ar", "action": "add", "name": "تشطيبات", "start_date": "2026-07-01",
+                                                       "end_date": "2026-08-01", "weight": "0.004"})
+        self.assertLess(page.status_code, 500)
+        self.assertFalse(ProjectTask.objects.filter(name="تشطيبات").exists())
+
+    def test_a_plan_save_from_a_task_read_before_the_engineers_update_keeps_the_new_percent(self):
+        stale = ProjectTask.objects.get(pk=self.foundations.pk)  # the office's page loaded it at 70%
+        schedule.set_progress(self.project, self.foundations, self.engineer, "90")
+        schedule.save_task(self.project, self.owner, {"name": "الأساسات المسلحة", "start_date": "2026-01-16", "end_date": "2026-02-15",
+                                                      "weight": "30", "predecessor": str(self.excavation.pk)}, stale)
+        self.foundations.refresh_from_db()
+        self.assertEqual((self.foundations.name, self.foundations.progress), ("الأساسات المسلحة", 90))
+
+    def test_the_task_tables_headers_match_its_cells(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(self.url("schedule")).content.decode()
+        head = re.search(r"data-schedule-tasks><thead><tr>(.*?)</tr></thead>", html).group(1)
+        headers = re.findall(r"<th[^>]*>(.*?)</th>", head)
+        self.assertEqual(headers[2], "الإنجاز")  # the third cell is the percent done
+        self.assertEqual(len(headers), 8)
+
+
 class ScreenTests(SchoolSetup):
     def test_the_tab_shows_the_summary_the_alerts_the_chart_and_the_tasks(self):
         self.client.force_login(self.owner)
