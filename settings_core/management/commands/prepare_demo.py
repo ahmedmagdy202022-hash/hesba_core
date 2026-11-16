@@ -254,6 +254,10 @@ class Command(BaseCommand):
             self._drugs(master, owner, modules)  # T10: after the shelf, whose brands are the alternatives
         if "cashboxes" in modules:
             self._banking(master, owner)  # DEMO-NEW: a bank account and cheques
+            if "projects" in extras:
+                from projects import demo as project_demo
+
+                project_demo.seed_bank_side(master, owner)  # Contracting C13 (C9, C4): cheques on the project and letters of guarantee, once the bank is there
         if "employees_technicians" in modules:
             self._shop_staff(owner)  # DEMO-NEW: a shop's cashier and storekeeper, on the payroll too
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
@@ -1587,7 +1591,13 @@ class Command(BaseCommand):
             invoice = bill_progress(project, owner, amount=Decimal(value) * Decimal("0.2"), description="مستخلص رقم 1")
             if n == 0:
                 post_sales_invoice(invoice.id, user=owner)
+        from projects import demo
+
+        won = demo.seed_tenders(owner, master["customers"])  # Contracting C13 (C8): a tender won (it makes a third project) and one lost
+        if won is not None:
+            made.append(won)  # last, so the variation order still goes on the project with the contract's bill of quantities
         self._project_files(made, owner)
+        demo.seed_site_life(master, owner, made)  # Contracting C13: schedule, materials back from site, subcontract by quantities, requests, labour, equipment
 
     @staticmethod
     def _project_files(projects, owner):

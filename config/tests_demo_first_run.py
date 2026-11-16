@@ -28,6 +28,7 @@ from django.urls import reverse
 
 from settings_core.models import ClientProfile
 
+from . import demo as showcase
 from . import demo_first_run as first_run
 from . import demo_templates as templates
 from .demo import DEMO_ACTIVITIES, DEMO_TILES, demo_subs, demo_tour
@@ -524,10 +525,15 @@ class EveryActivityTests(TestCase):
                 owner.hesba_profile.refresh_from_db()
                 self.assertEqual(owner.hesba_profile.display_name, owner_name(activity, sub))
                 steps = demo_tour(activity, sub)
-                self.assertEqual(len(steps), 4 if (activity, sub) == ("medical", "clinic") else 3)  # M8: the clinic's tour also opens the beds
+                # M8: the clinic's tour also opens the beds; Contracting C13: the contractor's has a step for each merged feature
+                self.assertEqual(len(steps), {("medical", "clinic"): 4, ("contracting", "general"): 12}.get((activity, sub), 3))
                 for _, _, _, _, url_name in steps:
-                    self.assertEqual(self.client.get(f"{reverse(url_name)}?lang=ar").status_code, 200, url_name)
-                    self.assertEqual(self.client.get(f"{reverse(url_name)}?lang=en").status_code, 200, url_name)
+                    path = first_run.step_path(url_name)
+                    if path is None:  # a screen of one project's record: the demo that has just restarted has none, and the card drops the step
+                        self.assertIn(url_name, showcase.STEPS_OF_A_RECORD)
+                        continue
+                    self.assertEqual(self.client.get(f"{path}?lang=ar").status_code, 200, url_name)
+                    self.assertEqual(self.client.get(f"{path}?lang=en").status_code, 200, url_name)
                 self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
                 self.assertEqual(self.client.get("/demo/begin/?lang=ar").status_code, 200)
 

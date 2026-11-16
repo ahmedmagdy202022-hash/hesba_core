@@ -359,7 +359,7 @@ class SampleBusinessPerActivityTests(TestCase):
 
         catalog = self.fill("contracting", "general")
         self.assert_a_working_business(catalog)
-        self.assertEqual(Project.objects.count(), 2)
+        self.assertEqual(Project.objects.count(), 3)  # the two of the demo and the one the won tender made (Contracting C13)
         project = Project.objects.get(name__startswith="عمارة")
         self.assertTrue(project.issues.exists())
         self.assertTrue(project.invoices.filter(invoice__status="posted").exists())
@@ -380,9 +380,10 @@ class SampleBusinessPerActivityTests(TestCase):
         self.assertEqual([row["certificate"].number for row in overdue], [2])
         self.assertGreater(total, 0)
         rows, totals = insights.portfolio()
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 3)
         self.assertGreater(totals["retention"], 0)
-        self.assertTrue(project.subcontracts.get().bills.filter(invoice__status="posted").exists())
+        self.assertEqual(project.subcontracts.count(), 2)  # the lump-sum one and, from C11, the one by quantities
+        self.assertTrue(project.subcontracts.get(lines__isnull=True).bills.filter(invoice__status="posted").exists())
         self.assertEqual(project.budget.count(), 4)
         result = reconciliation()
         self.assertTrue(result["balanced"] and result["ok"], result["rows"])
