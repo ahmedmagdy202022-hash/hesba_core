@@ -687,6 +687,27 @@ def certificate_rows(certificate):
     return rows
 
 
+def to_date(certificate):
+    """Contracting C10 (HG-135): what the owner's statement shows "to date" beside this certificate's own figures: the gross,
+    the retention and the advance recovered of the project's posted certificates numbered up to this one, each after its
+    posted returns (``effective``, the same reading ``position`` makes). Reads only."""
+
+    certificates = live_certificates(certificate.project).filter(invoice__status="posted", number__lte=certificate.number)
+    return to_date_running(certificates.select_related("invoice").prefetch_related("invoice__returns"))[certificate.pk]
+
+
+def to_date_running(certificates):
+    """{certificate pk: its figures to date} for posted certificates, in one pass in number order: each certificate is read
+    once (``effective``), so a page with every statement costs one reading per certificate, not one per pair."""
+
+    running, gross, retention, recovery = {}, ZERO, ZERO, ZERO
+    for certificate in sorted(certificates, key=lambda c: c.number):
+        figures = effective(certificate)
+        gross, retention, recovery = gross + figures[0], retention + figures[1], recovery + figures[2]
+        running[certificate.pk] = {"gross": money_round(gross), "retention": money_round(retention), "recovery": money_round(recovery)}
+    return running
+
+
 # ---- retention ----
 
 def retention_held(project):

@@ -1,0 +1,75 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format hesba_labels %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_labour.css' %}?v=c5-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C5 (HG-130): a project's daily labour. The site engineer records attendance and sees no rate; the office pays a period as one expense. #}
+{% include "projects/_head.html" %}
+<section class="lab-intro"><h2 class="prj-h">{{ lw.tab_title }}</h2><p>{{ lw.tab_intro }}</p>
+{% url 'projects:labour_register' as register_url %}{% link_ok register_url as register_ok %}{% if register_ok %}<p><a class="hs-notice-link" href="{{ register_url }}?lang={{ lang }}" data-labour-register-link>{{ lw.open_register }}</a></p>{% endif %}</section>
+
+<section class="op-summary-grid op-summary-grid--compact" data-labour-summary>
+<article><small>{{ lw.total_days }}</small><strong dir="ltr" data-labour-days>{{ total_days|qty }}</strong></article>
+<article><small>{{ lw.unpaid_days }}</small><strong dir="ltr" data-labour-unpaid-days>{{ unpaid_days|qty }}</strong></article>
+{% if can_money %}<article><small>{{ lw.labour_cost }}</small><strong data-labour-cost>{{ labour_cost|money }}</strong></article>{% endif %}
+</section>
+
+{% if not is_open %}<p class="op-message" data-project-closed>{{ lw.closed }}</p>{% endif %}
+
+<section class="prj-card" data-labour-attendance>
+<h2 class="prj-h">{{ lw.attendance }}</h2>
+<form class="lab-day-pick" method="get" data-labour-day-pick><input type="hidden" name="lang" value="{{ lang }}"><label for="lab-day">{{ lw.day }}</label><input id="lab-day" type="date" name="day" value="{{ work_date }}" max="{{ today }}"><button class="op-secondary" type="submit">{{ lw.show_day }}</button></form>
+{% if grid %}
+<form method="post" data-labour-attendance-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="attendance"><input type="hidden" name="work_date" value="{{ work_date }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.worker }}</th><th>{{ lw.trade }}</th><th>{{ lw.days }}</th><th>{{ lw.overtime }}</th></tr></thead><tbody>
+{% for row in grid %}<tr data-attendance-worker="{{ row.worker.pk }}"><td>{{ row.worker.name }}</td><td>{{ row.worker.trade|default:"—" }}</td>
+{% if row.paid %}<td><span class="op-status op-status-posted" data-attendance-paid>{{ lw.paid_lock }}</span> {% if row.days == "0.5" %}{{ lw.half }}{% else %}{{ lw.full }}{% endif %}</td><td dir="ltr">{{ row.overtime|default:"—" }}</td>
+{% elif can_log and is_open %}<td><input type="hidden" name="worker" value="{{ row.worker.pk }}"><label class="lab-visually-hidden" for="lab-days-{{ row.worker.pk }}">{{ lw.days }}</label><select id="lab-days-{{ row.worker.pk }}" name="days_{{ row.worker.pk }}"><option value="0"{% if row.days == "0" %} selected{% endif %}>{{ lw.absent }}</option><option value="0.5"{% if row.days == "0.5" %} selected{% endif %}>{{ lw.half }}</option><option value="1"{% if row.days == "1" %} selected{% endif %}>{{ lw.full }}</option></select></td>
+<td><label class="lab-visually-hidden" for="lab-ot-{{ row.worker.pk }}">{{ lw.overtime }}</label><input id="lab-ot-{{ row.worker.pk }}" class="lab-hours" name="overtime_{{ row.worker.pk }}" value="{{ row.overtime }}" inputmode="decimal" dir="ltr" placeholder="0"></td>
+{% else %}<td>{% if row.days == "0.5" %}{{ lw.half }}{% elif row.days == "1" %}{{ lw.full }}{% else %}{{ lw.absent }}{% endif %}</td><td dir="ltr">{{ row.overtime|default:"—" }}</td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+{% if can_log and is_open %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.save_day }}</button></div>{% endif %}
+</form>
+{% else %}<p class="op-muted" data-no-workers>{{ lw.no_workers }}</p>{% endif %}
+</section>
+
+<section class="prj-card" data-labour-days-list>
+<h2 class="prj-h">{{ lw.recorded }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.date }}</th><th>{{ lw.worker }}</th><th>{{ lw.trade }}</th><th>{{ lw.days }}</th><th>{{ lw.overtime }}</th>{% if can_money %}<th>{{ lw.rate }}</th><th>{{ lw.amount }}</th>{% endif %}<th>{{ lw.sheet }}</th></tr></thead><tbody>
+{% for row in recorded %}{% with day=row.day %}<tr data-labour-day="{{ day.pk }}"><td dir="ltr">{{ day.work_date|date:"Y-m-d" }}</td><td>{{ day.worker.name }}</td><td>{{ day.worker.trade|default:"—" }}</td><td>{% if day.days == 1 %}{{ lw.full }}{% else %}{{ lw.half }}{% endif %}</td><td dir="ltr">{{ day.overtime_hours|qty }}</td>{% if can_money %}<td data-labour-rate>{{ day.rate|money }}</td><td>{{ row.amount|money }}</td>{% endif %}<td>{% if row.paid %}<span class="op-status op-status-posted" data-day-paid>{{ lw.sheet }} <bdi dir="ltr">{{ day.pay_sheet.number }}</bdi></span>{% else %}<span class="lab-muted" data-day-unpaid>{{ lw.unpaid }}</span>{% endif %}</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="8" class="op-empty" data-days-none>{{ lw.no_days }}</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+
+{% if can_money %}
+<section class="prj-card" data-labour-builder>
+<h2 class="prj-h">{{ lw.builder }}</h2>
+<form class="lab-period" method="get" data-labour-period><input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-field"><label for="lab-from">{{ lw.from }}</label><input id="lab-from" type="date" name="from" value="{{ period_from }}" max="{{ today }}"></div>
+<div class="op-field"><label for="lab-to">{{ lw.to }}</label><input id="lab-to" type="date" name="to" value="{{ period_to }}" max="{{ today }}"></div>
+<button class="op-secondary" type="submit">{{ lw.build }}</button></form>
+{% if builder %}
+<p class="lab-note" data-builder-hint>{{ builder_note }}</p>
+{% if builder.rows %}<div class="op-table-wrap"><table class="op-table" data-builder-rows><thead><tr><th>{{ lw.worker }}</th><th>{{ lw.trade }}</th><th>{{ lw.days }}</th><th>{{ lw.overtime }}</th><th>{{ lw.amount }}</th></tr></thead><tbody>
+{% for row in builder.rows %}<tr data-builder-worker="{{ row.worker.pk }}"><td>{{ row.worker.name }}</td><td>{{ row.worker.trade|default:"—" }}</td><td dir="ltr">{{ row.days|qty }}</td><td dir="ltr">{{ row.overtime|qty }}</td><td>{{ row.amount|money }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<p class="lab-total"><span>{{ lw.total }}</span> <strong data-builder-total>{{ builder.total|money }}</strong></p>
+{% if not builder.rows %}<p class="op-muted" data-builder-nothing>{{ lw.nothing }}</p>
+{% elif can_pay and is_open and expenses_open %}
+<form class="op-form hs-form lab-pay" method="post" data-labour-pay-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="pay"><input type="hidden" name="period_from" value="{{ period_from }}"><input type="hidden" name="period_to" value="{{ period_to }}">
+<div class="op-form-grid"><div class="op-field"><label for="lab-cashbox">{{ lw.cashbox }}</label><select id="lab-cashbox" name="cashbox" required>{% for box in cashboxes %}<option value="{{ box.pk }}">{{ box.name_ar }}{% if lang == 'en' and box.name_en %} — {{ box.name_en }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="lab-paydate">{{ lw.pay_date }}</label><input id="lab-paydate" type="date" name="pay_date" value="{{ today }}"></div></div>
+<p class="lab-note">{{ lw.pay_hint }}</p>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.pay }}</button></div></form>
+{% elif can_pay and not expenses_open %}<p class="op-muted">{{ lw.expenses_off }}</p>{% endif %}
+{% endif %}
+</section>
+
+<section class="prj-card" data-labour-sheets>
+<h2 class="prj-h">{{ lw.sheets }}</h2>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ lw.number }}</th><th>{{ lw.period }}</th><th>{{ lw.total }}</th><th>{{ lw.expense }}</th><th>{{ lw.status }}</th><th></th></tr></thead><tbody>
+{% for row in sheets %}{% with sheet=row.sheet %}<tr data-labour-sheet="{{ sheet.number }}"><td dir="ltr">{{ sheet.number }}</td><td dir="ltr">{{ sheet.period_from|date:"Y-m-d" }} → {{ sheet.period_to|date:"Y-m-d" }}</td><td>{{ sheet.total|money }}</td><td dir="ltr">{{ sheet.expense.expense_number|default:"—" }}</td><td>{% if row.paid %}<span class="op-status op-status-posted">{{ lw.sheet_paid }}</span>{% else %}<span class="op-status op-status-cancelled" data-sheet-cancelled>{{ lw.sheet_cancelled }}</span>{% endif %}</td><td class="lab-actions"><a class="op-secondary" href="{% url 'projects:labour_sheet_print' project.pk sheet.number %}?lang={{ lang }}" data-sheet-print>{{ lw.print }}</a></td></tr>{% endwith %}
+{% empty %}<tr><td colspan="6" class="op-empty" data-sheets-none>{{ lw.no_sheets }}</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+{% else %}<p class="op-muted" data-money-note>{{ lw.money_note }}</p>{% endif %}
+{% endblock %}

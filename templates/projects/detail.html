@@ -15,6 +15,7 @@
 {% if equipment_memo %}<p class="op-muted" data-equipment-memo>{{ cwords.eq_memo }}: <strong dir="ltr" data-memo="amount">{{ equipment_memo.amount|money }}</strong> · {{ cwords.eq_profit_after }}: <span data-memo="profit_after">{% include "projects/_profit.html" with value=equipment_memo.profit_after loss=words.loss %}</span> · <a class="hs-notice-link" href="{% url 'projects:equipment' project.pk %}?lang={{ lang }}">{{ cwords.eq_open }}</a><br><small>{{ cwords.eq_memo_note }}</small></p>{% endif %}
 {% if figures.drafts %}<p class="op-muted">{{ words.drafts }}: {{ figures.drafts|money }}</p>{% endif %}
 {% project_guarantees project %}{# Contracting C4 (HG-123): the project's letters of guarantee; amounts for managers only #}
+{% if owner_link %}{% include "projects/_owner_link.html" with box=owner_link %}{% endif %}
 
 {% if can_view_sales %}<h2>{{ words.bills }}</h2>
 <div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.invoice }}</th><th>{{ cwords.description }}</th><th>{{ words.date }}</th><th>{{ words.total }}</th><th>{{ words.due }}</th><th>{{ words.doc_status }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>

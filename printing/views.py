@@ -451,6 +451,10 @@ def shared_document(request, token):
         from appointments.public import page as appointment_page
 
         return appointment_page(request, pk)
+    if kind == "project":  # C10 (HG-135): the owner's project page; the variation approval has its own endpoint
+        from projects.public import page as project_page
+
+        return project_page(request, pk)
     if kind == "work_order":  # S2: status and quote of a work order; approve / refuse have their own endpoints
         from workorders.models import WorkOrder
         from workorders.public import page
