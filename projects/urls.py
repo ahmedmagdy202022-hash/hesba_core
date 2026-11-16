@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import contract_views, views, views_documents, views_equipment, views_purchase_requests, views_reports, views_schedule, views_subcontracts, views_variations
+from . import contract_views, views, views_documents, views_equipment, views_labour, views_purchase_requests, views_reports, views_schedule, views_subcontracts, views_variations
 
 
 app_name = "projects"
@@ -14,6 +14,9 @@ urlpatterns = [
     # Contracting C6 (HG-129): the equipment register (owned and hired machines) and a project's equipment hours
     path("equipment/", views_equipment.register, name="equipment_register"),
     path("equipment/<int:eid>/", views_equipment.machine_edit, name="equipment_edit"),
+    # Contracting C5 (HG-130): the site-worker register (day-workers) and a project's daily labour with its pay sheets
+    path("workers/", views_labour.register, name="labour_register"),
+    path("workers/<int:wid>/", views_labour.worker_edit, name="labour_worker"),
     path("<int:pk>/", views.project_detail, name="detail"),
     # Contracting C12 (HG-127): the printed issue and return vouchers
     path("<int:pk>/materials/<str:kind>/<int:number>/print/", views.voucher_print, name="voucher_print"),
@@ -24,6 +27,8 @@ urlpatterns = [
     path("<int:pk>/certificates/<int:number>/print/", contract_views.certificate_print, name="certificate_print"),
     path("<int:pk>/payments/", contract_views.payments, name="payments"),
     path("<int:pk>/equipment/", views_equipment.equipment_tab, name="equipment"),
+    path("<int:pk>/labour/", views_labour.labour_tab, name="labour"),
+    path("<int:pk>/labour/sheets/<int:number>/print/", views_labour.sheet_print, name="labour_sheet_print"),
     path("<int:pk>/subcontracts/", contract_views.subcontracts, name="subcontracts"),
     # Contracting C11 (HG-128): one subcontract: its lines, bills by quantities, advance and payments, and the printed bill
     path("<int:pk>/subcontracts/<int:sid>/", views_subcontracts.subcontract_page, name="subcontract"),
