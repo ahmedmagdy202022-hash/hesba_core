@@ -158,11 +158,13 @@ def _nearest(amount, step):
 
 
 def _main_project():
-    """The demo's project with a bill of quantities (the first one made): where every feature below is shown."""
+    """The demo's contract under way: the first project made with a bill of quantities and certificates. Every feature below is shown
+    on it; a project that came from a won tender has the bill but no certificate yet, so it is never the one (and a demo with no
+    bill of quantities, like the maintenance contractor's, has none)."""
 
     from .models import Project
 
-    return Project.objects.filter(boq__isnull=False).order_by("pk").distinct().first()
+    return Project.objects.filter(boq__isnull=False, certificates__isnull=False).order_by("pk").distinct().first()
 
 
 def _spare(item):
@@ -179,7 +181,7 @@ def seed_site_life(master, owner, projects):
     demo has what it needs missing (no supplier, no site engineer). Returns the names of the parts that were made."""
 
     today = timezone.localdate()
-    main = next((project for project in projects if project.boq.exists()), None)
+    main = next((project for project in projects if project.boq.exists() and project.certificates.exists()), None)
     site = main or (projects[0] if projects else None)
     if site is None:
         return []

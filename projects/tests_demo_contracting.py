@@ -245,6 +245,13 @@ class TourTests(ContractingDemo):
         self.assertEqual(urls[11], "/projects/report/?lang=ar")
         self.assertEqual(len(set(urls)), 12)
 
+    @override_settings(DEMO_MODE=True)
+    def test_the_dashboard_shows_the_twelve_steps(self):
+        self.client.force_login(self.owner)
+        page = self.client.get("/dashboard/?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.content.decode().count("data-demo-tour-step="), 12)
+
     def test_the_diary_step_opens_the_newest_report_that_has_photos(self):
         path = demo.tour_path("projects:diary_day")
         report = site_reports.reports_for(self.main)[0]
@@ -286,3 +293,57 @@ class ToneTests(ContractingDemo):
                 self.assertNotIn(word, text)
             for pattern, word in zip(SLANG_FRAGMENTS, SLANG):
                 self.assertIsNone(pattern.search(text), f"{word}: {text}")
+
+
+class OtherContractingBusinesses(TestCase):
+    """The same build for the other kinds of contractor: a visitor who restarts and picks one of them presses «املاها ببيانات تجريبية»."""
+
+    def build(self, sub):
+        from reports.tests_demo_catalogs import SampleBusinessPerActivityTests
+
+        SampleBusinessPerActivityTests("fill").fill("contracting", sub)
+
+    def books_balance(self):
+        from ledger.reports import reconciliation
+        from reports import selectors
+
+        result = reconciliation()
+        self.assertTrue(result["balanced"] and result["ok"], result["rows"])
+        alerts = selectors.stock_alert_counts()
+        self.assertEqual((alerts["out_of_stock"], alerts["low_stock"]), (1, 1))
+
+    def assert_the_same_demo(self, sub):
+        from cheques.models import Cheque
+        from guarantees.models import Guarantee
+        from tenders.models import Tender
+
+        from .models import ProjectTask
+
+        self.build(sub)
+        self.assertEqual(Project.objects.count(), 3)
+        self.assertEqual((ProjectTask.objects.count(), PurchaseRequest.objects.count(), Guarantee.objects.count(), Tender.objects.count(),
+                          Cheque.objects.filter(number__in=("300871", "300872")).count()), (4, 2, 2, 2, 2))
+        self.assertEqual(Subcontract.objects.filter(lines__isnull=False).distinct().count(), 1)
+        self.assertEqual((LabourPaySheet.objects.count(), EquipmentLog.objects.count()), (1, 6))
+        self.books_balance()
+
+    def test_finishing_gets_the_same_demo(self):
+        self.assert_the_same_demo("finishing")
+
+    def test_electromechanical_gets_the_same_demo(self):
+        self.assert_the_same_demo("electromechanical")
+
+    def test_infrastructure_gets_the_same_demo(self):
+        self.assert_the_same_demo("infrastructure")
+
+    def test_a_contractor_with_no_bill_of_quantities_gets_what_needs_none_and_nothing_breaks(self):
+        from guarantees.models import Guarantee
+
+        from .models import ProjectTask
+
+        self.build("maintenance_contracts")
+        self.assertEqual((ProjectTask.objects.count(), Guarantee.objects.count(), Subcontract.objects.filter(lines__isnull=False).count()), (0, 0, 0))
+        self.assertEqual((LabourPaySheet.objects.count(), EquipmentLog.objects.count()), (1, 6))  # a labour week and two machines need no bill of quantities
+        self.assertEqual(Project.objects.count(), 3)  # the tender won still makes its project
+        self.assertIsNone(demo.tour_path("projects:boq"))  # and no project is «under way», so the project steps of the tour are dropped
+        self.books_balance()

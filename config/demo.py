@@ -135,7 +135,7 @@ DEMO_TOURS = {
         ("الجدول الزمني والبند المتأخر", "The schedule and its late task", "المخطط مقابل المنفذ وتنبيه التأخير", "Planned against actual, with the delay alert", "projects:schedule"),
         ("صرف خامات للموقع وارتجاع الفائض", "Issue materials to site and return the surplus", "إذن صرف بثلاثة أصناف وإذن ارتجاع بتكلفة المشروع", "A three-line issue voucher and a return at the project's cost", "projects:detail"),
         ("مستخلص مقاول الباطن بالكميات", "Bill the subcontractor by quantities", "دفعة مقدمة تُخصم من المستخلص، واحتجاز ضمان", "An advance recovered from the bill, and retention", "projects:subcontract"),
-        ("خطابات الضمان", "Letters of guarantee", "خطاب ينتهي بعد 20 يوم وتنبيه التجديد", "A letter that expires in 20 days, with the renewal alert", "guarantees:list"),
+        ("خطابات الضمان", "Letters of guarantee", "خطاب ضمان قرب ينتهي، وتنبيه التجديد", "A letter close to its expiry, with the renewal alert", "guarantees:list"),
         ("طلبات الشراء من الموقع", "Purchase requests from the site", "طلب معتمد بأمر شراء مسودة، وطلب مستني القرار", "An approved request with its draft purchase order, and one waiting", "projects:purchase_requests"),
         ("دراسة العطاءات", "The tender study", "عطاء اترسّى علينا وعطاء خسرناه بسبب السعر", "A tender won and one lost on price", "tenders:list"),
         ("تقرير المشاريع", "The projects report", "المستخلصات والضمان والدفعة المقدمة", "Progress bills, retention and the advance", "projects:report"),
