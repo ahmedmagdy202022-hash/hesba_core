@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_labour.css' %}?v=c5-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C5 (HG-130): the site-worker register. Day-workers, not employees; the day rate is the office's. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'projects:list' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ lw.back }}</a><h1>{{ lw.register_title }}</h1><p>{{ lw.register_intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-labour-register><thead><tr><th>{{ lw.name }}</th><th>{{ lw.trade }}</th><th>{{ lw.phone }}</th>{% if can_money %}<th>{{ lw.rate }}</th>{% endif %}<th>{{ lw.days_total }}</th><th>{{ lw.status }}</th>{% if can_pay %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}{% with worker=row.worker %}<tr data-worker="{{ worker.pk }}"><td>{{ worker.name }}</td><td>{{ worker.trade|default:"—" }}</td><td dir="ltr">{{ worker.phone|default:"—" }}</td>{% if can_money %}<td data-worker-rate>{{ worker.day_rate|money }}</td>{% endif %}<td dir="ltr">{{ row.days|qty }}</td><td><span class="op-status op-status-{% if worker.active %}posted{% else %}cancelled{% endif %}">{% if worker.active %}{{ lw.active }}{% else %}{{ lw.stopped }}{% endif %}</span></td>{% if can_pay %}<td class="lab-actions"><a class="op-secondary" href="{{ row.url }}" data-worker-edit>{{ lw.edit }}</a></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty" data-workers-none>{{ lw.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_pay %}
+<form class="op-form hs-form" method="post" data-worker-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ lw.add }}</h2>
+{% include "projects/_labour_worker_fields.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ lw.save }}</button></div></form>
+{% else %}<p class="op-muted" data-view-only>{{ lw.view_only }}</p>{% endif %}
+{% endblock %}

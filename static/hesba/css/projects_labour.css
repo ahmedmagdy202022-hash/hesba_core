@@ -1,0 +1,22 @@
+/* Contracting C5 (HG-130): the site-worker register and a project's daily labour. Tokens only: no colour literals.
+   Logical properties, so an Arabic page mirrors and an English one does not. On a phone (390 px) every block is one
+   column and the tables scroll inside their own wrapper (or read as cards), never the page. */
+
+.lab-intro p{margin:var(--hs-space-1) 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading)}
+.lab-note{margin:var(--hs-space-1) 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:var(--hs-leading);overflow-wrap:anywhere}
+.lab-muted{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.lab-actions{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.lab-day-pick,.lab-period{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--hs-space-2);align-items:end;margin-block-end:var(--hs-space-3);min-width:0}
+.lab-day-pick input,.lab-period input{width:100%;min-width:0}
+.lab-day-pick .op-secondary,.lab-period .op-secondary{width:100%}
+.lab-hours{width:100%;max-width:8rem;min-width:0}
+.lab-total{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--hs-space-2);margin:var(--hs-space-3) 0;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.lab-total span{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.lab-total strong{color:var(--hs-navy);font-weight:var(--hs-weight-bold)}
+.lab-pay .op-primary,[data-labour-attendance-form] .op-primary{width:100%}
+.lab-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+@media (min-width:720px){
+  .lab-day-pick{grid-template-columns:auto minmax(0,14rem) auto;justify-content:start}
+  .lab-period{grid-template-columns:repeat(2,minmax(0,14rem)) auto;justify-content:start}
+  .lab-day-pick .op-secondary,.lab-period .op-secondary,.lab-pay .op-primary,[data-labour-attendance-form] .op-primary{width:auto}
+}

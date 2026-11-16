@@ -613,3 +613,75 @@ class EquipmentLog(models.Model):
     class Meta:
         ordering = ["-work_date", "-pk"]
         indexes = [models.Index(fields=["project", "work_date"])]
+
+
+# ---- Contracting C5 (HG-130): daily labour and its pay sheets ----
+
+class SiteWorker(models.Model):
+    """A day-worker on the company's sites: paid by the day, not an employee (no payroll, no insurance; owner question 9)."""
+
+    name = models.CharField(max_length=160)
+    trade = models.CharField(max_length=80, blank=True)
+    phone = models.CharField(max_length=40, blank=True)
+    day_rate = models.DecimalField(max_digits=14, decimal_places=2)
+    active = models.BooleanField(default=True)
+    # ENT-001: the entity whose cashbox pays this worker; a worker made without one belongs to the main entity.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="site_workers")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name", "pk"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if self.entity_id is None:
+            from entities.services import main_entity
+
+            self.entity = main_entity()
+        super().save(*args, **kwargs)
+
+
+class LabourPaySheet(models.Model):
+    """One payment of a project's day-workers for a period: one ordinary expense («عمالة يومية») from a cashbox, linked to
+    the project under «labour». The days it paid point at it; they are paid while its expense is posted."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="labour_sheets")
+    number = models.PositiveIntegerField()
+    period_from = models.DateField()
+    period_to = models.DateField()
+    total = models.DecimalField(max_digits=14, decimal_places=2)
+    # The overtime divisor (hours in a working day) the sheet was paid with, so its lines still add up to its total
+    # if the setting changes later.
+    day_hours = models.DecimalField(max_digits=4, decimal_places=2)
+    expense = models.OneToOneField("expenses.Expense", on_delete=models.PROTECT, null=True, blank=True, related_name="labour_sheet")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-number"]
+        constraints = [models.UniqueConstraint(fields=["project", "number"], name="labour_sheet_number_per_project")]
+
+
+class LabourDay(models.Model):
+    """A worker's day on a project: a full day (1) or half a day (0.5), with overtime hours, at the day rate the worker had
+    when it was recorded (copied, so a later rate change moves nothing)."""
+
+    project = models.ForeignKey(Project, on_delete=models.PROTECT, related_name="labour_days")
+    work_date = models.DateField()
+    worker = models.ForeignKey(SiteWorker, on_delete=models.PROTECT, related_name="days")
+    days = models.DecimalField(max_digits=3, decimal_places=1)
+    overtime_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    rate = models.DecimalField(max_digits=14, decimal_places=2)
+    # The sheet that paid it. Paid while that sheet's expense is posted: a cancelled expense frees the day by being read,
+    # nothing is written on cancel; the next sheet takes it over.
+    pay_sheet = models.ForeignKey(LabourPaySheet, on_delete=models.PROTECT, null=True, blank=True, related_name="days")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-work_date", "worker__name", "pk"]
+        constraints = [models.UniqueConstraint(fields=["project", "worker", "work_date"], name="labour_day_once_per_worker")]
+        indexes = [models.Index(fields=["project", "work_date"])]
