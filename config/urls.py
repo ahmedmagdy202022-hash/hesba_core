@@ -22,6 +22,7 @@ from education import public as education_public
 from education import views_portal as education_portal
 from payments import views as payments_views
 from appointments import public as appointments_public
+from projects import public as projects_public
 from appointments import views_booking as booking_views
 from restaurant import views_qr as table_menu_views
 from restaurant import views_reservations as table_booking_views
@@ -50,6 +51,8 @@ urlpatterns = [
     # M3: the patient confirms an appointment, or asks to cancel it (a request for reception; nothing is cancelled here), from the same signed link.
     path("share/<str:token>/confirm/", login_not_required(appointments_public.confirm), name="share_appointment_confirm"),
     path("share/<str:token>/cancel-request/", login_not_required(appointments_public.cancel_request), name="share_appointment_cancel_request"),
+    # C10 (HG-135): the project owner approves a draft variation order from the project's signed link (public, CSRF-protected, throttled).
+    path("share/<str:token>/variation/<int:oid>/approve/", login_not_required(projects_public.approve), name="share_project_variation_approve"),
     # M6 (HG-085): a lab patient's results of one day, from a signed link plus a second factor (public, CSRF-protected, throttled).
     path("results/<str:token>/", login_not_required(medical_public.page), name="lab_result_link"),
     # E6 (HG-099): is this completion certificate genuine? The sheet's QR opens it. Signed token with its own salt, GET only, throttled, no-store.
