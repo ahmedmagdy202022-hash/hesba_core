@@ -468,7 +468,9 @@ def tour_card(request, lang, profile):
     activity, sub = profile.activity_slug, profile.sub_activity_slug or ""
     steps = []
     for ar, en, hint_ar, hint_en, url_name in showcase.demo_tour(activity, sub):
-        path = reverse(url_name)
+        path = step_path(url_name)
+        if path is None:  # a screen of one record the demo does not have (C13): no step
+            continue
         if closed_module(path) or closed_capability(path):  # a screen this business switched off is no step to take
             continue
         if not _step_is_there(url_name):  # video finding 20: never a step into a screen this sub-activity does not have
@@ -491,6 +493,17 @@ def tour_card(request, lang, profile):
         "lead": lead,
         "dismiss": "Hide" if lang == "en" else "إخفاء",
     }
+
+
+def step_path(url_name):
+    """The path a tour step opens: ``reverse(url_name)``, or for a step that belongs to one record of the demo
+    (``showcase.STEPS_OF_A_RECORD``) the path its resolver gives (None when there is no such record)."""
+
+    from django.utils.module_loading import import_string
+
+    if url_name in showcase.STEPS_OF_A_RECORD:
+        return import_string(showcase.STEP_PATH)(url_name)
+    return reverse(url_name)
 
 
 def _step_is_there(url_name):

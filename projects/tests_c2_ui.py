@@ -242,7 +242,7 @@ class DemoTests(TestCase):
 
     def test_each_project_has_three_documents_and_four_days_of_reports_one_of_them_delayed(self):
         today = timezone.localdate()
-        self.assertEqual(Project.objects.count(), 2)  # the demo's count is unchanged
+        self.assertEqual(Project.objects.count(), 3)  # the demo's two and the one the won tender made (Contracting C13)
         for project in Project.objects.all():
             rows = Attachment.objects.filter(content_type=ContentType.objects.get_for_model(Project), object_id=project.pk)
             self.assertEqual(sorted(documents.STAGE_KIND[row.stage] for row in rows), ["contract", "drawing", "photo"])

@@ -125,10 +125,20 @@ DEMO_TOURS = {
         ("الوصفات والتكلفة", "Recipes and cost", "كل منتج بخاماته وتكلفة القطعة", "Each product with its materials and unit cost", "manufacturing:home"),
         ("المخزن بعد الإنتاج", "Stock after production", "الخامات اللي اتصرفت والمنتج اللي دخل", "Materials used and product received", "inventory:stock"),
     ),
+    # Contracting C13: twelve steps, one for each merged feature; the ones that belong to a project open the demo's own (STEPS_OF_A_RECORD).
     "contracting": (
-        ("افتح مشروع ومقايسته", "Open a project and its bill of quantities", "بنود الأعمال بالكمية والفئة", "Work items by quantity and rate", "projects:list"),
+        ("افتح المشروع ومقايسته", "Open the project and its bill of quantities", "بنود الأعمال بالكمية والفئة والإجمالي", "Work items by quantity, rate and total", "projects:boq"),
+        ("المستخلص 3 بالكميات", "Progress bill 3 by quantities", "سجّل الكميات المنفذة، رحّله واطبعه للمالك", "Enter the work done, post it and print it for the owner", "projects:certificate"),
+        ("أمر تغيير معتمد", "An approved variation order", "الأصلي مقابل المعدّل: كميات وبنود جديدة ومدة زيادة", "Original against revised: quantities, new items and extra time", "projects:variation"),
+        ("شيك على المشروع", "A cheque on the project", "شيك تحت التحصيل وآخر اتحصّل؛ استلم شيك وارتجعه", "One cheque in hand and one cleared; receive one and bounce it", "projects:payments"),
+        ("يومية الموقع بصورها", "The site diary with its photos", "الطقس والعمالة والمعدات والتأخير، وصور اليوم", "Weather, crew, equipment, delays and the day's photos", "projects:diary_day"),
+        ("الجدول الزمني والبند المتأخر", "The schedule and its late task", "المخطط مقابل المنفذ وتنبيه التأخير", "Planned against actual, with the delay alert", "projects:schedule"),
+        ("صرف خامات للموقع وارتجاع الفائض", "Issue materials to site and return the surplus", "إذن صرف بثلاثة أصناف وإذن ارتجاع بتكلفة المشروع", "A three-line issue voucher and a return at the project's cost", "projects:detail"),
+        ("مستخلص مقاول الباطن بالكميات", "Bill the subcontractor by quantities", "دفعة مقدمة تُخصم من المستخلص، واحتجاز ضمان", "An advance recovered from the bill, and retention", "projects:subcontract"),
+        ("خطابات الضمان", "Letters of guarantee", "خطاب ينتهي بعد 20 يوم وتنبيه التجديد", "A letter that expires in 20 days, with the renewal alert", "guarantees:list"),
+        ("طلبات الشراء من الموقع", "Purchase requests from the site", "طلب معتمد بأمر شراء مسودة، وطلب مستني القرار", "An approved request with its draft purchase order, and one waiting", "projects:purchase_requests"),
+        ("دراسة العطاءات", "The tender study", "عطاء اترسّى علينا وعطاء خسرناه بسبب السعر", "A tender won and one lost on price", "tenders:list"),
         ("تقرير المشاريع", "The projects report", "المستخلصات والضمان والدفعة المقدمة", "Progress bills, retention and the advance", "projects:report"),
-        ("مشتريات الموقع", "Site purchases", "خامات اتشترت على المشروع", "Materials bought for the project", "purchases:list"),
     ),
 }
 
@@ -137,6 +147,15 @@ DEMO_TOURS = {
 #: medical centre's screen. ``demo_first_run.tour_card`` drops a step whose predicate says this business has no such
 #: screen, the same way it already drops one into a switched-off module or capability.
 STEP_IS_THERE = {"medical:queue": "medical.queue.has_queue"}
+
+#: Contracting C13: a step whose screen belongs to one record of the demo (a project's bill of quantities, its newest certificate).
+#: ``reverse(url_name)`` cannot give its address, so the step names a function that does: it takes the url name and returns the
+#: path, or None when the demo has no such record (an emptied demo), and ``demo_first_run.tour_card`` then drops the step.
+STEP_PATH = "projects.demo.tour_path"
+STEPS_OF_A_RECORD = frozenset({
+    "projects:boq", "projects:certificate", "projects:variation", "projects:payments", "projects:diary_day", "projects:schedule", "projects:detail",
+    "projects:subcontract", "projects:purchase_requests",
+})
 
 # M8 (HG-088): the clinic's demo has the beds on, so its tour has a fourth step; the tour card drops it wherever beds are off.
 # Video finding 20: a dentist has no reception queue, so the step above is dropped there; the day's report takes its
