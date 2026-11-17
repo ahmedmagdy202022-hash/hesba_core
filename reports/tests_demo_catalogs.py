@@ -166,9 +166,9 @@ class SampleBusinessPerActivityTests(TestCase):
         from shipping.models import Shipment
 
         self.assert_a_working_business(self.fill("restaurants", "fast_food", capabilities="pos,shift_required,promotions,loyalty,shipping"))
-        self.assertEqual(InvoicePromotion.objects.count(), 3)
+        self.assertEqual(InvoicePromotion.objects.count(), 5)  # the three till sales and, from the restaurants close-out, a table's part and a bill paid with the coupon
         self.assertTrue(InvoicePromotion.objects.filter(coupon_code="HESBA").exists())  # a cheap item still reaches the coupon's minimum
-        self.assertEqual(Shipment.objects.count(), 3)
+        self.assertEqual(Shipment.objects.count(), 5)  # the three parcels and, from the restaurants close-out, the two platform orders handed to their riders
         self.assertTrue(PointsEntry.objects.filter(kind="earn").exists())
 
     def test_a_courier_fee_leaves_the_running_costs_in(self):
@@ -262,11 +262,12 @@ class SampleBusinessPerActivityTests(TestCase):
         from restaurant.models import Order
 
         self.assertIsNotNone(insights.plate_cost(dish))
-        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 9)
+        # the sample's nine, and the restaurants close-out's: a part of a merged table, a bill paid two ways, and two platform orders
+        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 13)
         today = timezone.localdate()
         report = insights.period_report(today - timedelta(days=7), today)
-        self.assertEqual((report["totals"]["orders"], len(report["hours"]) >= 3), (9, True))
-        self.assertEqual([(row["orders"], row["fees"], row["minutes"]) for row in insights.deliveries(today - timedelta(days=7), today)], [(1, Decimal("20.00"), 30)])
+        self.assertEqual((report["totals"]["orders"], len(report["hours"]) >= 3), (13, True))
+        self.assertEqual([(row["orders"], row["fees"], row["minutes"]) for row in insights.deliveries(today - timedelta(days=7), today)], [(1, Decimal("20.00"), 30), (2, Decimal("0.00"), None)])  # the driver's, and the two platform orders (no driver, no fee of ours)
         self.assertEqual(len(insights.waste(today - timedelta(days=7), today)[0]), 1)
 
     def test_a_restaurant_plate_costs_its_ingredients(self):

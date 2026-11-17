@@ -85,8 +85,12 @@ class RestaurantDemoTests(NoCarPartsDemo, AiTestCase):
         from restaurant.models import DiningTable, KitchenTicket, Order, OrderStatus
 
         busy = [table for table in DiningTable.objects.all() if Order.objects.filter(table=table, status=OrderStatus.OPEN).exists()]
-        self.assertEqual(len(busy), 2)  # R4: a second table is in service too, so the kitchen screen has an older card and a void to show
-        order = Order.objects.filter(status=OrderStatus.OPEN, lines__ticket__isnull=True, lines__voided=False).distinct().get()  # the one with a line still to send
+        # R4: a second table is in service too, so the kitchen screen has an older card and a void to show; the restaurants close-out (#445)
+        # adds three more: the add-ons and combo table, the merged tables, and the check table with the service charge and the minimum.
+        self.assertEqual(len(busy), 5)
+        # the R4 table: sent to the kitchen and the bar, with one line still to send
+        order = (Order.objects.filter(status=OrderStatus.OPEN, lines__ticket__isnull=True, lines__voided=False)
+                 .filter(lines__ticket__isnull=False).distinct().get())
         self.assertEqual(order.lines.filter(voided=False).count(), 4)  # three dishes and a drinks line (R4)
         self.assertEqual(KitchenTicket.objects.filter(order=order).count(), 2)  # R4: one ticket for the kitchen and one for the bar
         self.assertEqual(order.lines.filter(voided=False, ticket__isnull=True).count(), 1)  # one line still to send

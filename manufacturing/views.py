@@ -164,7 +164,9 @@ def _overview(request, lang):
 
     issues = list(OrderMaterialIssue.objects.filter(order__in=open_orders).select_related("operation"))
     issued_orders = {issue.order_id for issue in issues}
-    wip_value = sum((issue.operation.quantity * issue.operation.unit_cost for issue in issues), Decimal("0")) if can_cost else None
+    # F12 (HG-132): a return is an adjustment in and comes off what is on the floor.
+    wip_value = sum(((-1 if issue.operation.adjustment_direction == "in" else 1) * issue.operation.quantity * issue.operation.unit_cost
+                     for issue in issues), Decimal("0")) if can_cost else None
     shortages = {}
     for order in open_orders:
         total = len(order.stages) or 1

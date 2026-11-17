@@ -280,7 +280,9 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
         consumed = list(issued)
         if any(operation.status != "posted" for operation in consumed):
             raise ValidationError(words["reversed"])
-    total = sum((operation.quantity * operation.unit_cost for operation in consumed), Decimal("0"))
+    # Manufacturing F12 (HG-132): an order's returns are adjustments in; they come off the materials (issues + extras − returns).
+    total = sum(((-1 if operation.adjustment_direction == StockAdjustmentDirection.IN else 1) * operation.quantity * operation.unit_cost
+                 for operation in consumed), Decimal("0"))
     produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, location, StockAdjustmentDirection.IN, output, reason, user,
                             unit_cost=cost_round((total + conversion_cost) / output), stand_in=stand_in)
     run = ProductionRun.objects.create(number=number, recipe=recipe, batches=batches, location=location, run_date=run_date, output_quantity=output,

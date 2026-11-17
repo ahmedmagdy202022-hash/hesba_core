@@ -1,0 +1,39 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<form method="get" class="op-form mfg-costs-filter" data-costs-filter><input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid">
+<div class="op-field"><label for="cv-from">{{ words.from }}</label><input id="cv-from" type="date" name="from" value="{{ date_from|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="cv-to">{{ words.to }}</label><input id="cv-to" type="date" name="to" value="{{ date_to|date:'Y-m-d' }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.show }}</button></div></form>
+
+{% if rows %}
+<section class="op-summary-grid" data-costs-totals>
+  <article data-total-material><small>{{ words.material }} · {{ words.standard }} / {{ words.actual }}</small><strong>{{ totals.material|money }}</strong><small>{{ words.standard }} {{ totals.std_material|money }} · {{ words.diff }} <bdi dir="ltr">{{ totals.diff_material|money }}</bdi></small></article>
+  <article data-total-labour><small>{{ words.labour }} · {{ words.planned }} / {{ words.actual }}</small><strong>{{ totals.labour|money }}</strong><small>{{ words.planned }} {{ totals.planned_labour|money }} · {{ words.diff }} <bdi dir="ltr">{{ totals.diff_labour|money }}</bdi></small></article>
+  <article data-total-overhead><small>{{ words.overhead }} · {{ words.planned }} / {{ words.actual }}</small><strong>{{ totals.overhead|money }}</strong><small>{{ words.planned }} {{ totals.planned_overhead|money }} · {{ words.diff }} <bdi dir="ltr">{{ totals.diff_overhead|money }}</bdi></small></article>
+  <article data-total-yield><small>{{ words.yield }}</small><strong>{{ totals.good|qty }}</strong><small>{{ words.ordered }} {{ totals.planned_units|qty }} · {{ words.diff }} <bdi dir="ltr">{{ totals.diff_units|qty }}</bdi></small></article>
+</section>
+<p class="op-muted">{{ words.lines_note }}</p>
+<div class="op-table-wrap"><table class="op-table" data-costs-orders><thead><tr><th>{{ words.order }}</th><th>{{ words.product }}</th><th>{{ words.material }}</th><th>{{ words.labour }}</th><th>{{ words.overhead }}</th><th>{{ words.yield }}</th><th>{{ words.unit }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-variance-order="{{ row.order.number }}"><td><a href="{% url 'manufacturing:order' row.order.pk %}?lang={{ lang }}"><bdi>{{ row.order.number }}</bdi></a><small class="mfg-mrp-note" dir="ltr">{{ row.order.run.run_date|date:"Y-m-d" }}</small></td><td>{{ row.order.recipe.product.item_name }}</td>
+<td data-material-variance><div class="mfg-title"><span>{{ row.material|money }}</span><small class="mfg-mrp-note">{{ words.standard }} {{ row.std_material|money }} · <bdi dir="ltr">{{ row.diff_material|money }}</bdi></small></div></td>
+<td data-labour-variance><div class="mfg-title"><span>{{ row.labour|money }}</span><small class="mfg-mrp-note">{{ words.planned }} {{ row.planned_labour|money }} · <bdi dir="ltr">{{ row.diff_labour|money }}</bdi></small></div></td>
+<td data-overhead-variance><div class="mfg-title"><span>{{ row.overhead|money }}</span><small class="mfg-mrp-note">{{ words.planned }} {{ row.planned_overhead|money }} · <bdi dir="ltr">{{ row.diff_overhead|money }}</bdi>{% if row.outside %} · {{ words.outside }} {{ row.outside|money }}{% endif %}</small></div></td>
+<td data-yield-variance><div class="mfg-title"><span>{{ row.good|qty }}</span><small class="mfg-mrp-note">{{ words.ordered }} {{ row.planned_units|qty }} · <bdi dir="ltr">{{ row.diff_units|qty }}</bdi></small></div></td>
+<td data-unit-variance><div class="mfg-title"><span>{{ row.unit|unit_cost }}</span><small class="mfg-mrp-note">{{ words.standard }} {{ row.standard_unit|unit_cost }}</small></div></td></tr>
+{% endfor %}</tbody></table></div>
+
+<h2>{{ words.details }}</h2>
+{% for row in rows %}<details class="mfg-costs-detail" data-variance-materials="{{ row.order.number }}"><summary><bdi>{{ row.order.number }}</bdi> · {{ row.order.recipe.product.item_name }}</summary>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.item }}</th><th>{{ words.std_qty }}</th><th>{{ words.qty }}</th><th>{{ words.diff }}</th><th>{{ words.std_value }}</th><th>{{ words.value }}</th><th>{{ words.diff }}</th></tr></thead><tbody>
+{% for line in row.materials %}<tr data-variance-item="{{ line.item.item_code }}"><td>{{ line.item.item_name }}</td><td>{{ line.std_qty|qty }}</td><td>{{ line.qty|qty }}</td><td dir="ltr" data-diff-qty>{{ line.diff_qty|qty }}</td><td>{{ line.std_value|money }}</td><td>{{ line.value|money }}</td><td dir="ltr" data-diff-value>{{ line.diff_value|money }}</td></tr>{% endfor %}
+</tbody></table></div></details>{% endfor %}
+{% else %}<p class="op-notice" data-costs-empty>{{ words.none }}</p>{% endif %}
+
+<h2>{{ words.months }}</h2>
+{% if months is None %}<p class="op-muted" data-no-months>{{ words.no_months }}</p>{% else %}<p class="op-muted">{{ words.months_hint }}</p>
+<div class="op-table-wrap"><table class="op-table" data-costs-months><thead><tr><th>{{ words.month }}</th><th>{{ words.absorbed }}</th><th>{{ words.wages }}</th><th>{{ words.paid_overhead }}</th><th>{{ words.paid }}</th><th>{{ words.gap }}</th></tr></thead><tbody>
+{% for month in months %}<tr data-month="{{ month.month|date:'Y-m' }}"><td dir="ltr">{{ month.month|date:"Y-m" }}</td><td data-absorbed>{{ month.absorbed|money }}</td><td>{{ month.wages|money }}</td><td>{{ month.overhead|money }}</td><td data-paid>{{ month.paid|money }}</td><td dir="ltr" data-gap>{{ month.difference|money }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endblock %}
