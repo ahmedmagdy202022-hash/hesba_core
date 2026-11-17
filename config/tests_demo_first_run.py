@@ -525,15 +525,15 @@ class EveryActivityTests(TestCase):
                 owner.hesba_profile.refresh_from_db()
                 self.assertEqual(owner.hesba_profile.display_name, owner_name(activity, sub))
                 steps = demo_tour(activity, sub)
-                # M8: the clinic's tour also opens the beds; Contracting C13: the contractor's has a step for each merged feature
-                self.assertEqual(len(steps), {("medical", "clinic"): 4, ("contracting", "general"): 12}.get((activity, sub), 3))
+                # M8: the clinic's tour also opens the beds; Contracting C13, Restaurants close-out: the contractor's and the restaurant's have a step for each merged feature
+                self.assertEqual(len(steps), {("medical", "clinic"): 4, ("contracting", "general"): 12, ("restaurants", "restaurant"): 12}.get((activity, sub), 3))
                 for _, _, _, _, url_name in steps:
                     path = first_run.step_path(url_name)
-                    if path is None:  # a screen of one project's record: the demo that has just restarted has none, and the card drops the step
+                    if path is None:  # a screen of one project's or one table's record: the demo that has just restarted has none, and the card drops the step
                         self.assertIn(url_name, showcase.STEPS_OF_A_RECORD)
                         continue
-                    self.assertEqual(self.client.get(f"{path}?lang=ar").status_code, 200, url_name)
-                    self.assertEqual(self.client.get(f"{path}?lang=en").status_code, 200, url_name)
+                    self.assertEqual(self.client.get(first_run.step_url(path, "ar")).status_code, 200, url_name)
+                    self.assertEqual(self.client.get(first_run.step_url(path, "en")).status_code, 200, url_name)
                 self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
                 self.assertEqual(self.client.get("/demo/begin/?lang=ar").status_code, 200)
 

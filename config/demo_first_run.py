@@ -475,10 +475,10 @@ def tour_card(request, lang, profile):
             continue
         if not _step_is_there(url_name):  # video finding 20: never a step into a screen this sub-activity does not have
             continue
-        query = f"?lang={lang}"
+        url = step_url(path, lang)
         if url_name == "reports:daily":  # the summary opens on yesterday by default; «اقفل اليوم» means today's
-            query += f"&date={timezone.localdate().isoformat()}"
-        steps.append({"n": len(steps) + 1, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": f"{path}{query}"})
+            url += f"&date={timezone.localdate().isoformat()}"
+        steps.append({"n": len(steps) + 1, "title": ar if lang == "ar" else en, "hint": hint_ar if lang == "ar" else hint_en, "url": url})
     if not steps:
         return None
     if lang == "en":
@@ -502,8 +502,14 @@ def step_path(url_name):
     from django.utils.module_loading import import_string
 
     if url_name in showcase.STEPS_OF_A_RECORD:
-        return import_string(showcase.STEP_PATH)(url_name)
+        return import_string(showcase.STEP_PATHS[url_name.partition(":")[0]])(url_name)
     return reverse(url_name)
+
+
+def step_url(path, lang):
+    """A step's path in one language: the path, plus its own query when it has one (``?phone=…``)."""
+
+    return f"{path}{'&' if '?' in path else '?'}lang={lang}"
 
 
 def _step_is_there(url_name):

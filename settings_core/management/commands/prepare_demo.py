@@ -258,6 +258,8 @@ class Command(BaseCommand):
                 from projects import demo as project_demo
 
                 project_demo.seed_bank_side(master, owner)  # Contracting C13 (C9, C4): cheques on the project and letters of guarantee, once the bank is there
+        if "tables" in extras:
+            self._restaurant_close_out(master, catalog, owner)  # Restaurants close-out: after the shop's own samples (offers, couriers, the bank) are made
         if "employees_technicians" in modules:
             self._shop_staff(owner)  # DEMO-NEW: a shop's cashier and storekeeper, on the payroll too
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
@@ -1127,6 +1129,16 @@ class Command(BaseCommand):
         Order.objects.filter(pk=order.pk).update(opened_at=closed - timedelta(minutes=55), dispatched_at=closed - timedelta(minutes=30), closed_at=closed)
         kitchen_demo.seed_modifiers(catalog, dishes, owner)  # R1a: last, so every order above is placed exactly as before
         kitchen_demo.seed_combo(catalog, dishes, master["items"], owner)  # R1b: after every order too, so no seeded figure moves
+
+    def _restaurant_close_out(self, master, catalog, owner):
+        """Restaurants close-out: every merged restaurant feature the floor above does not show, with a few records each
+        (``restaurant.demo.seed_features``, through the services their screens use). Skipped when the kitchen or the tables are not there."""
+
+        from restaurant import demo as restaurant_demo
+
+        dishes = self._dishes(master)
+        if dishes and master["raw"]:
+            restaurant_demo.seed_features(master, catalog, dishes, owner)
 
     @staticmethod
     def _closing_moment(today, days, hour, now):

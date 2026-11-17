@@ -673,8 +673,10 @@ class DemoComboTests(TestCase):
         self.assertEqual([[(choice.item.item_code, choice.upcharge) for choice in slot.choices.order_by("sort", "pk")] for slot in combo.slots.order_by("sort", "pk")],
                          [[("DEMO-ITEM-01", D("0.00")), ("DEMO-ITEM-02", D("20.00"))], [("DEMO-ITEM-04", D("0.00")), ("DEMO-ITEM-05", D("0.00"))]])
         self.assertEqual(combos.cheapest_saving(combo), D("20.00"))
-        self.assertFalse(OrderLine.objects.filter(combo__isnull=False).exists())  # nothing ordered with it: every seeded figure is as before
+        # the close-out (restaurant.demo.seed_combo_table) puts one on table 1's open bill (two lines); nothing is paid with it, so every seeded figure is as before
+        self.assertEqual(set(OrderLine.objects.filter(combo__isnull=False).values_list("order__status", flat=True)), {"open"})
+        self.assertEqual(OrderLine.objects.filter(combo__isnull=False).count(), 2)
         today = timezone.localdate()
         self.assertEqual(period_report(today - timedelta(days=7), today)["totals"]["combo_discount"], D("0.00"))
-        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 9)
+        self.assertEqual(Order.objects.filter(status="paid", invoice__status="posted").count(), 13)  # the sample's nine and the close-out's four (a part, a bill paid two ways, two platform orders; points and the gift card need loyalty and gift cards on)
         self.assertEqual(demo.seed_combo(None, [], [], None), combo)  # safe to run twice

@@ -95,9 +95,19 @@ DEMO_TOURS = {
         ("الأجهزة اللي عندك بسيريالاتها", "Your devices by serial number", "كل جهاز بسيرياله وضمانه", "Every device with its serial and warranty", "serials:index"),
         ("اقفل اليوم وشوف الربح", "Close the day and see the profit", "تقرير اليوم والخزنة في دقيقة", "The day's report and the cash in a minute", "reports:daily"),
     ),
+    # Restaurants close-out: twelve steps, one for each merged feature; the ones that belong to one record open the demo's own (STEPS_OF_A_RECORD).
     "restaurants": (
         ("افتح طاولة وسجّل طلب", "Open a table and take an order", "الصالة قدامك: اضغط على طاولة وضيف الأطباق", "The floor is in front of you: tap a table, add dishes", "restaurant:board"),
-        ("شوف تكلفة الطبق", "See what a dish costs", "كل طبق بمكوناته من المطبخ وهامشه", "Each dish with its kitchen ingredients and margin", "restaurant:costing"),
+        ("طاولة بإضافات ووجبة كومبو", "A table with add-ons and a combo", "جبنة زيادة، اختيار إجباري على الطبق، ووجبة كومبو في نفس الطلب", "Extra cheese, a required choice on a dish, and a combo on the same order", "restaurant:order_combo"),
+        ("قسّم الحساب وادمج طاولتين", "Split a bill and merge two tables", "طاولة اتدمجت مع جارتها، وجزء منها اتدفع لوحده بالأصناف", "A table merged with its neighbour, and a part of it paid on its own by items", "restaurant:order_split"),
+        ("الشيك قبل الدفع بالخدمة والكوبون", "The check before paying, with service and a coupon", "نسبة الخدمة والحد الأدنى للفرد وخصم الكوبون، وتقدر تدفع بأكثر من طريقة", "The service charge, the minimum per guest and the coupon, and you can pay several ways", "restaurant:check"),
+        ("منيو الـ QR على الطاولة", "The table's QR menu", "اللي بيشوفه الضيف: المنيو وطلب من الطاولة، وطلب مستني قبول الكاشير", "What the guest sees: the menu and ordering from the table, with a request waiting for staff", "restaurant:table_menu"),
+        ("حجز الطاولات والعربون", "Table reservations and the deposit", "حجوزات اليوم والبكرة، وحجز عليه عربون", "Today's and tomorrow's bookings, one with a deposit", "restaurant:reservations"),
+        ("طلبات مسبقة بميعاد استلام", "Pre-orders with a pick-up time", "طلب بعربون وقائمة الإنتاج لليوم اللي بعده", "An order with a deposit and the production list for the next day", "restaurant:preorders"),
+        ("مركز الاتصال: العميل برقمه", "The call centre: the caller by number", "عناوينه المحفوظة ومنطقة التوصيل وآخر طلباته، وكرر الطلب بضغطة", "Saved addresses, the delivery zone and last orders, and repeat an order in one tap", "restaurant:call"),
+        ("طلبات المنصات (طلبات وelmenus)", "Delivery-platform orders (Talabat and elmenus)", "طلب اتسجّل على حساب المنصة، وعمولتها، والمبلغ المعلّق عندها", "An order posted on the platform's account, its commission, and what it still holds", "restaurant:platforms"),
+        ("أكثر من براند من مطبخ واحد", "Several brands from one kitchen", "كل براند بمنيو وعنوان على الإيصال، والطلب بيحمل اسم براند", "Each brand with its own menu and receipt header; each order carries its brand", "restaurant:brands"),
+        ("تكلفة الطبق والتحضير الملغي", "What a dish costs, and a cancelled preparation", "مكونات الطبق وهامشه، وتحضير اتلغى وخاماته رجعت للمخزن", "A dish's ingredients and margin, and a preparation cancelled with its materials back in stock", "restaurant:dish"),
         ("تقرير المطعم النهارده", "Today's restaurant report", "الأطباق الأكثر طلبًا، وساعات الذروة، وأداء فريق الخدمة", "Top dishes, peak hours and the waiters", "restaurant:report"),
     ),
     "medical": (
@@ -148,13 +158,17 @@ DEMO_TOURS = {
 #: screen, the same way it already drops one into a switched-off module or capability.
 STEP_IS_THERE = {"medical:queue": "medical.queue.has_queue"}
 
-#: Contracting C13: a step whose screen belongs to one record of the demo (a project's bill of quantities, its newest certificate).
-#: ``reverse(url_name)`` cannot give its address, so the step names a function that does: it takes the url name and returns the
-#: path, or None when the demo has no such record (an emptied demo), and ``demo_first_run.tour_card`` then drops the step.
-STEP_PATH = "projects.demo.tour_path"
+#: Contracting C13, Restaurants close-out: a step whose screen belongs to one record of the demo (a project's bill of quantities, its newest
+#: certificate; a table's order, the guest's menu of one table). ``reverse(url_name)`` cannot give its address, so the step's app names a
+#: function that does (``STEP_PATHS``, by the name's namespace): it takes the url name and returns the path, or None when the demo has no
+#: such record (an emptied demo), and ``demo_first_run.tour_card`` then drops the step. The path may carry its own query (the call
+#: centre's caller, the check's coupon); the card adds its language to it.
+STEP_PATHS = {"projects": "projects.demo.tour_path", "restaurant": "restaurant.demo.tour_path"}
 STEPS_OF_A_RECORD = frozenset({
     "projects:boq", "projects:certificate", "projects:variation", "projects:payments", "projects:diary_day", "projects:schedule", "projects:detail",
     "projects:subcontract", "projects:purchase_requests",
+    "restaurant:order_combo", "restaurant:order_split", "restaurant:check", "restaurant:table_menu", "restaurant:reservations", "restaurant:preorders",
+    "restaurant:call", "restaurant:platforms", "restaurant:brands", "restaurant:dish",
 })
 
 # M8 (HG-088): the clinic's demo has the beds on, so its tour has a fourth step; the tour card drops it wherever beds are off.
@@ -237,10 +251,11 @@ def switch_activity(request):
         # each only where the activity already has the sections it needs (a clinic gets no purchases for the invoice photo).
         modules = activity_fit.default_modules(activity, sub)
         ai = tuple(slug for slug in AI_CAPABILITIES if set(caps.needs(slug)) <= set(modules))
-        from .demo_templates import services_demo_extras
+        from .demo_templates import restaurant_demo_extras, restaurant_demo_modules, services_demo_extras
 
-        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai + tuple(slug for slug in services_demo_extras(activity, sub) if caps.is_available(slug))))
-        complete_setup(profile, activity, sub, ",".join(modules), user=request.user, capabilities_raw=",".join(chosen))
+        extras = services_demo_extras(activity, sub) + restaurant_demo_extras(activity, sub)
+        chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai + tuple(slug for slug in extras if caps.is_available(slug))))
+        complete_setup(profile, activity, sub, ",".join(restaurant_demo_modules(activity, sub, modules)), user=request.user, capabilities_raw=",".join(chosen))
     lang = "en" if request.POST.get("lang") == "en" else "ar"
     return redirect(f"/dashboard/?lang={lang}")
 
