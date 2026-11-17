@@ -208,11 +208,20 @@ class RestaurantDemo(TestCase):
 
     def test_two_brands_from_one_kitchen_and_the_orders_after_them_carry_a_brand(self):
         food, drinks = Brand.objects.order_by("sort")
-        self.assertEqual((food.name_ar, food.is_default, [c.name_ar for c in food.categories.all()]), ("بيت الواحة", True, ["المنيو"]))
+        self.assertEqual((food.name_ar, food.is_default, [c.name_ar for c in food.categories.all()]), ("بيت الواحة", True, []))  # the whole menu
         self.assertEqual((drinks.name_ar, drinks.is_default, [c.name_ar for c in drinks.categories.all()]), ("واحة جوس", False, ["المشروبات"]))
         takeaway = Order.objects.get(kind="takeaway", status="open")
         self.assertEqual((takeaway.brand, takeaway.total), (drinks, D("30.00")))
         self.assertEqual(Order.objects.get(notes=demo.BIRTHDAY_NOTE).brand, food)
+        # a table opened after the build keeps the whole menu on its screen: its drinks and the combo are there to order
+        from . import services
+
+        self.client.force_login(self.owner)
+        fresh = services.open_order(self.owner, table=table("6"), guests=2)
+        self.assertEqual(fresh.brand, food)
+        page = self.client.get(reverse("restaurant:order", args=[fresh.pk]), {"lang": "ar"}).content.decode()
+        self.assertIn("مياه معدنية صغيرة", page)
+        self.assertIn("وجبة التوفير", page)
         self.assertEqual(Order.objects.filter(brand__isnull=True, status="paid").count(), 14)  # every bill made before the brands carries none: the sample's nine and this close-out's five
 
     # ---- R3: the service charge, the minimum and the check -----------------------------------------------------------------------
@@ -375,6 +384,12 @@ class OtherRestaurantBusinesses(TestCase):
 
     def test_a_cafe_gets_the_same_demo(self):
         self.assertEqual(self.check("cafe", 6), 12)
+        from . import services
+
+        fresh = services.open_order(get_user_model().objects.get(username="owner"), table=table("6"), guests=2)  # a table opened after the build
+        page = self.client.get(reverse("restaurant:order", args=[fresh.pk]), {"lang": "ar"}).content.decode()
+        self.assertIn("قهوة تركي", page)  # the café's coffee is in the bar's category: the default brand must not hide it
+        self.assertIn("وجبة التوفير", page)
         self.assertEqual(TableReservation.objects.count(), 4)
         self.assertEqual(Brand.objects.count(), 2)
 

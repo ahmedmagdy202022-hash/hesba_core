@@ -133,7 +133,8 @@ COUPON = ("MARHABA15", "كوبون الترحيب", "15")
 HAPPY_HOUR = ("هابي أور المشروبات", "20", "17:00", "19:00")
 TABLE_MINIMUM = "40"
 SERVICE_PERCENT = "12"
-BRANDS = (("بيت الواحة", "Bayt El Waha", "مطبخ بيت الواحة", "food"), ("واحة جوس", "Waha Juice", "عصائر طازجة من مطبخ بيت الواحة", "bar"))
+#: the default brand has no categories (the whole menu: every table opened after it keeps its drinks and its combo); the drinks brand holds the bar's
+BRANDS = (("بيت الواحة", "Bayt El Waha", "مطبخ بيت الواحة", "all"), ("واحة جوس", "Waha Juice", "عصائر طازجة من مطبخ بيت الواحة", "bar"))
 ZONES = (("مدينة نصر", "Nasr City", "20.00", "35"), ("مصر الجديدة", "Heliopolis", "25.00", "40"), ("التجمع الخامس", "Fifth Settlement", "35.00", "55"))
 PLATFORMS = (("طلبات", "Talabat", "TB-48210", "18", True), ("elmenus", "elmenus", "EM-77305", "15", False))
 CANCELLED_PREPARATION = "تحضير زائد عن احتياج الوردية"
@@ -434,7 +435,7 @@ def seed_platforms(master, dishes, cashbox, owner):
 
 
 def seed_brands(catalog, drink, waiter, owner):
-    """R11: two brands from the one kitchen (the food, and the drinks bar), and a takeaway of the drinks brand open. Run after every other order,
+    """R11: two brands from the one kitchen (the whole menu, and the drinks bar), and a takeaway of the drinks brand open. Run after every other order,
     so the first brand does not stick to the ones the sample made before it."""
 
     from reports.management.commands.seed_demo_business import BAR_CATEGORY_CODE
@@ -444,11 +445,10 @@ def seed_brands(catalog, drink, waiter, owner):
 
     if Brand.objects.exists():
         return []
-    food = Category.objects.filter(category_code="DEMO-CAT-01").first()
     bar = Category.objects.filter(category_code=BAR_CATEGORY_CODE).first()
     made = []
     for name_ar, name_en, header, which in BRANDS:
-        category = food if which == "food" else bar
+        category = bar if which == "bar" else None
         made.append(brands.save_brand({"name_ar": name_ar, "name_en": name_en, "header": header, "sort": str(len(made) + 1),
                                        "categories": [category.pk] if category else []}, owner))
     if drink is not None:
