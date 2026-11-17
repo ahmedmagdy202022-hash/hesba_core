@@ -630,6 +630,7 @@ Status: RESOLVED — approved by Ahmed on 9 Oct 2026 ("موافق تعمل كل 
     - No new movement types: the issued value leaves the stock report when it is issued and sits in the work-in-progress account (`wip`, 110502 on the manufacturing chart; COGS where a chart has none).
   - **Labour and overhead:** the product is adjusted in at `cost_round((materials + labour + overhead) / good units)`, so its authoritative average cost, and with it each later sale's cost (HG-003), includes conversion cost.
     - In GL-002 the output operation credits work in progress with the material part and **absorbed production cost** (`production_cost`, 5102) with the conversion part. The labour and overhead themselves were already booked as expenses when paid.
+      - **Note, 15 Nov 2026 (see HG-132):** the output now credits work in progress with exactly what the run's materials debited to it (their own journal values) and books the rest of its value to 5102, so the piastres of the four-decimal unit cost no longer stay in work in progress.
   - **Scrap:** good units = order quantity − all stage defects, capped at the fewest good units any stage recorded. Only good units enter stock; they carry the whole cost (normal loss), and the run records `scrap_quantity`. A lot with no good units cannot be finished.
     - **Note, 13 Nov 2026 (see HG-100):** as built, the finish put `recipe output × batches − scrap` into stock, with the batches rounded to three decimals, so an order whose quantity is not a whole number of batches came in a few thousandths of a unit short (100 with a batch of 3 as 99.999). HG-100 makes the finish put in the good units themselves.
   - **Not changed:** inventory movement types, stock report sums, average-cost formula, closing logic, plain production runs (no conversion, no scrap).
@@ -5153,6 +5154,129 @@ HG-100 is reserved by another open task and is not in this tree: the gap is on p
   6. A cancelled order's `LotUse` rows stay; the trace ignores them (the order is cancelled). A cancelled run's rows stay too.
   7. The screens were checked by markup assertions and the tests above, not in a phone browser; a 390 px look is still to be taken before merge.
   8. Migration numbering: any other open branch that adds a `manufacturing` or `batches` migration and merges first makes this one renumber.
+
+## HG-132 — Manufacturing F12: what an order really used and really spent: extra issue, return at the cost still on the order, actual labour and overhead lines, over-yield, the rounding residue booked to 5102 (one projector rule), and the variance report (`manufacturing/0006_actuals`)
+
+- **Status:** implemented on `claude/manufacturing-f12-actuals` (cut from the open F3 branch `claude/manufacturing-f3-lots-trace`, PR #438, so `manufacturing/0005_lots` is already there) under Ahmed's delegation, **awaiting his review before merge**. **T3**: it changes the stock cost of a manufactured product (materials, labour and overhead as really used and spent) and adds one rule to the general-ledger projector. Written as «Manufacturing F12». HG-127 to HG-131 are on open PRs; nothing is renumbered. Roadmap: `docs/MARKET_PARITY_ROADMAP.md`, «إعادة القياس — Manufacturing F12»: items 3, 4 and 9 move from جزئي to موجود, 52.5% → 60.0%.
+- **Why:** an order issued exactly the recipe at its first stage and nothing else; a line that used 1 kg more flour could only make a general stock adjustment (booked as a stock-count loss, 5211, not to the order), and what was left over could not come back to the order. Labour and overhead were one number each, typed when the order was **opened**. Nothing compared an order with its standard. And the four-decimal unit cost left piastres in work in progress (trap 2).
+- **Why no existing table serves:** `labor_cost` and `overhead_cost` hold one figure each; they stay as the **planned** figures. Actual spending needs lines, and issues need a kind so returns can be told apart. The standard must be stored at the start, or editing the recipe rewrites last month's variance (trap 17).
+
+### Schema (`manufacturing/0006_actuals`, depends on `0005_lots`, `master_data/0003`, `staff/0001`; no data step)
+
+- `OrderMaterialIssue.kind` (`issue` / `extra` / `return`, default `issue`, so every existing row is the start's issue) and `OrderMaterialIssue.reason` (255, blank).
+- `OrderStandardLine(order, component, quantity 14,3, unit_cost 14,4)`, unique per (order, component): the recipe's quantity × the order's batches at the cost each component was issued at, written by `orders.advance` right after the start's issue.
+- `OrderCostLine(order, kind labour/overhead/outside, description, employee → staff.Employee NULL, hours 10,2 NULL, rate 14,2 NULL, amount 14,2 > 0 by a check constraint, created_by, created_at, cancelled_at NULL)`. **The work-centre column is not added** (F6a is not built; it can come with F6a's own migration).
+- `makemigrations --check --dry-run`: clean.
+
+### Rules (`manufacturing/actuals.py`)
+
+- **Extra issue «صرف إضافي»:** only on an order on the floor (`in_progress`) that has its start's issue rows; any active stock-tracked item but the order's own product (a substitute too), a quantity above zero and a reason. Stock is checked under `lock_items_for_stock_check` first (one clear Arabic message), then `inventory.services.adjust_stock(reference, today, item, order.location, StockAdjustmentDirection.OUT, quantity, reason, user)` **with no `unit_cost`**, so it goes out at the authoritative average at that moment. Linked by `OrderMaterialIssue(kind=extra, reason=…)`. Reference `PO-…-X01`, `-X02` (`services._next` on `StockOperation.reference_number`). While batches are on, the lots it used are written to `LotUse(order=…)` exactly as F3's start does (`lots._positions` before and after, `lots.record_uses`; an expired lot refuses the whole call), and `lots.after_finish` hands them to the run. **No projector change for it:** the projector already sends `order_issue` operations to work in progress.
+- **Return «رجّع خامات»:** only on an order on the floor; refused on a finished or cancelled order («مينفعش ترجّع خامات على أمر خلص أو اتلغى.»). The item must have been issued or extra-issued to this order; the quantity is at most issued + extra − returned (posted rows only). **Engine API used, exactly:** `inventory.services.adjust_stock(reference, today, item, order.location, StockAdjustmentDirection.IN, quantity, reason, user, unit_cost=unit_cost)`, `stand_in` left `None`, with `unit_cost = cost_round(value still on the order ÷ quantity still on it)` (`actuals.return_cost`): this order's posted issue and extra rows of that item less its earlier returns, each at the cost it moved at. (Built first as the average over every issue and extra; Codex on #439 showed that a return, then a cheaper extra, then a return took more value than the order held. Now the next return can take at most what is left.) Because a `unit_cost` is passed and there is no stand-in, the engine's own line `if stand_in is None and not user_has_permission(user, "inventory.view_cost"): raise PermissionDenied(...)` applies; `return_materials` also checks `inventory.view_cost` itself first, and `adjust_stock` checks `inventory.adjust_stock` (`_require_adjust`). This is the same path HG-036's finish uses for the product (`produce` passes `unit_cost` to `adjust_stock`). Linked by `OrderMaterialIssue(kind=return)`; reference `PO-…-R01`. The projector credits work in progress from the movement's direction (an adjustment in on an `order_issue` operation). **A return writes no `LotUse` row** (rows are positive quantities used, and the batch screens hand returned stock to lots by expiry, not by origin).
+- **Actual lines:** labour and overhead only from the screen and the service (`outside` is kept for F4's own path); hours × rate (both 2 places, amount `money_round`) or an amount; added and cancelled while the order is planned or on the floor; both need `inventory.view_cost` (they set the product's stock cost) on top of the page's `inventory.adjust_stock`. Cancelling sets `cancelled_at`; nothing is deleted. Audited (`add_order_cost_line`, `cancel_order_cost_line`, `extra_issue`, `return_materials`).
+- **Finish (`orders.finish`):**
+  - materials = issues + extras − returns: `services.produce` now signs each consumed operation by `adjustment_direction` (the one line in `produce`, below);
+  - conversion = `actuals.conversion(order)["total"]`, **per kind**: labour = its live lines if any, else `labor_cost`; overhead = its live lines if any, else `overhead_cost`; outside = its live lines only. With no line at all it is `labor_cost + overhead_cost`, byte for byte as before (`tests_hg036` unchanged and passing);
+  - output = good units (F11, HG-100);
+  - the run's consumption rows are written **out-operations first, then returns** (`actuals.out_first`), so `cancel_run`, unchanged, reverses what went out before a return leaves stock again.
+- **Over-yield (owner question 8):** at the final stage only, good units above the order's quantity are accepted up to quantity × 1.10 (rounded down to 3 places) with a reason in the stage note; otherwise «السليم أكتر من كمية الأمر؛ اكتب السبب في الملاحظات.» / «… لحد 10% بس، يعني {cap} وحدة على الأكتر.». `good_units` returns the final stage's good units when every stage is done and that figure exceeds the order's quantity; the run's scrap is then 0 and the extra units share the same total cost (310.00 over 105 = 2.9524). An earlier stage still refuses more than the order. Rule as built: an over-yield is measured against the **ordered** quantity, so after earlier defects a final figure between the units entering the stage and the order is still refused.
+- **Cancelling an order on the floor (`orders.cancel`):** every posted issue, extra and return is reversed through `cancel_stock_operation`, out-operations first, then returns; stock and value come back exactly (tested: flour 200 / 4,000.00, sugar 38 / 1,212.00).
+- **Signed elsewhere:** `orders.issued_value` (the cost card on the floor) and the home's work-in-progress tile subtract returns. `cost_card` shows each kind's actual figure and an «تشغيل خارجي» tile when there is one.
+
+### The projector rule (the one projector change), exactly
+
+In `ledger/projector.py`, `_place_stock_operation`, after `if not remainder: return` and **before** the HG-036 conversion branch, which is kept unchanged:
+
+```python
+if hasattr(op, "production_output"):
+    net = self._run_wip(op.production_output)
+    if net is not None:
+        wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+        absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+        cleared = net if remainder > 0 else -net
+        g.add(wip, cleared, g.entity_id)
+        g.add(absorbed, remainder - cleared, g.entity_id)
+        return
+```
+
+and a new static method `_run_wip(run)`: the sum, over every **original** movement (`reversal_of IS NULL`) of the run's consumption operations (`StockMovement.objects.filter(stock_operation__production_consumption__run_id=run.pk, reversal_of__isnull=True)`), of `money_round(quantity × unit_cost)`, negative for a movement type in the projector's own `STOCK_IN` (an order's return); `None` when the run has no consumption row.
+
+- **Line by line:** (1) only a run's output operation; (2) `net` is exactly what the run's materials debited to work in progress, valued the way the projector valued those debits; (3)/(4) the same fallbacks as HG-036 (work in progress → 5101 on a chart without it; absorbed → work in progress, i.e. 5101, on a chart without 5102); (5) the original output entry has `remainder < 0` (its stock line is a debit), so work in progress is credited `net`; a reversal on another day has `remainder > 0` and debits it back (a reversal on the same day nets to zero in one group and never reaches here); (6)/(7) work in progress gets ±`net`, and **everything else of the output's value** goes to absorbed production cost: labour, overhead and outside as before, **plus the rounding residue**; (8) a run with no consumption row (none exist; kept as a guard) falls through to the old branches unchanged.
+- **Before / after, reference order:** debit finished goods 325.00; credit work in progress 265.00; credit 5102 60.00 — identical, because 98 × 3.3163 = 324.9974 rounds to 325.00 and there is no residue.
+- **Before / after, residue example** (materials 12,000.00 + labour 1,000.00, 780 good units at 16.6667, stock value 13,000.03): before, work in progress was credited 13,000.03 − 1,000.00 = 12,000.03 and **ended at −0.03**, 5102 at −1,000.00; now work in progress is credited 12,000.00 and **ends at 0.00**, 5102 at **−1,000.03**. A plain run of 12,000.00 over 780 (15.3846, 11,999.99) left **+0.01** in work in progress; now 0.00 and 5102 +0.01 (a debit).
+- **Proved first:** `manufacturing/tests_actuals.py::ResidueTests` (both tests) was committed as expected failures before this rule (commit `f75997e`); a probe run on that commit printed `value 13000.03 wip -0.03 5102 -1000.00`. The projector commit (`b8ccf67`) lifts the markers and both pass. On the restaurant chart both tests passed before and after: both fallbacks are 5101, so the rule moves nothing there.
+- **Effect on history:** the journal is rebuilt from the sub-ledgers, so every past run's piastre residue moves from work in progress to 5102 on that run's own date at the next rebuild. Only those two accounts change, by piastres per run; no closing summary stores either (closing saves sales, purchases, profit, stock value, party and cashbox totals from the sub-ledgers). The trial balance stays balanced and `reconciliation()` does not read work in progress or 5102.
+
+### Protected lines touched (all named)
+
+- **Schema:** the migration above.
+- `ledger/projector.py`: the branch and `_run_wip` above. Nothing else in the projector.
+- `manufacturing/services.py::produce`: the materials total, one statement: `total = sum(((-1 if operation.adjustment_direction == StockAdjustmentDirection.IN else 1) * operation.quantity * operation.unit_cost for operation in consumed), Decimal("0"))` (was the unsigned sum). For a plain run, the restaurant kitchen, the demo and every order without a return, every operation is an adjustment out, so the figure is identical.
+- `manufacturing/orders.py`: `finish` (conversion from `actuals.conversion`, consumption order), `cancel` (reversal order), `advance` (over-yield; the standard written at the start), `good_units` (over-yield), `issued_value` and `cost_card` (signed, actual figures).
+- **Not touched:** `inventory/services.py` (the engine, `adjust_stock`, `cancel_stock_operation`, average cost), sales and purchase posting, customer and supplier ledgers, cashboxes, `reports/` calculations, closing, the permission core (no new code: `inventory.adjust_stock`, `inventory.view_cost`, `inventory.view_stock` only), `restaurant/`, `prepare_demo.py`, `services.cancel_run`, `lots.py`.
+
+### The stock-cost change, in plain words
+
+The product now enters stock at what the order really used (issues + extras − returns, each at the cost it moved at) plus the labour and overhead really recorded (or the planned figures when nothing actual was entered), over the good units. Its authoritative average cost, and with it every later sale's cost (HG-003), follows. An extra issue lowers the component's stock at today's average (the average itself does not move on an outflow); a return raises the component's stock at the issued cost, so its average moves toward that cost, never jumping because a purchase came in meanwhile (trap 3). The ledger: an extra issue debits work in progress and credits raw materials; a return the reverse; the output clears work in progress exactly and books the rest to 5102.
+
+### Variance report (`/manufacturing/costs/`, `manufacturing/variance.py`, `costs_views.py`, `templates/manufacturing/costs.html`)
+
+- Needs `inventory.view_stock` **and** `inventory.view_cost` (403 otherwise; a stock keeper gets 403). Reading only. Finished orders whose run is posted, by the run's date, in the period (this month by default), scoped by `location__entity` like the other manufacturing screens (another entity's orders do not appear; tested).
+- Per order: materials standard against actual per component (quantity and value; the standard from `OrderStandardLine`, else the start's issue rows for orders started before F12, else the run's consumption for orders started before HG-036; never the recipe as it is now); labour and overhead planned against actual; good units against the order (yield); unit cost against the standard ((standard materials + planned labour + planned overhead) ÷ order quantity). Totals tiles on top.
+- **Month line:** per calendar month in the period, the journal (after `ensure_fresh()`) of the entity being worked in: absorbed = −(5102 debit − credit); paid = 5201 wages + 5202 rent + 5203 utilities + 5206 maintenance; the difference. On a chart without `production_cost` (a restaurant with the module on) a note replaces it.
+
+### Screens (Arabic and English; existing classes and `--hs-*` tokens only; no new CSS, no script)
+
+- Order page (`templates/manufacturing/_actuals.html`, included in `order.html`): «الخامات على الأمر» (each issue, extra and return, signed, cost columns for the cost permission only), «صرف إضافي» (item, quantity, reason), «رجّع خامات» (only with `inventory.view_cost`; each returnable item with what can come back and its issued cost), «التكاليف الفعلية» (planned against actual per kind, the lines with «إلغاء السطر», «+ ضيف التكلفة» with kind, optional employee, hours, hourly rate or amount, description), a hint for the over-yield at the final stage, and a link to the report. The manufacturing home gets «فروق التكلفة» for holders of the cost permission.
+- Arabic labels for both `kind` fields in `settings_core/display_labels.py`. No word from the banned list (tested over the new files).
+- **Not seen in a phone browser:** checked by markup assertions only; a 390 px look and Ahmed's «موافق» on the changed order page are still to be taken before merge.
+
+### Defaults built for the owner (change on request)
+
+1. **Question 7 — actual labour: hours × rate, typed amounts, or both? Planned figure when nothing actual?** Both; per kind, the planned figure counts while that kind has no live line (today's behaviour when nothing actual is entered).
+2. **Question 8 — more good units than ordered?** Up to 10% more, at the final stage, with a reason; the same total cost over more units.
+3. **Question 10 — the rounding residue in work in progress?** Booked to 5102 on the run's output entry, for plain runs and orders alike.
+4. (Built, not asked) The month line's "paid overhead" is rent, utilities and maintenance (5202, 5203, 5206); other expense accounts are not counted.
+
+### Departures from the plan
+
+- No work-centre column (optional per the brief; F6a not built).
+- A return writes no `LotUse` row (see above); an extra issue does.
+- Extras and returns are refused on an order started before HG-036 (no start issue rows): otherwise `finish` would pass the extra as the only "issued" operation and the recipe would never be consumed.
+- Outside lines (`kind=outside`) are counted by `conversion` but cannot be added from the screen or `add_cost_line`; F4 adds its own path.
+
+### Risks
+
+1. **History moves by piastres** in work in progress and 5102 at the next journal rebuild (above). Expected and documented; no stored total contradicts it.
+2. **A full return of a component issued at mixed costs** comes back at the weighted cost rounded to 4 places, so a piastre may stay in work in progress while the order is on the floor; the finish clears it through the residue rule, and a cancellation reverses each operation at its own cost, exactly.
+3. **Labour absorbed twice or not at all (trap 11):** the month line shows absorbed against paid; nothing stops a user from typing more labour than was paid. Payroll-to-order links are not built.
+4. The over-yield rule measures against the ordered quantity (above).
+5. The month line's overhead accounts are a fixed list.
+6. The variance of an order finished before F12 with no standard rows reads its start's issue rows (identical by construction).
+7. Screens not yet seen at 390 px in a browser.
+8. Migration numbering: any other branch adding a `manufacturing` migration and merging first makes this one renumber.
+9. **No second-person hold (trap 15):** the approvals screen holds reversals (`inventory.reverse_operation`, `manufacturing.cancel_run`), not adjustments. An extra issue or a return goes straight through `adjust_stock`, as the start's issue always did, and cancelling an order on the floor (which now also reverses its extras and returns) is not held either. Not wired here.
+10. **Reversing a return can leave a component at a cost nobody paid** (HG-100's defect 2, for a component): `orders.cancel` and `cancel_run` take a returned quantity out again at the return's own cost. If that returned stock was used elsewhere and refilled at another price meanwhile, the reversal still goes through (the engine refuses only on a shortage) and moves the component's average. A «left since» check for components is a separate task.
+11. The variance report's actual materials are the sum of each movement's journal value (`money_round` per movement); `run.total_cost` rounds the unrounded sum once, so the two can differ by a piastre on a mixed-cost order. The report uses the former, so its header equals the sum of its lines and matches what work in progress received.
+
+### Tests (`manufacturing/tests_actuals.py`, 37, both charts where money moves)
+
+- The reference order, step by step: work in progress 260.00 → 280.00 after 1 kg flour at 20.00 → 265.00 after 0.5 kg sugar back at 30.00 with sugar's average at 32.00 (sugar's stock value 1,152.00 → 1,167.00); labour lines 2 × 4 h × 7.50 = 60.00; finish with 2 defective: 98 good at 3.3163, stock value 325.00; the output's journal per account (manufacturing: finished goods +325.00, work in progress −265.00, 5102 −60.00; restaurant: inventory +325.00, 5101 −325.00); work in progress 0.00; variance flour +1 (+20.00), sugar −0.5 (−15.00), labour +10.00, yield −2, unit cost 3.3163 against 3.1000.
+- No actual lines: conversion = planned 50.00, 310.00 at 3.1000.
+- Conversion per kind (overhead line replaces only overhead; an outside line adds), a cancelled line restores the plan, line rules, permissions.
+- Return at the weighted issue + extra cost (30.6667), above what was issued refused, a never-issued item refused, on finished or cancelled orders refused, the cost permission; extra issue rules (planned order, product, service item, quantity, reason, short stock, a substitute); an order started before HG-036; the stock screen's guard covers extras and returns.
+- Cancelling an order and cancelling the run reverse issues, extras and returns, stock and value back exactly.
+- Residue: an order (13,000.03; work in progress 0.00; 5102 −1,000.03; the output journal per account; then the run cancelled back to zero) and a plain run (11,999.99; 5102 +0.01).
+- Over-yield (105 with a reason → 2.9524; no reason, above 110, an earlier stage: refused).
+- An extra issue's `LotUse` and its hand-over to the run; a return writes none.
+- Screens: the order page in both languages, every POST, a stock keeper (no return, no cost lines, 403 on both POSTs and on the report), the report in both languages, an empty period, entity scoping, the restaurant chart's note, no banned word.
+- Every money scenario ends with `Projector().rebuild()`, `trial_balance()["balanced"]`, `reconciliation()` (clean on the manufacturing chart; on the restaurant chart exactly HG-100's stated 5101 difference, work in progress − absorbed) and the control balances.
+- **Existing tests:** none edited. `tests_hg036`, `tests_f11`, `tests_lots` and the rest of `manufacturing` pass unchanged.
+
+### Files
+
+- `manufacturing/`: `models.py`, `migrations/0006_actuals.py`, `actuals.py` (new), `variance.py` (new), `costs_views.py` (new), `orders.py`, `services.py`, `views.py` (the home's work-in-progress tile), `order_views.py`, `urls.py`, `tests_actuals.py` (new).
+- `templates/manufacturing/`: `_actuals.html` (new), `costs.html` (new), `order.html`, `home.html`.
+- Outside `manufacturing/`: `ledger/projector.py` (the rule above), `settings_core/display_labels.py` (two label maps), `docs/AGENT_HARD_GATES.md` (this entry and a dated note under HG-036), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure).
 
 ## HG-135 — Contracting C10: the owner's (or consultant's) project page behind a signed link, and the owner's approval of a draft variation order through the same approval core as the office's (no schema; one new `printing.share` kind)
 

@@ -528,6 +528,18 @@ class Projector:
         remainder = -g.balance()
         if not remainder:
             return
+        if hasattr(op, "production_output"):
+            # Manufacturing F12 (HG-132): work in progress gives back exactly what the run's materials put into it (their
+            # own journal values); what the output is worth beyond that (labour and overhead, and the piastres of the
+            # four-decimal unit cost) is absorbed production cost. A reversal on another day mirrors it by the sign.
+            net = self._run_wip(op.production_output)
+            if net is not None:
+                wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+                absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+                cleared = net if remainder > 0 else -net
+                g.add(wip, cleared, g.entity_id)
+                g.add(absorbed, remainder - cleared, g.entity_id)
+                return
         if hasattr(op, "production_output") and op.production_output.conversion_cost:
             # HG-036: the product came in at materials + labour + overhead. The
             # materials clear work in progress; labour and overhead are credited
@@ -546,6 +558,20 @@ class Projector:
         else:
             account = self.acc["stock_loss"] if remainder > 0 else self.acc["stock_gain"]
         g.add(account, remainder, g.entity_id)
+
+    @staticmethod
+    def _run_wip(run):
+        """Manufacturing F12 (HG-132): what a run's materials put into work in progress, as the journal valued them (each
+        original movement of its consumption operations at money_round(quantity x unit cost); an order's return, an
+        adjustment in, takes off). None for a run with no consumption rows."""
+
+        from inventory.models import StockMovement
+
+        rows = list(StockMovement.objects.filter(stock_operation__production_consumption__run_id=run.pk, reversal_of__isnull=True)
+                    .values_list("quantity", "unit_cost", "movement_type"))
+        if not rows:
+            return None
+        return sum(((-1 if movement_type in STOCK_IN else 1) * money_round(quantity * unit_cost) for quantity, unit_cost, movement_type in rows), ZERO)
 
     def _place_stock_movement(self, g):
         remainder = -g.balance()

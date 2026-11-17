@@ -9,14 +9,14 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from master_data.models import Customer, Location
+from master_data.models import Customer, Item, Location
 from batches.services import batches_enabled
 from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import make_to_order, orders
-from .models import OrderStatus, ProductionOrder, Recipe
+from . import actuals, make_to_order, orders
+from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .views import COST, PRODUCE, VIEW, _lang, _pick
 from entities import scope as entity_scope
@@ -34,7 +34,17 @@ WORDS = {
            "empty": "مفيش أوامر هنا.", "all_done": "كل المراحل خلصت — جاهز للإنهاء.", "for": "لـ", "materials_short": "الخامات مش كفاية حاليًا",
            "recipes_link": "الوصفات والتشغيلات", "no_recipes": "لازم تعمل وصفة للمنتج الأول من صفحة التصنيع.",
            "lot_no": "رقم تشغيلة المنتج (اختياري)", "lot_expiry": "تاريخ صلاحية المنتج (اختياري)", "lot_hint": "لو سيبتهم فاضيين: رقم التشغيلة هو رقم الإنتاج، والصلاحية من مدة صلاحية الوصفة.", "lot_date": "تاريخ صلاحية المنتج مش صحيح.",
-           "for_sale": "لطلب", "delivery": "تسليم للعميل", "delivery_short": "تسليم", "open_sale": "افتح أمر البيع"},
+           "for_sale": "لطلب", "delivery": "تسليم للعميل", "delivery_short": "تسليم", "open_sale": "افتح أمر البيع",
+           "materials": "الخامات على الأمر", "kind": "النوع", "item": "الصنف", "qty": "الكمية", "unit_cost": "تكلفة الوحدة", "value": "القيمة", "why": "السبب",
+           "extra": "صرف إضافي", "extra_hint": "لو الخط احتاج خامة زيادة أو بديلة: بتطلع من المخزن على الأمر بمتوسط تكلفتها النهارده.", "extra_save": "اصرف على الأمر",
+           "extra_done": "الخامة اتصرفت على الأمر.", "return": "رجّع خامات", "return_hint": "اللي فضل من خامات الأمر بيرجع المخزن بنفس التكلفة اللي اتصرف بيها على الأمر ده.",
+           "return_save": "رجّع للمخزن", "return_done": "الخامات رجعت المخزن.", "can_return": "متاح للرجوع", "nothing_back": "مفيش خامات متاحة للرجوع.",
+           "actual": "التكاليف الفعلية", "actual_hint": "لكل نوع: لو سجلت سطور فعلية بتحل محل الرقم المخطط عند إنهاء الأمر، ولو مفيش بيتحسب المخطط.",
+           "planned_fig": "المخطط", "actual_fig": "الفعلي", "lines_none": "لسه مفيش تكاليف فعلية.", "cost_kind": "نوع التكلفة", "labour_kind": "عمالة", "overhead_kind": "مصاريف تشغيل",
+           "employee": "الموظف (اختياري)", "nobody": "—", "hours": "الساعات", "hour_rate": "سعر الساعة", "amount": "أو المبلغ", "description": "البيان",
+           "add_line": "ضيف التكلفة", "line_added": "التكلفة اتسجلت.", "line_cancel": "إلغاء السطر", "line_cancelled": "السطر اتلغى.", "cancelled_line": "ملغي",
+           "over_hint": "في آخر مرحلة: لو السليم طلع أكتر من كمية الأمر (لحد 10%)، اكتب السبب في الملاحظات.", "outside": "تشغيل خارجي",
+           "costs_link": "تقرير الفروق"},
     "en": {"title": "Production orders", "intro": "Each production order moves through the factory's stages: the first stage issues the materials from stock to work in progress, and when the order finishes the good units go into stock at the cost of materials, labour and overhead.",
            "new": "New production order", "recipe": "Product (recipe)", "quantity": "Quantity", "location": "Made at", "customer": "For customer (optional)",
            "due": "Due on", "labor": "Labour cost", "overhead": "Overhead (power, rent...)", "notes": "Notes", "save": "Open order",
@@ -47,7 +57,17 @@ WORDS = {
            "empty": "No orders here.", "all_done": "All stages done — ready to finish.", "for": "for", "materials_short": "Not enough materials right now",
            "recipes_link": "Recipes and runs", "no_recipes": "Make a recipe for the product first on the manufacturing page.",
            "lot_no": "Product lot number (optional)", "lot_expiry": "Product expiry date (optional)", "lot_hint": "Left empty, the lot number is the run number and the expiry comes from the recipe's shelf life.", "lot_date": "The product's expiry date is not valid.",
-           "for_sale": "For order", "delivery": "Delivery to the customer", "delivery_short": "Delivery", "open_sale": "Open the sales order"},
+           "for_sale": "For order", "delivery": "Delivery to the customer", "delivery_short": "Delivery", "open_sale": "Open the sales order",
+           "materials": "Materials on the order", "kind": "Kind", "item": "Item", "qty": "Quantity", "unit_cost": "Unit cost", "value": "Value", "why": "Reason",
+           "extra": "Extra issue", "extra_hint": "When the line needs more of a material, or a substitute: it leaves stock to this order at today's average cost.", "extra_save": "Issue to the order",
+           "extra_done": "The material was issued to the order.", "return": "Return materials", "return_hint": "What is left of the order's materials goes back to stock at the cost it was issued to this order at.",
+           "return_save": "Return to stock", "return_done": "The materials are back in stock.", "can_return": "Can return", "nothing_back": "No materials can come back.",
+           "actual": "Actual costs", "actual_hint": "Per kind: actual lines replace the planned figure when the order finishes; with none, the planned figure counts.",
+           "planned_fig": "Planned", "actual_fig": "Actual", "lines_none": "No actual costs yet.", "cost_kind": "Kind of cost", "labour_kind": "Labour", "overhead_kind": "Overhead",
+           "employee": "Employee (optional)", "nobody": "—", "hours": "Hours", "hour_rate": "Hourly rate", "amount": "Or the amount", "description": "Description",
+           "add_line": "Add the cost", "line_added": "The cost was recorded.", "line_cancel": "Cancel the line", "line_cancelled": "The line was cancelled.", "cancelled_line": "Cancelled",
+           "over_hint": "At the final stage: if good units are more than the order (up to 10%), write the reason in the notes.", "outside": "Outside processing",
+           "costs_link": "Variance report"},
 }
 
 
@@ -71,6 +91,22 @@ def _date(value):
         return date.fromisoformat(value) if value else None
     except ValueError:
         return None
+
+
+def _stock_items():
+    return Item.objects.filter(active=True, is_stock_tracked=True).order_by("item_name")
+
+
+def _employees():
+    from staff.models import Employee
+
+    return Employee.objects.filter(active=True).order_by("name")[:300]
+
+
+def _employee(raw):
+    from staff.models import Employee
+
+    return _pick(Employee, raw, active=True)
 
 
 def _stage_name(stage, lang):
@@ -148,6 +184,23 @@ def order_detail(request, pk):
             elif action == "cancel":
                 orders.cancel(order, request.user, request.POST.get("reason", ""), lang)
                 messages.success(request, words["cancelled_msg"])
+            elif action == "extra":  # F12 (HG-132)
+                actuals.extra_issue(order, request.user, item=_pick(Item, request.POST.get("item"), active=True), quantity=request.POST.get("quantity"),
+                                    reason=request.POST.get("why", ""), lang=lang)
+                messages.success(request, words["extra_done"])
+            elif action == "return":
+                actuals.return_materials(order, request.user, item=_pick(Item, request.POST.get("item")), quantity=request.POST.get("quantity"),
+                                         reason=request.POST.get("why", ""), lang=lang)
+                messages.success(request, words["return_done"])
+            elif action == "add_cost":
+                actuals.add_cost_line(order, request.user, kind=request.POST.get("kind", ""), description=request.POST.get("description", ""),
+                                      employee=_employee(request.POST.get("employee")), hours=request.POST.get("hours"), rate=request.POST.get("rate"),
+                                      amount=request.POST.get("amount"), lang=lang)
+                messages.success(request, words["line_added"])
+            elif action == "cancel_cost":
+                line = get_object_or_404(OrderCostLine, pk=request.POST.get("line") if str(request.POST.get("line", "")).isdigit() else 0, order=order)
+                actuals.cancel_cost_line(line, request.user, lang)
+                messages.success(request, words["line_cancelled"])
         except ValidationError as exc:
             from settings_core.ui_messages import translate
 
@@ -165,8 +218,22 @@ def order_detail(request, pk):
     logs = [{"log": log, "label": names.get(log.stage_key, log.stage_key)} for log in order.stage_logs.select_related("done_by")]
     batches = order.quantity / order.recipe.output_quantity if order.recipe.output_quantity else 0
     plan = services.plan(order.recipe, batches, order.location) if order.status != OrderStatus.DONE else None
+    can_cost = user_has_permission(request.user, COST)
+    on_floor = order.status == OrderStatus.IN_PROGRESS and order.issues.filter(kind="issue").exists()
+    material_rows = []
+    for issue in order.issues.select_related("operation__item"):
+        operation = issue.operation
+        material_rows.append({"issue": issue, "label": choice_label(issue, "kind", lang), "operation": operation, "sign": actuals.sign(operation),
+                              "value": operation.quantity * operation.unit_cost})
+    lines = [{"line": line, "label": choice_label(line, "kind", lang)} for line in order.cost_lines.select_related("employee")] if can_cost else []
     return render(request, "manufacturing/order.html", _ctx(
         request, order=order, status_label=choice_label(order, "status", lang), stages=stage_rows, logs=logs, error=error,
+        material_rows=material_rows, on_floor=on_floor, cost_lines=lines, spent=actuals.conversion(order) if can_cost else None,
+        lines_open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS),
+        returnable=actuals.returnable(order) if on_floor and can_cost else [],
+        extra_items=_stock_items().exclude(pk=order.recipe.product_id) if on_floor else [],
+        employees=_employees() if can_cost and order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) else [],
+        final_stage=order.stage_index == len(order.stages) - 1,
         cost=orders.cost_card(order), quality=orders.quality(order), plan=plan,
         sale=order.sales_order_line.order if order.sales_order_line_id else None, can_open_sale=_can_open_sale(request.user),
         short=bool(plan and any(row["short"] for row in plan["rows"])),
