@@ -227,6 +227,27 @@ def services_demo_extras(activity, sub_activity):
     return SERVICES_DEMO_CAPABILITIES if activity == "services" and sub_activity in SERVICES_DEMO_SUBS else ()
 
 
+#: Restaurants close-out: what a visitor to a restaurant showcase is walked through, switched on for the demo only: coupons, happy hour,
+#: points and gift cards on the table bill (R6), a deposit on a reservation or a pre-order (R8, R10; it rides on the appointments
+#: module's switch), and the platforms' price lists and couriers (R14). The online payment link stays OFF for the reason above.
+RESTAURANT_DEMO_CAPABILITIES = ("promotions", "loyalty", "gift_cards", "deposits", "price_lists", "shipping")
+RESTAURANT_DEMO_MODULES = ("appointments_visits",)
+
+
+def restaurant_demo_extras(activity, sub_activity):
+    """The extra capabilities the restaurants showcase switches on (none for any other business; real installs never call this)."""
+
+    return RESTAURANT_DEMO_CAPABILITIES if activity == "restaurants" else ()
+
+
+def restaurant_demo_modules(activity, sub_activity, modules):
+    """``modules`` with the restaurants showcase's extra one (the deposits' module) added; every other business's list as it is."""
+
+    if activity != "restaurants":
+        return tuple(modules)
+    return tuple(dict.fromkeys(tuple(modules) + RESTAURANT_DEMO_MODULES))
+
+
 def demo_capabilities(activity, sub_activity, features):
     """The features a demo of this business switches on: the interview's suggestions, plus the AI showcase
     wherever its sections exist (HG-078 dev. 7), plus what prepare_demo turns on for the retail shop, plus the clinic's online booking
@@ -241,6 +262,7 @@ def demo_capabilities(activity, sub_activity, features):
         chosen += ["online_booking"]
         chosen += ["inpatient"]  # M8 (HG-088): the landing page offers the clinic, so its demo shows the beds (settings_core/demo_inpatient.py)
     chosen += services_demo_extras(activity, sub_activity)
+    chosen += restaurant_demo_extras(activity, sub_activity)
     return tuple(dict.fromkeys(slug for slug in chosen if caps.is_available(slug)))
 
 
@@ -258,7 +280,7 @@ def complete_demo_setup(activity, sub_activity, user=None):
     modules, features = interview.resolve(activity, sub_activity, interview.suggested_answers(activity, sub_activity))
     ai = [slug for slug in AI_CAPABILITIES if set(caps.needs(slug)) <= set(modules)]
     profile = ClientProfile.get_active()
-    complete_setup(profile, activity, sub_activity, ",".join(modules), user=user,
+    complete_setup(profile, activity, sub_activity, ",".join(restaurant_demo_modules(activity, sub_activity, modules)), user=user,
                    capabilities_raw=",".join(demo_capabilities(activity, sub_activity, list(features) + ai)))
     _name_the_demo_shop()
     name_the_demo_owner(activity, sub_activity)
