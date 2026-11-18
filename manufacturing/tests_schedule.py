@@ -525,7 +525,7 @@ class EntityTests(SchedulePlant):
 
         with working_in(main):
             schedule.arrange(DAY1, self.owner)                                          # plans the main entity's orders only
-        self.assertIsNone(far.steps.get().planned_start)
+        self.assertFalse(far.steps.exclude(planned_start=None).exists())  # F6a: the branch order took the factory's stages, none planned here
         url = reverse("manufacturing:schedule")
         page = self.client.get(url, {"start": DAY1.isoformat()})
         self.assertContains(page, f'data-bar="{near.number}"')
