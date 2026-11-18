@@ -60,7 +60,8 @@ WORDS = {
            "short": "المخزون ناقص: المتاح {stock}، و{waiting} مصنّعين لسه ما اتفوترش.",
            "no_recipe": "مفيش وصفة للصنف ده", "cancel_warn": "في أمر إنتاج مفتوح مربوط بالأمر ده. لو ألغيت أمر البيع، أمر الإنتاج مش هيتلغي لوحده.",
            "cancelled_warn": "أمر البيع اتلغى، لكن أمر الإنتاج {numbers} لسه شغال. ألغيه من شاشته لو مش محتاجه.",
-           "no_stock_hint": "المنتج مش بيتحجز للعميل؛ أي بيع تاني بياخد من نفس المخزن."},
+           "no_stock_hint": "المنتج مش بيتحجز للعميل؛ أي بيع تاني بياخد من نفس المخزن.",
+           "job_pending": "البند ده ليه بيان تكلفة، فبيتحوّل لأمر إنتاج خاص من صفحة المواصفات والتكلفة."},
     "en": {"column": "Production", "make": "Make a production order", "quantity": "Quantity", "location": "Made at", "labor": "Labour cost",
            "overhead": "Overhead", "recipe": "Recipe", "open": "Open the order", "order_word": "Production order",
            "made_ok": "Production order {number} opened for this order.", "for_sale": "For order", "delivery": "Delivery to the customer",
@@ -69,7 +70,8 @@ WORDS = {
            "short": "Stock is short: {stock} available, and {waiting} made but not invoiced yet.",
            "no_recipe": "No recipe for this item", "cancel_warn": "An open production order is linked to this order. Cancelling the sales order does not cancel it.",
            "cancelled_warn": "The sales order is cancelled, but production order {numbers} is still running. Cancel it from its own screen if it is not needed.",
-           "no_stock_hint": "The product is not reserved for the customer; any other sale takes from the same stock."},
+           "no_stock_hint": "The product is not reserved for the customer; any other sale takes from the same stock.",
+           "job_pending": "This line has a cost sheet, so it becomes a custom production order from its specifications and cost page."},
 }
 
 
@@ -160,13 +162,17 @@ def make(line, user, data, lang="ar"):
     """«اعمل أمر إنتاج»: a production order for (part of) what a confirmed order line still needs made.
 
     ``data``: quantity (default: all that is uncovered), location (default: the entity's default one), labour and overhead
-    planned. Posts nothing. Returns the new ProductionOrder."""
+    planned, and a note (Manufacturing F7: the outside work a custom job expects). Posts nothing. Returns the new ProductionOrder."""
 
     words = MESSAGES[lang]
     order = SalesOrder.objects.select_for_update().get(pk=line.order_id)  # one at a time per order: a double tap cannot make it twice
     line = SalesOrderLine.objects.select_related("item", "order__customer").get(pk=line.pk)
     if order.status != Status.CONFIRMED:
         raise ValidationError(words["not_confirmed"])
+    from .quotes import MESSAGES as QUOTE_MESSAGES, pending
+
+    if pending([line.pk]):  # Manufacturing F7 (HG-138): a line with a cost sheet is made through «حوّله لأمر إنتاج خاص», as its own job item
+        raise ValidationError(QUOTE_MESSAGES[lang]["pending"])
     recipe = recipe_for(line.item)
     if recipe is None:
         raise ValidationError(words["no_recipe"])
@@ -187,7 +193,7 @@ def make(line, user, data, lang="ar"):
         raise ValidationError(words["location"])
     created = production.create_order(
         {"recipe": recipe, "location": location, "quantity": quantity, "customer": order.customer, "due_date": order.deliver_by,
-         "labor_cost": data.get("labor_cost"), "overhead_cost": data.get("overhead_cost")}, user, lang)
+         "labor_cost": data.get("labor_cost"), "overhead_cost": data.get("overhead_cost"), "notes": data.get("notes") or ""}, user, lang)
     created.sales_order_line = line
     created.save(update_fields=["sales_order_line"])
     _audit(line, user, created, quantity)
@@ -233,6 +239,9 @@ def line_states(order, rows, lang, *, can_make):
     for recipe in Recipe.objects.filter(product_id__in=items, active=True).order_by("code"):
         recipes.setdefault(recipe.product_id, recipe)
     confirmed = order.status == Status.CONFIRMED
+    from .quotes import pending
+
+    jobs = pending([row["line"].pk for row in rows])  # Manufacturing F7 (HG-138): made through «حوّله لأمر إنتاج خاص», never the plain action
     states = {}
     for row in rows:
         line = row["line"]
@@ -249,8 +258,8 @@ def line_states(order, rows, lang, *, can_make):
         waiting = min(row["left"], max(made_done - row["invoiced"] - row["drafted"], ZERO))
         states[line.pk] = {
             "orders": [{"order": link, "state": _stage(link, lang)[0], "label": _stage(link, lang)[1]} for link in mine],
-            "free": free, "free_plain": f"{free.normalize():f}", "recipe": recipe, "can_make": bool(can_make and confirmed and recipe is not None and free > 0),
-            "no_recipe": bool(confirmed and recipe is None and not mine), "made": made_done, "stock": stock, "waiting": waiting,
+            "free": free, "free_plain": f"{free.normalize():f}", "recipe": recipe, "can_make": bool(can_make and confirmed and recipe is not None and free > 0 and line.pk not in jobs),
+            "no_recipe": bool(confirmed and recipe is None and not mine and line.pk not in jobs), "job_pending": line.pk in jobs, "made": made_done, "stock": stock, "waiting": waiting,
             "short": bool(done and waiting > 0 and stock < waiting), "has_made": bool(done),
             "uncovered_text": words["uncovered"].format(qty=fmt_qty(free)) if free > 0 and mine else "",
             "made_text": words["made_stock"].format(made=fmt_qty(made_done), stock=fmt_qty(stock)) if done else "",
