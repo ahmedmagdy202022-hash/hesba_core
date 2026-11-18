@@ -59,7 +59,7 @@
   {% else %}
   <table class="pr-lines">
     <thead><tr><th class="pr-col-no">#</th><th>{{ words.item }}</th><th class="pr-num">{{ words.qty }}</th>{% if not doc.no_prices %}<th class="pr-num">{{ words.price }}</th>{% if doc.has_discounts %}<th class="pr-num">{{ words.discount }}</th>{% endif %}<th class="pr-num">{{ words.total }}</th>{% endif %}</tr></thead>
-    <tbody>{% for line in doc.lines %}<tr><td class="pr-col-no">{{ forloop.counter }}</td><td class="pr-item">{{ line.label }}</td><td class="pr-num">{{ line.quantity|qty }}</td>{% if not doc.no_prices %}<td class="pr-num">{{ line.unit_price|money }}</td>{% if doc.has_discounts %}<td class="pr-num">{{ line.discount|money }}</td>{% endif %}<td class="pr-num">{{ line.total|money }}</td>{% endif %}</tr>{% endfor %}</tbody>
+    <tbody>{% for line in doc.lines %}<tr><td class="pr-col-no">{{ forloop.counter }}</td><td class="pr-item">{{ line.label }}{% if line.specs %}<small class="pr-specs" data-line-specs>{% for label, value in line.specs %}{% if not forloop.first %} · {% endif %}{{ label }}: <bdi>{{ value }}</bdi>{% endfor %}</small>{% endif %}</td><td class="pr-num">{{ line.quantity|qty }}</td>{% if not doc.no_prices %}<td class="pr-num">{{ line.unit_price|money }}</td>{% if doc.has_discounts %}<td class="pr-num">{{ line.discount|money }}</td>{% endif %}<td class="pr-num">{{ line.total|money }}</td>{% endif %}</tr>{% endfor %}</tbody>
   </table>
   {% if not doc.no_prices %}
 

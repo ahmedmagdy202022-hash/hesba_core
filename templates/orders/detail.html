@@ -32,7 +32,7 @@
 
 <h2>{{ words.lines }}</h2>
 <div class="op-table-wrap"><table class="op-table" data-order-lines><thead><tr><th>{{ words.item }}</th><th>{{ words.qty }}</th><th>{{ words.price }}</th><th>{{ words.discount }}</th><th>{{ words.amount }}</th>{% if order.order_number %}<th>{{ words.invoiced }}</th><th>{{ words.left }}</th>{% endif %}{% if production %}<th>{{ production.words.column }}</th>{% endif %}<th></th></tr></thead><tbody>
-{% for row in rows %}{% with line=row.line %}<tr data-line="{{ line.pk }}"><td class="op-cell-text">{{ line.item.item_name }}{% if line.description %} — {{ line.description }}{% endif %}</td>
+{% for row in rows %}{% with line=row.line %}<tr data-line="{{ line.pk }}"><td class="op-cell-text">{{ line.item.item_name }}{% if line.description %} — {{ line.description }}{% endif %}{% if row.quote %}{% include "manufacturing/_quote_line.html" with q=row.quote %}{% endif %}</td>
 <td>{{ line.quantity|qty }}</td><td>{{ line.unit_price|money }}</td><td>{% if line.discount_percent %}{{ line.discount_percent|floatformat:"-2" }}%{% else %}—{% endif %}</td><td>{{ line.amount|money }}</td>
 {% if order.order_number %}<td data-invoiced>{{ row.invoiced|qty }}{% if row.drafted %} <small class="op-muted">+ {{ row.drafted|qty }} {{ words.drafted }}</small>{% endif %}</td><td data-left>{{ row.left|qty }}</td>{% endif %}
 {% if production %}{% include "orders/_production_cell.html" %}{% endif %}
