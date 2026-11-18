@@ -5893,7 +5893,7 @@ The product now enters stock at what the order really used (issues + extras − 
 - **The till:** no `JOB-` code in the catalogue or the quick picks, even pinned; the invoice form still lists it.
 - **Screens:** the whole page by posts (specs, five lines, the price, the figures, the sales order's specifications and link); converting from the page (and a place that does not exist refused); the print shows the specifications and no cost, in both languages; the English page; no banned word («شغلانة» included) in the new files and pages, and no Arabic line starts or ends with a Latin word or a placeholder.
 - **Permissions and entities:** the manager (specs and price, no sheet amount in the HTML, every cost post 403 and nothing changed, the rule refuses too, converts); the cashier (writes specs, cannot convert, 403); the stock keeper (403); a cost viewer without the quotation right (sees, cannot write); quotations off (404, refused); another entity's line 404 on the page and on all five posts, nothing changed, and converted at the branch's own place from the branch.
-- **On PostgreSQL:** `manufacturing orders sales.tests_pos offline_pos ledger inventory config.tests_demo_restart restaurant.tests_kitchen printing` together: **703 tests, all pass** (run at the tests commit). After the last screen fix, `manufacturing.tests_quotes manufacturing.tests_make_to_order orders printing`: 116 tests, all pass.
+- **On PostgreSQL:** `manufacturing orders sales.tests_pos offline_pos ledger inventory config.tests_demo_restart restaurant.tests_kitchen printing` together: **703 tests, all pass**, at the tests commit and again after the last screen fix (`23cc4fe`).
 - **Existing tests edited: none.**
 
 ### Files
