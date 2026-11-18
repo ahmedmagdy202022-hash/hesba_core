@@ -2,13 +2,17 @@
 
 The sub-activity chosen at setup picks the list; the words are the ones the
 shop floor uses. An order keeps the list it was opened with.
+
+Manufacturing F5 (HG-136): food has a «فحص جودة» stage too (between cooling and
+packing), where the recipe's quality criteria are recorded. Orders opened before
+it keep the four stages they were opened with.
 """
 
 STAGES = {
     "garments": (("cutting", "قص", "Cutting"), ("sewing", "خياطة", "Sewing"), ("finishing", "تشطيب وكي", "Finishing & ironing"),
                  ("quality", "فحص جودة", "Quality check"), ("packing", "تغليف", "Packing")),
     "food": (("prep", "تحضير وخلط", "Preparation & mixing"), ("cooking", "طهي / خَبز", "Cooking / baking"),
-             ("cooling", "تبريد", "Cooling"), ("packing", "تعبئة وتغليف", "Filling & packing")),
+             ("cooling", "تبريد", "Cooling"), ("quality", "فحص جودة", "Quality check"), ("packing", "تعبئة وتغليف", "Filling & packing")),
     "furniture": (("cutting", "تقطيع الخشب", "Cutting"), ("assembly", "تجميع", "Assembly"), ("painting", "دهان", "Painting"),
                   ("finishing", "تشطيب وتنجيد", "Finishing & upholstery")),
     "printing": (("prepress", "تجهيز وتصميم", "Pre-press"), ("printing", "طباعة", "Printing"),

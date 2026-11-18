@@ -70,7 +70,10 @@ MESSAGES = {
            "report_kept": "المشروع ده اتقفل؛ صور تقاريره بتفضل زي ما هي ومينفعش تتمسح.",
            "variation_read_only": "إضافة مرفقات أمر التغيير لمهندس الموقع أو لصاحب صلاحية الفواتير بس.",
            "variation_stage": "مرفق أمر التغيير بيتسجّل كنسخة موقّعة بس.", "variation_closed": "أمر التغيير ده اتقفل؛ مينفعش يتضاف عليه مرفقات.",
-           "variation_kept": "أمر التغيير ده اتقفل؛ مرفقاته بتفضل زي ما هي ومينفعش تتمسح."},
+           "variation_kept": "أمر التغيير ده اتقفل؛ مرفقاته بتفضل زي ما هي ومينفعش تتمسح.",
+           "quality_read_only": "إضافة شهادة الجودة لصاحب صلاحية تحويل المخزون بس.",
+           "quality_delete_denied": "مسح شهادة الجودة لصاحب صلاحية تحويل المخزون بس.",
+           "quality_stage": "المرفق على فحص الجودة بيتسجّل كشهادة جودة بس.", "quality_kind": "شهادة الجودة لازم تكون ملف PDF أو صورة."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -97,7 +100,10 @@ MESSAGES = {
            "report_kept": "This project is closed; the photos of its reports are kept and cannot be deleted.",
            "variation_read_only": "Only the site engineer, or someone who may create invoices, can add files to a variation order.",
            "variation_stage": "A file on a variation order is kept as its signed copy only.", "variation_closed": "This variation order is closed; files can no longer be added to it.",
-           "variation_kept": "This variation order is closed; its files are kept and cannot be deleted."},
+           "variation_kept": "This variation order is closed; its files are kept and cannot be deleted.",
+           "quality_read_only": "Only someone who may transfer stock can add a quality certificate.",
+           "quality_delete_denied": "Only someone who may transfer stock can delete a quality certificate.",
+           "quality_stage": "A file on a quality check is kept as its quality certificate only.", "quality_kind": "A quality certificate must be an image or a PDF."},
 }
 
 
@@ -298,6 +304,32 @@ def _no_entity(record):
     return None
 
 
+# Manufacturing F5 (HG-136): the quality certificate of a quality check (a lab report, a supplier's certificate of analysis).
+# Seen as the quality screen is (the stock view right, inside the entity of the order's or the purchase's location); added
+# and removed by whoever may record a check (the stock transfer right). The certificate rides on the existing ``report``
+# stage, as a project's document kinds ride on stages: no attachments migration.
+
+def _quality_checks(user):
+    from manufacturing import quality
+    from permissions.services import user_has_permission
+
+    if not user_has_permission(user, "inventory.view_stock"):
+        raise PermissionDenied("Quality checks need inventory.view_stock.")
+    return quality.scoped_checks()
+
+
+def _quality_can_change(user, check):
+    from manufacturing import quality
+    from permissions.services import user_has_permission
+
+    return user_has_permission(user, quality.RELEASE)
+
+
+def _quality_check_entity(check):
+    place = check.order.location if check.order_id else check.purchase_line.invoice.receiving_location
+    return place.entity
+
+
 WORK_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.OTHER)
 MEDICAL_STAGES = (Stage.SCAN, Stage.LAB, Stage.PHOTO, Stage.REPORT)
 #: the six document kinds of a project, stored on the six stages they are mapped to (see ``projects.documents``)
@@ -308,6 +340,8 @@ PROJECT_MAX_COUNT, PROJECT_MAX_BYTES = 40, 40 * 1024 * 1024
 REPORT_MAX_COUNT, REPORT_MAX_BYTES = 12, 12 * 1024 * 1024
 #: a variation order's signed copy: a scan of a few pages, or a few phone photos of them
 VARIATION_MAX_COUNT, VARIATION_MAX_BYTES = 6, 12 * 1024 * 1024
+#: a quality check's certificate: a lab report of a few pages, or a few photos of it
+QUALITY_MAX_COUNT, QUALITY_MAX_BYTES = 6, 12 * 1024 * 1024
 
 _MEDICAL_RULES = {"can_attach": _medical_can_attach, "closed": lambda record: False, "can_delete": _medical_can_delete,
                   "signature_final": lambda record: False, "entity": _current_entity, "delete_denied": "medical_delete_denied",
@@ -344,7 +378,14 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
                                       "delete_denied": "variation_read_only", "read_only_message": "variation_read_only", "closed_error": "variation_closed",
                                       "kept_when_closed": "variation_kept", "stages": (Stage.OTHER,), "kinds": (Kind.PHOTO, Kind.DOCUMENT),
                                       "stage_error": "variation_stage", "kind_error": "project_kind", "default_stage": Stage.OTHER,
-                                      "max_count": VARIATION_MAX_COUNT, "max_owner_bytes": VARIATION_MAX_BYTES}}
+                                      "max_count": VARIATION_MAX_COUNT, "max_owner_bytes": VARIATION_MAX_BYTES},
+          # Manufacturing F5 (HG-136): the quality certificate of a quality check. Never closed: a certificate can arrive after the decision.
+          "manufacturing.qualitycheck": {"visible": _quality_checks, "can_attach": _quality_can_change, "closed": lambda check: False,
+                                         "can_delete": _quality_can_change, "signature_final": lambda check: False, "entity": _quality_check_entity,
+                                         "delete_denied": "quality_delete_denied", "read_only_message": "quality_read_only",
+                                         "stages": (Stage.REPORT,), "kinds": (Kind.PHOTO, Kind.DOCUMENT), "stage_error": "quality_stage",
+                                         "kind_error": "quality_kind", "default_stage": Stage.REPORT,
+                                         "max_count": QUALITY_MAX_COUNT, "max_owner_bytes": QUALITY_MAX_BYTES}}
 
 
 def owner_label(owner_or_model):

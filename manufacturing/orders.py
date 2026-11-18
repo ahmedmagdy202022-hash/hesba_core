@@ -33,7 +33,7 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
-from . import actuals, lots, schedule, services, workcentres
+from . import actuals, lots, quality, schedule, services, workcentres
 from inventory.models import StockOperationStatus
 
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
@@ -197,14 +197,18 @@ def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
     # (quantity over the recipe's output, kept to three decimals) only say how much material the order takes:
     # 100 units with a batch of 3 are 33.333 batches, and 3 x 33.333 would put 99.999 into stock.
     good = good_units(order)
+    # Manufacturing F5 (HG-136): a recipe that needs release puts its product into the entity's quality hold place
+    # (not a selling location); the materials still come from the order's location. None: the order's location, as ever.
+    hold = quality.hold_place_for(order)
     run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
                            notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
                            conversion_cost=actuals.conversion(order)["total"], scrap=max(order.quantity - good, Decimal("0")),
-                           issued=issued or None, output=good)
+                           issued=issued or None, output=good, output_location=hold)
     order.run, order.status, order.finished_at = run, OrderStatus.DONE, timezone.now()
     order.save(update_fields=["run", "status", "finished_at"])
-    lots.after_finish(order, run, user, lot_no, lot_expiry)
-    _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost)})
+    lots.after_finish(order, run, user, lot_no, lot_expiry, location=hold)
+    _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost),
+                                                    **({"on_hold": hold.location_code} if hold is not None else {})})
     return order
 
 

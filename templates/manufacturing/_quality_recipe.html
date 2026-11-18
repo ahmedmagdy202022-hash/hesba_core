@@ -1,0 +1,11 @@
+{# Manufacturing F5 (HG-136): the recipe page's quality section: whether its orders finish on hold, and its criteria. #}
+<h2 data-quality-section>{{ qw.quality_title }}</h2><p class="op-muted">{{ qw.quality_hint }}</p>
+{% if quality_error %}<div class="op-message op-message-error" role="alert" data-quality-error>{{ quality_error }}</div>{% endif %}
+<p><span class="op-status {% if recipe.needs_release %}op-status-posted{% else %}op-status-draft{% endif %}" data-needs-release="{% if recipe.needs_release %}1{% else %}0{% endif %}">{% if recipe.needs_release %}{{ qw.release_on }}{% else %}{{ qw.release_off }}{% endif %}</span></p>
+{% if quality_criteria %}<div class="op-table-wrap"><table class="op-table" data-recipe-criteria><thead><tr><th>{{ qw.criterion }}</th><th>{{ qw.kind }}</th><th>{{ qw.limits }}</th></tr></thead><tbody>
+{% for row in quality_criteria %}<tr data-recipe-criterion="{{ row.criterion.pk }}"><td>{{ row.name }}</td><td>{% if row.criterion.kind == 'number' %}{{ qw.number_kind }}{% else %}{{ qw.pass_fail }}{% endif %}</td><td>{{ row.limits|default:"—" }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="op-muted" data-criteria-none>{{ qw.criteria_none }}</p>{% endif %}
+{% if can_criteria %}<form class="op-form" method="post" data-quality-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="quality">
+<label class="mfg-pick"><input type="checkbox" name="needs_release" value="1"{% if recipe.needs_release %} checked{% endif %}><span>{{ qw.needs_release }}</span></label>
+{% include "manufacturing/_quality_criteria_form.html" %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ qw.save_quality }}</button></div></form>{% endif %}

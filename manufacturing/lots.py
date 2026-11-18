@@ -142,24 +142,27 @@ def check_lot(lot_no, lot_expiry, lang="ar"):
     return _clean_lot(lot_no, lot_expiry, timezone.localdate(), lang)
 
 
-def record_product_lot(run, user, lot_no="", lot_expiry=None):
-    """The ``Batch`` of the run's product at its location (only while batches are on). Returns it, or None."""
+def record_product_lot(run, user, lot_no="", lot_expiry=None, location=None):
+    """The ``Batch`` of the run's product at its location (only while batches are on). Returns it, or None.
+
+    Manufacturing F5 (HG-136): ``location`` is where the product really entered stock when that is not the run's own
+    location (the quality hold place); the lot is written there and follows the release (``quality``)."""
 
     if not batches_enabled():
         return None
     days = run.recipe.shelf_life_days
     expiry = lot_expiry or (run.run_date + timedelta(days=days) if days else None)
-    lot = Batch.objects.create(item=run.recipe.product, location=run.location, batch_no=((lot_no or "").strip() or run.number)[:60], expiry_date=expiry,
+    lot = Batch.objects.create(item=run.recipe.product, location=location or run.location, batch_no=((lot_no or "").strip() or run.number)[:60], expiry_date=expiry,
                                quantity=run.output_quantity, received_on=run.run_date, production_run=run, created_by=user)
     services._audit(run, user, "record_product_lot", {"lot": lot.batch_no, "expiry": str(expiry or ""), "quantity": str(lot.quantity)}, AuditEventType.CREATE)
     return lot
 
 
-def after_finish(order, run, user, lot_no="", lot_expiry=None):
+def after_finish(order, run, user, lot_no="", lot_expiry=None, location=None):
     """An order's finish: the lots its start used now belong to the run too, and the product gets its lot."""
 
     LotUse.objects.filter(order=order, run__isnull=True).update(run=run)
-    return record_product_lot(run, user, lot_no, lot_expiry)
+    return record_product_lot(run, user, lot_no, lot_expiry, location)
 
 
 # ---- what the run page shows ----

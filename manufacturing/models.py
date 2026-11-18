@@ -47,6 +47,9 @@ class Recipe(models.Model):
     notes = models.CharField(max_length=255, blank=True)
     # Manufacturing F3 (HG-131): days from the run date to the product lot's expiry; NULL = the product has no shelf life.
     shelf_life_days = models.PositiveIntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
+    # Manufacturing F5 (HG-136): an order of this recipe finishes into the entity's quality hold place (``QC-<entity>``)
+    # instead of its own location; the goods are released or rejected from the quality screen.
+    needs_release = models.BooleanField(default=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="recipes")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -302,3 +305,118 @@ class OrderCostLine(models.Model):
     class Meta:
         ordering = ["pk"]
         constraints = [models.CheckConstraint(condition=models.Q(amount__gt=0), name="mfg_costline_positive")]
+
+
+class CriterionKind(models.TextChoices):
+    PASS_FAIL = "pass_fail", "Pass or fail"
+    NUMBER = "number", "A number within limits"
+
+
+class QualityCriterion(models.Model):
+    """Manufacturing F5 (HG-136): one thing a quality check looks at: for a recipe's product (the in-process quality stage
+    and the check before release) or for a bought item (an incoming check of a purchase received into the hold place).
+
+    ``pass_fail`` is answered yes or no; ``number`` is a measured value that must sit within ``min_value`` and
+    ``max_value`` (either may be empty). A check keeps its own copy of the name and limits (``QualityResult``), so
+    editing the list never rewrites a check already recorded."""
+
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, null=True, blank=True, related_name="criteria")
+    item = models.ForeignKey("master_data.Item", on_delete=models.CASCADE, null=True, blank=True, related_name="quality_criteria")
+    order = models.PositiveSmallIntegerField()
+    name_ar = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True)
+    kind = models.CharField(max_length=10, choices=CriterionKind.choices, default=CriterionKind.PASS_FAIL)
+    min_value = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    max_value = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+
+    class Meta:
+        ordering = ["order", "pk"]
+        constraints = [
+            models.CheckConstraint(condition=(models.Q(recipe__isnull=False) & models.Q(item__isnull=True))
+                                   | (models.Q(recipe__isnull=True) & models.Q(item__isnull=False)), name="mfg_criterion_recipe_or_item"),
+            models.CheckConstraint(condition=models.Q(min_value__isnull=True) | models.Q(max_value__isnull=True)
+                                   | models.Q(min_value__lte=models.F("max_value")), name="mfg_criterion_limits"),
+        ]
+
+    def name(self, lang="ar"):
+        return (self.name_en or self.name_ar) if lang == "en" else self.name_ar
+
+
+class CheckKind(models.TextChoices):
+    FINAL = "final", "Finished goods on hold"
+    STAGE = "stage", "In-process quality stage"
+    INCOMING = "incoming", "Incoming purchase"
+
+
+class CheckResult(models.TextChoices):
+    PASSED = "passed", "Passed"
+    HELD = "held", "Kept on hold"
+    REJECTED = "rejected", "Rejected"
+    PARTLY = "partly", "Partly passed"
+
+
+class QualityCheck(models.Model):
+    """Manufacturing F5 (HG-136): a dated quality check with its decision.
+
+    * ``final``: the goods of a finished order waiting in the hold place. The passed quantity is released to the order's
+      location (``release_operation``, an ordinary transfer); the rejected quantity is written off from the hold place
+      (``reject_operation``, an ordinary adjustment out). A check that decides nothing keeps the goods on hold.
+    * ``incoming``: a purchase line received into the hold place. The passed quantity is released to ``destination``;
+      the rejected quantity stays in the hold place to go back on an ordinary purchase return (no operation).
+    * ``stage``: the criteria recorded with an order's quality stage (``stage_log``). Nothing moves: failed units are
+      the stage's defects (scrap), as before.
+
+    ``quantity`` is what was waiting (or entered the stage) when the check was recorded. What still waits is never
+    stored: it is the made quantity less the passed and rejected quantities whose operations are still posted."""
+
+    number = models.CharField(max_length=30, unique=True)
+    kind = models.CharField(max_length=10, choices=CheckKind.choices)
+    order = models.ForeignKey(ProductionOrder, on_delete=models.PROTECT, null=True, blank=True, related_name="quality_checks")
+    purchase_line = models.ForeignKey("purchases.PurchaseLine", on_delete=models.PROTECT, null=True, blank=True, related_name="quality_checks")
+    stage_log = models.OneToOneField(OrderStageLog, on_delete=models.CASCADE, null=True, blank=True, related_name="quality_check")
+    checked_on = models.DateField()
+    result = models.CharField(max_length=10, choices=CheckResult.choices)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    passed_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    rejected_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    note = models.CharField(max_length=255, blank=True)
+    destination = models.ForeignKey("master_data.Location", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    release_operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, null=True, blank=True, related_name="quality_release")
+    reject_operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, null=True, blank=True, related_name="quality_reject")
+    checked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(condition=(models.Q(order__isnull=False) & models.Q(purchase_line__isnull=True))
+                                   | (models.Q(order__isnull=True) & models.Q(purchase_line__isnull=False)), name="mfg_check_order_or_purchase"),
+            models.CheckConstraint(condition=models.Q(quantity__gte=0) & models.Q(passed_quantity__gte=0) & models.Q(rejected_quantity__gte=0),
+                                   name="mfg_check_quantities"),
+            models.CheckConstraint(condition=models.Q(quantity__gte=models.F("passed_quantity") + models.F("rejected_quantity")),
+                                   name="mfg_check_within_quantity"),
+        ]
+
+    def __str__(self):
+        return self.number
+
+
+class QualityResult(models.Model):
+    """Manufacturing F5 (HG-136): what one criterion read on one check, with the criterion's name and limits as they
+    were that day (``criterion`` is only a pointer and may be gone)."""
+
+    quality_check = models.ForeignKey(QualityCheck, on_delete=models.CASCADE, related_name="results")
+    criterion = models.ForeignKey(QualityCriterion, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    name_ar = models.CharField(max_length=120)
+    name_en = models.CharField(max_length=120, blank=True)
+    kind = models.CharField(max_length=10, choices=CriterionKind.choices)
+    min_value = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    max_value = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    value = models.DecimalField(max_digits=14, decimal_places=3, null=True, blank=True)
+    ok = models.BooleanField()
+
+    class Meta:
+        ordering = ["pk"]
+
+    def name(self, lang="ar"):
+        return (self.name_en or self.name_ar) if lang == "en" else self.name_ar

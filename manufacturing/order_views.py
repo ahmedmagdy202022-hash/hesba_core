@@ -15,7 +15,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import actuals, make_to_order, orders, schedule, workcentres
+from . import actuals, make_to_order, orders, quality, quality_views, schedule, workcentres
 from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .schedule_views import schedule_context
@@ -166,7 +166,7 @@ def board(request):
             key = f"{stage[0]}:{stage[1]}" if len(stage) >= 5 else stage[0]
             index.setdefault(key if key in index else stage[0], index["planned"])["orders"].append(order)
     recent = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.DONE, OrderStatus.CANCELLED)).select_related("recipe__product", "run")[:15]
-    locations = entity_scope.locations(Location.objects).filter(active=True)
+    locations = quality.production_places(entity_scope.locations(Location.objects).filter(active=True))  # F5 (HG-136): never the quality hold place
     return render(request, "manufacturing/orders.html", _ctx(
         request, columns=columns, recent=[{"order": o, "label": choice_label(o, "status", lang)} for o in recent], error=error, post=request.POST,
         recipes=Recipe.objects.filter(active=True).select_related("product"), locations=locations,
@@ -187,7 +187,8 @@ def order_detail(request, pk):
         action = request.POST.get("action")
         try:
             if action == "advance":
-                orders.advance(order, request.user, good=request.POST.get("good"), defect=request.POST.get("defect"), note=request.POST.get("note", ""), minutes=request.POST.get("minutes"), lang=lang)
+                # F5 (HG-136): the same advance; at the quality stage of a recipe with criteria they are recorded with it.
+                quality_views.advance_order(request, order, lang)
                 messages.success(request, words["advanced"])
             elif action == "finish":
                 if not user_has_permission(request.user, COST):
@@ -267,7 +268,8 @@ def order_detail(request, pk):
         short=bool(plan and any(row["short"] for row in plan["rows"])),
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
         ready=order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages),
-        open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=late_reason != "", late_reason=late_reason, **plan_context))
+        open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=late_reason != "", late_reason=late_reason, **plan_context,
+        **quality_views.order_quality_context(request, order, lang)))
 
 
 @require_permission(PRODUCE)

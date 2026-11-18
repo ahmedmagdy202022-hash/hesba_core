@@ -18,7 +18,7 @@ from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 from settings_core.templatetags.hesba_format import qty as fmt_qty
 
-from . import lots, services
+from . import lots, quality, services
 from .models import ProductionRun, Recipe
 from entities import scope as entity_scope
 
@@ -245,8 +245,8 @@ def recipe_detail(request, pk):
     lang = _lang(request)
     words = WORDS[lang]
     recipe = get_object_or_404(Recipe.objects.select_related("product"), pk=pk)
-    error, routing_error, routing_rows = "", "", None
-    locations = entity_scope.locations(Location.objects).filter(active=True)
+    error, routing_error, routing_rows, quality_error, quality_rows = "", "", None, "", None
+    locations = quality.production_places(entity_scope.locations(Location.objects).filter(active=True))  # F5 (HG-136): never the quality hold place
     location = _pick(Location, request.GET.get("location") or request.POST.get("location"), active=True) or locations.filter(is_default=True).first() or locations.first()
     batches = services._decimal(request.GET.get("batches") or request.POST.get("batches") or "1") or Decimal("1")
     if request.method == "POST":
@@ -257,6 +257,7 @@ def recipe_detail(request, pk):
                     raise PermissionDenied("Production needs inventory.adjust_stock.")
                 if not user_has_permission(request.user, COST):
                     raise ValidationError(words["cost_needed"])
+                quality.check_plain_run(recipe, lang)  # F5 (HG-136): a recipe that needs release is made through an order, which finishes on hold
                 run_date = None
                 try:
                     run_date = date.fromisoformat(request.POST.get("run_date", "")) if request.POST.get("run_date") else None
@@ -284,6 +285,19 @@ def recipe_detail(request, pk):
                     messages.success(request, workcentre_views.WORDS[lang]["routing_saved"])
                     return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
                 return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows)
+            if action == "quality":  # F5 (HG-136): whether the recipe's orders finish on hold, and its quality criteria
+                from . import quality_views
+
+                try:
+                    quality_views.recipe_quality_post(request, recipe, lang)
+                except ValidationError as exc:
+                    from settings_core.ui_messages import translate
+
+                    quality_error, quality_rows = translate(" ".join(exc.messages), lang), quality_views.posted_criteria(request)
+                else:
+                    messages.success(request, quality_views.WORDS[lang]["quality_saved"])
+                    return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
+                return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows, quality_error, quality_rows)
             if not user_has_permission(request.user, RECIPES):
                 raise PermissionDenied("Recipes need master_data.manage_items.")
             data, lines = _recipe_post(request)
@@ -297,8 +311,8 @@ def recipe_detail(request, pk):
     return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows)
 
 
-def _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error="", routing_rows=None):
-    from . import workcentre_views
+def _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error="", routing_rows=None, quality_error="", quality_rows=None):
+    from . import quality_views, workcentre_views
 
     lines = list(recipe.lines.select_related("component"))
     form = {"product": str(recipe.product_id), "name": recipe.name, "output_quantity": _plain(recipe.output_quantity), "active": recipe.active, "notes": recipe.notes,
@@ -308,6 +322,7 @@ def _recipe_page(request, recipe, lang, location, locations, batches, error, rou
         locations=locations, items=_stock_items(), form=form, rows=_rows([(str(line.component_id), _plain(line.quantity)) for line in lines]), error=error,
         runs=[{"run": run, "status_label": choice_label(run, "status", lang)} for run in recipe.runs.select_related("location")[:20]],
         routing_error=routing_error, **workcentre_views.routing_context(request, recipe, routing_rows),
+        quality_error=quality_error, **quality_views.recipe_quality_context(request, recipe, quality_rows),
     ))
 
 
