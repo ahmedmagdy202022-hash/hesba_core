@@ -250,14 +250,18 @@ def _checked(recipe, batches, location, words):
 
 
 @transaction.atomic
-def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="ar"):
-    """HG-036: issue a batch's materials to the floor (work in progress)."""
+def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="ar", stand_in=None):
+    """HG-036: issue a batch's materials to the floor (work in progress).
+
+    ``stand_in``: Manufacturing F8 (HG-140), the narrower permission that stands in for inventory.adjust_stock. Only the
+    floor screen passes one (``floor.done``, for a worker who holds manufacturing.record_stage); every other caller
+    leaves it out and needs inventory.adjust_stock as before. The quantities and the cost are worked out here, never typed."""
 
     words = MESSAGES[lang]
     recipe, batches, lines = _checked(recipe, batches, location, words)
     _check_stock(lines, batches, location, words)
     reason = f"صرف خامات {reference} / Materials issued {reference}"
-    return _consume(lines, batches, location, f"{reference}-I", reason, issue_date or timezone.localdate(), user)
+    return _consume(lines, batches, location, f"{reference}-I", reason, issue_date or timezone.localdate(), user, stand_in=stand_in)
 
 
 @transaction.atomic

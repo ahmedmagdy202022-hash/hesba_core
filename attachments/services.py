@@ -73,7 +73,11 @@ MESSAGES = {
            "variation_kept": "أمر التغيير ده اتقفل؛ مرفقاته بتفضل زي ما هي ومينفعش تتمسح.",
            "quality_read_only": "إضافة شهادة الجودة لصاحب صلاحية تحويل المخزون بس.",
            "quality_delete_denied": "مسح شهادة الجودة لصاحب صلاحية تحويل المخزون بس.",
-           "quality_stage": "المرفق على فحص الجودة بيتسجّل كشهادة جودة بس.", "quality_kind": "شهادة الجودة لازم تكون ملف PDF أو صورة."},
+           "quality_stage": "المرفق على فحص الجودة بيتسجّل كشهادة جودة بس.", "quality_kind": "شهادة الجودة لازم تكون ملف PDF أو صورة.",
+           "floor_read_only": "إضافة صورة العيب لصاحب صلاحية تسجيل مراحل الإنتاج بس.",
+           "floor_delete_denied": "مسح صورة العيب لصاحب صلاحية تسوية المخزون بس.",
+           "floor_stage": "المرفق على أمر الإنتاج بيتسجّل كصورة عيب بس.", "floor_closed": "الأمر ده خلص أو اتلغى؛ مينفعش تتضاف عليه صور.",
+           "floor_kept": "الأمر ده خلص أو اتلغى؛ صوره بتفضل زي ما هي ومينفعش تتمسح."},
     "en": {"denied": "You may not use attachments on this record.", "not_found": "The attachment or the record was not found.",
            "kind": "The attachment kind must be photo, document or signature.", "stage": "The attachment stage must be receive, deliver or other.",
            "empty": "The file is empty or was not sent.", "size": "The file is larger than allowed ({limit}).",
@@ -103,7 +107,11 @@ MESSAGES = {
            "variation_kept": "This variation order is closed; its files are kept and cannot be deleted.",
            "quality_read_only": "Only someone who may transfer stock can add a quality certificate.",
            "quality_delete_denied": "Only someone who may transfer stock can delete a quality certificate.",
-           "quality_stage": "A file on a quality check is kept as its quality certificate only.", "quality_kind": "A quality certificate must be an image or a PDF."},
+           "quality_stage": "A file on a quality check is kept as its quality certificate only.", "quality_kind": "A quality certificate must be an image or a PDF.",
+           "floor_read_only": "Only someone who may record production stages can add a defect photo.",
+           "floor_delete_denied": "Only someone who may adjust stock can delete a defect photo.",
+           "floor_stage": "A file on a production order is kept as a defect photo only.", "floor_closed": "This order is finished or cancelled; photos can no longer be added to it.",
+           "floor_kept": "This order is finished or cancelled; its photos are kept and cannot be deleted."},
 }
 
 
@@ -330,6 +338,45 @@ def _quality_check_entity(check):
     return place.entity
 
 
+# Manufacturing F8 (HG-140): the photo of a defect, taken on the floor screen and kept on the production order. Seen as the
+# order page is (the stock view right, or the floor's own right, inside the entity of the order's location); added by
+# whoever may record a stage (the floor permission, or stock adjustment); removed by the supervisor (stock adjustment)
+# while the order is open, and kept for good once it is finished or cancelled. It rides on the existing ``photo`` stage:
+# no attachments migration.
+
+def _production_orders(user):
+    from manufacturing import floor
+    from permissions.services import user_has_permission
+
+    if not (user_has_permission(user, "inventory.view_stock") or floor.can_use(user)):
+        raise PermissionDenied("Production orders need inventory.view_stock.")
+    return floor.scoped_orders()
+
+
+def _production_order_can_attach(user, order):
+    from manufacturing import floor
+
+    return floor.can_use(user)
+
+
+def _production_order_can_delete(user, order):
+    from manufacturing import floor
+    from permissions.services import user_has_permission
+
+    return user_has_permission(user, floor.PRODUCE)
+
+
+def _production_order_closed(order):
+    from manufacturing import floor
+    from manufacturing.models import ProductionOrder
+
+    return not ProductionOrder.objects.filter(pk=order.pk, status__in=floor.OPEN).exists()  # fresh from the database, not the caller's copy
+
+
+def _production_order_entity(order):
+    return order.location.entity
+
+
 WORK_STAGES = (Stage.RECEIVE, Stage.DELIVER, Stage.OTHER)
 MEDICAL_STAGES = (Stage.SCAN, Stage.LAB, Stage.PHOTO, Stage.REPORT)
 #: the six document kinds of a project, stored on the six stages they are mapped to (see ``projects.documents``)
@@ -342,6 +389,8 @@ REPORT_MAX_COUNT, REPORT_MAX_BYTES = 12, 12 * 1024 * 1024
 VARIATION_MAX_COUNT, VARIATION_MAX_BYTES = 6, 12 * 1024 * 1024
 #: a quality check's certificate: a lab report of a few pages, or a few photos of it
 QUALITY_MAX_COUNT, QUALITY_MAX_BYTES = 6, 12 * 1024 * 1024
+#: a production order's defect photos: a few phone photos over its stages
+FLOOR_MAX_COUNT, FLOOR_MAX_BYTES = 12, 12 * 1024 * 1024
 
 _MEDICAL_RULES = {"can_attach": _medical_can_attach, "closed": lambda record: False, "can_delete": _medical_can_delete,
                   "signature_final": lambda record: False, "entity": _current_entity, "delete_denied": "medical_delete_denied",
@@ -385,7 +434,14 @@ OWNERS = {"workorders.workorder": {"visible": _work_orders, "can_attach": _work_
                                          "delete_denied": "quality_delete_denied", "read_only_message": "quality_read_only",
                                          "stages": (Stage.REPORT,), "kinds": (Kind.PHOTO, Kind.DOCUMENT), "stage_error": "quality_stage",
                                          "kind_error": "quality_kind", "default_stage": Stage.REPORT,
-                                         "max_count": QUALITY_MAX_COUNT, "max_owner_bytes": QUALITY_MAX_BYTES}}
+                                         "max_count": QUALITY_MAX_COUNT, "max_owner_bytes": QUALITY_MAX_BYTES},
+          # Manufacturing F8 (HG-140): the photos of defects taken on the floor screen. Closed and kept with the order.
+          "manufacturing.productionorder": {"visible": _production_orders, "can_attach": _production_order_can_attach, "closed": _production_order_closed,
+                                            "can_delete": _production_order_can_delete, "signature_final": lambda order: False,
+                                            "entity": _production_order_entity, "delete_denied": "floor_delete_denied",
+                                            "read_only_message": "floor_read_only", "closed_error": "floor_closed", "kept_when_closed": "floor_kept",
+                                            "stages": (Stage.PHOTO,), "kinds": (Kind.PHOTO,), "stage_error": "floor_stage", "kind_error": "photo",
+                                            "default_stage": Stage.PHOTO, "max_count": FLOOR_MAX_COUNT, "max_owner_bytes": FLOOR_MAX_BYTES}}
 
 
 def owner_label(owner_or_model):

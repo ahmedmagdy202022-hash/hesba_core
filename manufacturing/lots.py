@@ -104,16 +104,18 @@ def _lock(recipe):
 
 
 @transaction.atomic
-def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="ar", order=None):
-    """``services.issue`` (an order's start), then the ingredient lots it used, for ``order``."""
+def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="ar", order=None, stand_in=None):
+    """``services.issue`` (an order's start), then the ingredient lots it used, for ``order``.
+
+    ``stand_in`` (Manufacturing F8, HG-140) is handed to ``services.issue`` unchanged; only the floor screen passes one."""
 
     if not batches_enabled() or location is None:
-        return services.issue(recipe, user, batches=batches, location=location, reference=reference, issue_date=issue_date, lang=lang)
+        return services.issue(recipe, user, batches=batches, location=location, reference=reference, issue_date=issue_date, lang=lang, stand_in=stand_in)
     when = issue_date or timezone.localdate()
     _lock(recipe)
     items = [line.component for line in recipe.lines.select_related("component")]
     before = _positions(items, location)
-    operations = services.issue(recipe, user, batches=batches, location=location, reference=reference, issue_date=when, lang=lang)
+    operations = services.issue(recipe, user, batches=batches, location=location, reference=reference, issue_date=when, lang=lang, stand_in=stand_in)
     record_uses(operations, before, _positions(items, location), when, lang, order=order)
     return operations
 
