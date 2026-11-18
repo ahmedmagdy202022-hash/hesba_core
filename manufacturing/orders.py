@@ -22,6 +22,11 @@ while the order is on the floor (materials = issues + extras − returns), actua
 labour and overhead lines (each kind's live lines replace its planned figure at
 the finish), the order's standard written at the start, and an over-yield of up
 to 10% at the final stage with a reason (owner question 8).
+
+Manufacturing F4 (HG-137) adds, through ``outside``: a stage that is at an outside supplier is not closed in the factory
+(it is closed by its return), an order is not cancelled while a stage is out, and the finish first turns each posted
+processing bill into an ``OrderCostLine(kind=outside)`` (and is refused while a bill is missing or still draft), so
+the fee joins the conversion below.
 """
 
 from decimal import ROUND_DOWN, Decimal
@@ -34,6 +39,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
 from . import actuals, lots, schedule, services, workcentres
+from . import outside as outside_rules
 from . import quality as quality_rules  # this module's own ``quality(order)`` is the defect rate
 from inventory.models import StockOperationStatus
 
@@ -144,6 +150,7 @@ def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang=
     order = _locked(order)
     if order.status not in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) or order.stage_index >= len(order.stages):
         raise ValidationError(words["state"])
+    outside_rules.check_in_house(order, lang)  # F4 (HG-137): a stage at an outside supplier is closed by its return
     defect_qty = Decimal("0") if defect in (None, "") else services._decimal(defect)
     if defect_qty is None or defect_qty < 0:
         raise ValidationError(words["defect"])
@@ -198,6 +205,9 @@ def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
     issued = actuals.out_first([issue.operation for issue in order.issues.select_related("operation")])
     if any(operation.status != StockOperationStatus.POSTED for operation in issued):
         raise ValidationError(words["reversed"])
+    # Manufacturing F4 (HG-137): each posted processing bill (net of VAT and of its purchase returns) becomes an outside cost
+    # line, read by ``actuals.conversion`` below; a stage still out, or a bill missing or still draft, refuses the finish.
+    outside_rules.absorb(order, user, lang)
     # F11 (HG-100): the order's own good units enter stock, and the rest of the order is its scrap. The batches
     # (quantity over the recipe's output, kept to three decimals) only say how much material the order takes:
     # 100 units with a batch of 3 are 33.333 batches, and 3 x 33.333 would put 99.999 into stock.
@@ -227,6 +237,7 @@ def cancel(order, user, reason, lang="ar"):
         raise ValidationError(words["state"])
     if not (reason or "").strip():
         raise ValidationError(words["reason"])
+    outside_rules.check_order_cancel(order, lang)  # F4 (HG-137): not while its units are at an outside supplier
     from inventory.services import cancel_stock_operation
 
     # The materials come back from the floor: what went out first (issues, extras), then the returns leave again (F12).
@@ -254,11 +265,13 @@ def cost_card(order):
         estimate = services.plan(order.recipe, _batches(order) if order.recipe.output_quantity else Decimal("0"), order.location)
         material, output, stage = estimate["cost"], estimate["output"], "estimate"
     spent = actuals.conversion(order)  # F12 (HG-132): each kind's actual lines, else its planned figure
-    total = money_round(material + spent["total"])
+    # F4 (HG-137): outside processing is written as cost lines at the finish; until then the card shows what it is expected to be.
+    outside = spent["outside"] if order.run_id else outside_rules.expected(order)
+    total = money_round(material + spent["labour"] + spent["overhead"] + outside)
     per_unit = cost_round(total / output) if output else Decimal("0")
     material_unit = cost_round(material / output) if output else Decimal("0")
     absorbed = bool(order.run_id and order.run.conversion_cost)
-    return {"material": money_round(material), "labor": spent["labour"], "overhead": spent["overhead"], "outside": spent["outside"], "total": total,
+    return {"material": money_round(material), "labor": spent["labour"], "overhead": spent["overhead"], "outside": outside, "total": total,
             "output": output, "per_unit": per_unit, "material_per_unit": material_unit, "estimate": stage == "estimate",
             "stage": stage, "absorbed": absorbed, "scrap": order.run.scrap_quantity if order.run_id else order.quantity - good_units(order)}
 

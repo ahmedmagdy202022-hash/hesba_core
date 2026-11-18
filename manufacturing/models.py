@@ -282,7 +282,8 @@ class CostLineKind(models.TextChoices):
 
 class OrderCostLine(models.Model):
     """Manufacturing F12 (HG-132): labour or overhead actually spent on an order (hours x rate, or an amount), added
-    and cancelled until the finish. ``outside`` is reserved for processing at an outside workshop (F4).
+    and cancelled until the finish. ``outside`` is the fee of a stage done at an outside supplier (Manufacturing F4, HG-137):
+    written by the order's finish from the supplier's posted bill (``outside.absorb``), never typed.
 
     At the finish, each kind's live lines replace that kind's planned figure on the order (``labor_cost``,
     ``overhead_cost``); a kind with no live line keeps its planned figure."""
@@ -420,3 +421,55 @@ class QualityResult(models.Model):
 
     def name(self, lang="ar"):
         return (self.name_en or self.name_ar) if lang == "en" else self.name_ar
+
+
+class OutsideStatus(models.TextChoices):
+    SENT = "sent", "At the supplier"
+    BACK = "back", "Back"
+    BILLED = "billed", "Billed"
+    CANCELLED = "cancelled", "Cancelled"
+
+
+class OutsideJob(models.Model):
+    """Manufacturing F4 (HG-137): one stage of an order done at an outside supplier («تشغيل لدى الغير»).
+
+    A record of where the order's units are, never a stock document: the units were issued to work in progress when
+    the order started, so sending them out and taking them back writes no stock movement and no journal row. The
+    stage is closed (good and defective, like any stage) when the units come back. ``purchase_invoice`` is the
+    supplier's bill: an ordinary purchase invoice made as a draft of one service line (``returned_good`` x
+    ``unit_price``) and posted from the purchases screen. ``cost_line`` is the ``OrderCostLine(kind=outside)`` the
+    order's finish wrote from that posted bill, net of its purchase returns: the fee that joined the product's cost.
+
+    ``status`` is what this module wrote. A bill cancelled from the purchases screen is read, never stored: such a
+    job counts as back and takes a new bill (``outside.state``)."""
+
+    order = models.ForeignKey(ProductionOrder, on_delete=models.PROTECT, related_name="outside_jobs")
+    stage_key = models.CharField(max_length=30)
+    supplier = models.ForeignKey("master_data.Supplier", on_delete=models.PROTECT, related_name="outside_jobs")
+    quantity_sent = models.DecimalField(max_digits=14, decimal_places=3)
+    # Agreed per good unit that comes back, before tax. 0 = not agreed yet (set later by someone who may see cost, before the bill).
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    sent_on = models.DateField()
+    returned_good = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    returned_defective = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    returned_on = models.DateField(null=True, blank=True)
+    purchase_invoice = models.OneToOneField("purchases.PurchaseInvoice", on_delete=models.PROTECT, null=True, blank=True, related_name="outside_job")
+    cost_line = models.OneToOneField(OrderCostLine, on_delete=models.PROTECT, null=True, blank=True, related_name="outside_job")
+    status = models.CharField(max_length=10, choices=OutsideStatus.choices, default=OutsideStatus.SENT)
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity_sent__gt=0) & models.Q(unit_price__gte=0), name="mfg_outside_sent_and_price"),
+            models.CheckConstraint(condition=models.Q(returned_good__gte=0) & models.Q(returned_defective__gte=0), name="mfg_outside_returned"),
+            models.CheckConstraint(condition=models.Q(quantity_sent__gte=models.F("returned_good") + models.F("returned_defective")),
+                                   name="mfg_outside_within_sent"),
+            # A stage is out once at a time; a cancelled sending leaves the stage free to be sent again.
+            models.UniqueConstraint(fields=["order", "stage_key"], condition=~models.Q(status="cancelled"), name="mfg_one_live_outside_job_per_stage"),
+        ]
+
+    def __str__(self):
+        return f"{self.order_id}:{self.stage_key}"
