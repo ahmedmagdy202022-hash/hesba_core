@@ -5841,7 +5841,7 @@ The product now enters stock at what the order really used (issues + extras − 
 - **The sales order page:** under each line its specifications and a link «المواصفات والتكلفة» (or «المواصفات» without the cost right); F1's column says the line is made from that page.
 - **The quotation's print** (and its share link, which renders the same document): the specifications in small type under the line; never a cost (tested).
 - `static/hesba/css/print.css`: one rule (`.pr-specs`, tokens only). No new colour literal, no new script.
-- **Seen as headless Chromium screenshots** at 390 px and 1280 px on a local copy of the printing example (the page as a quotation in Arabic and English, as an open order ready to convert, after conversion; the manager's view; the sales order page as a quotation and as an order; the print): no page scrolls sideways at either width. A first look showed the line's specifications broken into narrow columns on the sales order's phone card; fixed by keeping them in one column (`mfg-title`). **Not seen on a real phone; Ahmed's «موافق» on the new page and on the changed sales order page and print is still to be taken.**
+- **Seen as headless Chromium screenshots** at 390 px and 1280 px on a local copy of the printing example (the page as a quotation in Arabic and English, as an open order ready to convert, after conversion; the manager's view; the sales order page as a quotation and as an order; the print): no page scrolls sideways at either width. A first look showed the line's specifications broken into narrow columns on the sales order's phone card (fixed by keeping them in one column, `mfg-title`) and the back link's word glued to the order number (fixed by wrapping both in one `<span>`, as F1's cell does). The print stylesheet's new rule needs no cache bump: production serves hashed static names (`CompressedManifestStaticFilesStorage`). **Not seen on a real phone; Ahmed's «موافق» on the new page and on the changed sales order page and print is still to be taken.**
 
 ### Owner questions (the default built in bold)
 
@@ -5872,6 +5872,8 @@ The product now enters stock at what the order really used (issues + extras − 
 
 ### Risks
 
+- **The `JOB-` prefix is reserved.** The till hides every item whose code starts with it; no item code in the code base, the demo catalogues or the seed commands uses it today (searched), but an item a shop types or imports with that prefix would vanish from the till too.
+- **A material never bought has an average of 0.0000.** Left blank, its unit cost on the sheet is 0.0000 with no warning, so the quote can be priced too low; type the cost for such a material.
 - **A crafted till post can still sell a `JOB-` item**: `sales.pos.parse_cart` accepts any active item by its id, as it does for the deposits fee item today. The catalogue filter hides it; it does not forbid it. The till's button settings page (`sales/pos_buttons.py`) still lists `JOB-` items as candidates (pinning one has no effect, tested).
 - **The order line's item changes after the customer accepted.** Reports grouped by item show the job item, not the placeholder; the quotation's print shows the line's description, so the customer sees the same text.
 - **The sheet is an estimate.** The job's real cost is the materials at their average when the order starts plus the planned labour and overhead (and F4 bills); a sheet priced at old averages can quote below cost. The page shows the computed price; nothing warns when the averages move.

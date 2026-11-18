@@ -1,7 +1,7 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}{# Manufacturing F7 (HG-138): one quotation line's specifications, its cost sheet (only with the cost permission) and «حوّله لأمر إنتاج خاص». #}
 {% block operation_content %}
-<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:detail' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if order.order_number %}{{ qw.order }}{% else %}{{ qw.quote }}{% endif %} <bdi dir="ltr">{{ order.display_number }}</bdi></a>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:detail' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}<span>{% if order.order_number %}{{ qw.order }}{% else %}{{ qw.quote }}{% endif %} <bdi dir="ltr">{{ order.display_number }}</bdi></span></a>
 <h1>{{ qw.title }}</h1><p>{{ qw.intro }}</p></div></section>
 
 <section class="op-summary-grid op-summary-grid--compact" data-quote-line><article><small>{{ qw.customer }}</small><strong>{{ order.customer.name }}</strong></article>
