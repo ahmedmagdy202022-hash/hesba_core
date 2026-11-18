@@ -2,6 +2,7 @@
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -26,7 +27,7 @@ WORDS = {
         "unscheduled": "من غير تاريخ استحقاق", "later": "بعد الـ 14 يوم", "min": "دقيقة", "no_load": "مفيش مراكز عمل شغالة.", "assets_none": "—",
         "routing": "المراحل", "routing_hint": "مراحل الوصفة بالترتيب، كل مرحلة على مركز عمل. الأوامر الجديدة بتاخد المراحل دي؛ لو مفيش مراحل بتاخد مراحل المصنع المعتادة. الأوامر المفتوحة متتغيرش.",
         "stage": "المرحلة", "stage_ar": "اسم المرحلة", "stage_en": "الاسم بالإنجليزي", "centre": "مركز العمل", "per_batch": "دقايق الدفعة", "setup": "دقايق التجهيز",
-        "routing_save": "حفظ المراحل", "routing_saved": "اتحفظت المراحل.", "routing_none": "الوصفة دي من غير مراحل: أوامرها بتاخد مراحل المصنع المعتادة.",
+        "routing_save": "حفظ المراحل", "routing_saved": "اتحفظت المراحل.", "routing_none": "الوصفة دي من غير مراحل: أوامرها بتاخد مراحل المصنع المعتادة.", "routing_other": "مراحل الوصفة دي متسجّلة على مراكز عمل كيان تاني، وتتعدّل من الكيان ده. الأوامر هنا بتاخد مراحل المصنع المعتادة.",
         "row": "صف", "centres_link": "مراكز العمل", "no_centres": "ضيف مركز عمل الأول من صفحة مراكز العمل.", "routing_cost": "تكلفة الدفعة بسعر المراكز",
         "routing_view_only": "تعديل المراحل لصاحب الصلاحية بس.",
     },
@@ -41,7 +42,7 @@ WORDS = {
         "unscheduled": "With no due date", "later": "After the 14 days", "min": "min", "no_load": "No active work centres.", "assets_none": "—",
         "routing": "Stages", "routing_hint": "The recipe's stages in order, each on a work centre. New orders take these stages; with none they take the factory's usual stages. Open orders do not change.",
         "stage": "Stage", "stage_ar": "Stage name", "stage_en": "English name", "centre": "Work centre", "per_batch": "Minutes per batch", "setup": "Setup minutes",
-        "routing_save": "Save the stages", "routing_saved": "The stages were saved.", "routing_none": "This recipe has no stages: its orders take the factory's usual stages.",
+        "routing_save": "Save the stages", "routing_saved": "The stages were saved.", "routing_none": "This recipe has no stages: its orders take the factory's usual stages.", "routing_other": "This recipe's stages are on another entity's work centres and are edited from that entity. Orders here take the factory's usual stages.",
         "row": "Row", "centres_link": "Work centres", "no_centres": "Add a work centre first from the work centres page.", "routing_cost": "Cost of one batch at the centres' rates",
         "routing_view_only": "Only users with the permission can change the stages.",
     },
@@ -98,6 +99,8 @@ def routing_context(request, recipe, posted=None):
     """The routing section of the recipe page: its rows (the saved steps, or the posted ones after a refusal)."""
 
     can_cost = user_has_permission(request.user, COST)
+    if not workcentres.routing_visible(recipe):  # another entity's machines and rates: neither shown nor replaceable here
+        return {"steps": [], "route_rows": [], "route_centres": [], "route_batch_cost": None, "route_other": True, "rwords": WORDS[_lang(request)]}
     steps = list(recipe.steps.select_related("work_centre"))
     if posted is not None:
         rows = posted
@@ -111,7 +114,7 @@ def routing_context(request, recipe, posted=None):
         from config.money import money_round
 
         batch = money_round(sum((s.work_centre.rate_per_hour * (s.setup_minutes + s.minutes_per_batch) / 60 for s in steps), 0))
-    return {"steps": steps, "route_rows": rows, "route_centres": workcentres.scoped().filter(active=True), "route_batch_cost": batch, "rwords": WORDS[_lang(request)]}
+    return {"steps": steps, "route_rows": rows, "route_centres": workcentres.scoped().filter(Q(active=True) | Q(pk__in=[s.work_centre_id for s in steps])), "route_batch_cost": batch, "rwords": WORDS[_lang(request)]}
 
 
 def posted_rows(request):

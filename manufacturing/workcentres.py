@@ -54,6 +54,8 @@ MESSAGES = {
         "step_minutes": "الصف {n}: دقايق الدفعة لازم تكون رقم أكبر من صفر.", "step_setup": "الصف {n}: دقايق التجهيز لازم تكون رقم مش سالب.",
         "minutes": "دقايق المرحلة لازم تكون رقم أكبر من صفر.", "log": "المرحلة دي مش على الأمر ده.", "no_suggestion": "مفيش تكلفة مقترحة للمرحلة دي.",
         "confirmed": "التكلفة دي اتسجلت قبل كده على الأمر.", "line_note": "{name} · {minutes} دقيقة",
+        "routing_other": "مراحل الوصفة دي متسجّلة على مراكز عمل كيان تاني، وتتعدّل من الكيان ده.",
+        "routing_mixed": "كل مراحل الوصفة لازم تكون على مراكز عمل من نفس الكيان.",
     },
     "en": {
         "code": "Enter the work centre's code (up to 20 characters).", "code_dup": "This work centre code is already used.", "name": "Enter the work centre's Arabic name.",
@@ -63,6 +65,8 @@ MESSAGES = {
         "step_minutes": "Row {n}: minutes per batch must be a number above zero.", "step_setup": "Row {n}: setup minutes must be a number, not negative.",
         "minutes": "The stage's minutes must be a number above zero.", "log": "That stage is not on this order.", "no_suggestion": "There is no suggested cost for that stage.",
         "confirmed": "This cost is already on the order.", "line_note": "{name} · {minutes} min",
+        "routing_other": "This recipe's stages are on another entity's work centres; edit them from that entity.",
+        "routing_mixed": "Every stage of a recipe must be on work centres of the same entity.",
     },
 }
 
@@ -82,6 +86,34 @@ def scoped():
     """The work centres of the entity being worked in (NULL is the main entity)."""
 
     return entity_scope.scope(WorkCentre.objects, "entity")
+
+
+def _entity_key(entity_id):
+    """An entity id with NULL read as the main entity (records made before ENT-001 belong to it)."""
+
+    if entity_id is not None:
+        return entity_id
+    from entities.models import Entity
+
+    return Entity.objects.filter(is_main=True).values_list("pk", flat=True).first()
+
+
+def routing_entity(recipe):
+    """The entity a recipe's routing belongs to (the entity of its work centres), or None when it has no step.
+
+    A recipe is shared by every entity, but its routing names machines and their rates, so it belongs to one entity:
+    an order opened elsewhere takes the factory's stage list, and another entity can neither see nor replace it."""
+
+    step = recipe.steps.select_related("work_centre").first()
+    return _entity_key(step.work_centre.entity_id) if step else None
+
+
+def routing_visible(recipe):
+    """True when the routing (if any) belongs to the entity being worked in, or no single entity is chosen."""
+
+    owner = routing_entity(recipe)
+    chosen = entity_scope.entity()
+    return owner is None or chosen is None or owner == _entity_key(chosen.pk)
 
 
 def can_see_rates(user):
@@ -167,6 +199,8 @@ def save_routing(recipe, rows, user, lang="ar"):
     words = MESSAGES[lang]
     if not user_has_permission(user, MANAGE):
         raise PermissionDenied("The routing needs master_data.manage_items.")
+    if not routing_visible(recipe):
+        raise ValidationError(words["routing_other"])
     used = set(recipe.steps.values_list("work_centre_id", flat=True))
     available = {str(c.pk): c for c in scoped().filter(Q(active=True) | Q(pk__in=used))}  # a centre switched off since stays usable on the recipe that has it
     clean, taken = [], set()
@@ -189,6 +223,8 @@ def save_routing(recipe, rows, user, lang="ar"):
         taken.add(key)
         clean.append(RecipeStep(recipe=recipe, order=len(clean) + 1, stage_key=key, name_ar=name_ar[:120], name_en=(row.get("name_en") or "").strip()[:120],
                                 work_centre=centre, minutes_per_batch=minutes.quantize(Decimal("0.01")), setup_minutes=setup.quantize(Decimal("0.01"))))
+    if len({_entity_key(step.work_centre.entity_id) for step in clean}) > 1:  # the whole group view lists every entity's centres
+        raise ValidationError(words["routing_mixed"])
     before = [step.stage_key for step in recipe.steps.all()]
     recipe.steps.all().delete()
     RecipeStep.objects.bulk_create(clean)
@@ -206,12 +242,15 @@ def planned_minutes(step, batches):
     return (step.setup_minutes + step.minutes_per_batch * batches).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def stages_for(recipe, quantity):
-    """The stages a new order of ``quantity`` units of ``recipe`` is opened with, or None when the recipe has no routing
-    (the caller then copies the factory's list as it always has)."""
+def stages_for(recipe, quantity, location=None):
+    """The stages a new order of ``quantity`` units of ``recipe`` at ``location`` is opened with, or None when the recipe
+    has no routing, or its routing belongs to another entity than the location's (the caller then copies the factory's
+    list as it always has): an order never takes another entity's machines or rates."""
 
-    steps = list(recipe.steps.all())
+    steps = list(recipe.steps.select_related("work_centre"))
     if not steps:
+        return None
+    if location is not None and _entity_key(steps[0].work_centre.entity_id) != _entity_key(location.entity_id):
         return None
     batches = batches_of(quantity, recipe)
     return [[step.stage_key, step.name_ar, step.name_en or step.name_ar, step.work_centre_id, str(planned_minutes(step, batches))] for step in steps]

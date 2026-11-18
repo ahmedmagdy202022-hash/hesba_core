@@ -87,7 +87,7 @@ def create_order(data, user, lang="ar"):
         number=services._next(ProductionOrder, "number", f"PO-{today:%Y%m%d}-", 3), recipe=recipe, quantity=quantity, location=location,
         customer=data.get("customer"), due_date=data.get("due_date"),
         # Manufacturing F6a (HG-133): the recipe's routing when it has one (a work centre and planned minutes per stage), else the factory's list as ever.
-        stages=workcentres.stages_for(recipe, quantity) or [list(stage) for stage in current_stages()],
+        stages=workcentres.stages_for(recipe, quantity, location) or [list(stage) for stage in current_stages()],
         labor_cost=_money(data.get("labor_cost"), words), overhead_cost=_money(data.get("overhead_cost"), words),
         notes=(data.get("notes") or "")[:255], created_by=user)
     _audit(order, user, "create_production_order", {"number": order.number, "recipe": recipe.code, "quantity": str(quantity)})

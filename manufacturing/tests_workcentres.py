@@ -337,6 +337,20 @@ class ScreenTests(RoutedPlant):
         self.assertEqual(self.recipe.steps.count(), 1)                              # and the refused save changed nothing
         self.assertContains(self.client.get(url), 'data-recipe-step="packing"')
 
+    def test_a_switched_off_centre_stays_chosen_and_an_unchanged_routing_saves(self):
+        self.oven.active = False
+        self.oven.save()
+        url = reverse("manufacturing:recipe", args=[self.recipe.pk])
+        self.assertContains(self.client.get(url), f'<option value="{self.oven.pk}" selected>الفرن</option>')   # the saved row keeps its centre
+        done = self.client.post(url, {"action": "routing", "lang": "ar",
+                                      "step_name_ar_0": "خلط", "step_name_en_0": "Mixing", "step_centre_0": self.mixer.pk, "step_minutes_0": "30", "step_setup_0": "0",
+                                      "step_name_ar_1": "خَبز", "step_name_en_1": "Baking", "step_centre_1": self.oven.pk, "step_minutes_1": "40", "step_setup_1": "0"})
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual([(s.work_centre_id, s.minutes_per_batch) for s in self.recipe.steps.all()], [(self.mixer.pk, D("30.00")), (self.oven.pk, D("40.00"))])
+        other = self.recipe.__class__.objects.exclude(pk=self.recipe.pk).first()
+        if other is not None:                                                       # a recipe that never had it is still not offered a switched-off centre
+            self.assertNotContains(self.client.get(reverse("manufacturing:recipe", args=[other.pk])), f'<option value="{self.oven.pk}">الفرن</option>')
+
     def test_the_new_screens_use_no_banned_word(self):
         banned = ("ورشة", "الأسطى", "بتاع", "دوس", "لينك")
         for name in ("templates/manufacturing/work_centres.html", "templates/manufacturing/work_centre_form.html", "templates/manufacturing/_routing.html",
@@ -451,6 +465,38 @@ class EntityTests(RoutedPlant):
         self.assertEqual(WorkCentre.objects.get(code="BR-NEW").entity, branch)
         self.client.post(reverse("entities:switch"), {"entity": "", "next": "/dashboard/"})
         self.assertContains(self.client.get(reverse("manufacturing:work_centres")), 'data-work-centre="BR-OVEN"')   # the whole group sees both
+
+
+    def test_a_routing_belongs_to_the_entity_of_its_work_centres(self):
+        from entities.current import working_in
+        from entities.services import save_entity
+
+        branch = save_entity({"code": "BR6C", "name_ar": "فرع العاشر", "activity_slug": "manufacturing", "sub_activity_slug": "food"}, self.owner)
+        branch_plant = make_location(location_code="BR-PLANT3", name_ar="مصنع العاشر", name_en="Tenth plant", entity=branch)
+        # An order opened at the branch never takes the main entity's mixer, oven and their rates: it gets the factory's list.
+        there = orders.create_order({"recipe": self.recipe, "location": branch_plant, "quantity": "20", "labor_cost": "0"}, self.owner)
+        self.assertTrue(all(len(stage) == 3 for stage in there.stages))
+        self.assertEqual(workcentres.plan_rows(there), [])
+        self.assertEqual([stage[3] for stage in self.cake_order().stages], [self.mixer.pk, self.oven.pk])   # the main plant still takes it
+        # The branch neither sees nor replaces it.
+        with working_in(branch):
+            self.assertFalse(workcentres.routing_visible(self.recipe))
+            with self.assertRaisesMessage(ValidationError, "كيان تاني"):
+                workcentres.save_routing(self.recipe, [], self.owner)
+        self.assertEqual(self.recipe.steps.count(), 2)
+        self.client.force_login(self.owner)
+        self.client.post(reverse("entities:switch"), {"entity": branch.pk, "next": "/dashboard/"})
+        page = self.client.get(reverse("manufacturing:recipe", args=[self.recipe.pk]))
+        self.assertContains(page, "data-routing-other")
+        for hidden in ("data-recipe-step", "data-routing-form", "data-routing-cost"):
+            self.assertNotContains(page, hidden)
+        self.client.post(reverse("entities:switch"), {"entity": "", "next": "/dashboard/"})
+        # Seen from the whole group every centre is offered, but one routing cannot mix two entities' centres.
+        far = WorkCentre.objects.create(code="BR-OVEN3", name_ar="فرن العاشر", kind="machine", hours_per_day=8, rate_per_hour="99.00", entity=branch)
+        with self.assertRaisesMessage(ValidationError, "نفس الكيان"):
+            workcentres.save_routing(self.recipe, [{"name_ar": "خلط", "work_centre": self.mixer.pk, "minutes_per_batch": "5"},
+                                                   {"name_ar": "خَبز", "work_centre": far.pk, "minutes_per_batch": "5"}], self.owner)
+        self.assertEqual(self.recipe.steps.count(), 2)
 
 
 class UnchangedUntilTheFinishTests(RoutedPlant):
