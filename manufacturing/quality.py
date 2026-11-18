@@ -573,7 +573,9 @@ def _decide(subject, user, *, passed, rejected, note, results, destination, lang
 def check_order(order, user, *, passed="", rejected="", note="", results=None, lang="ar"):
     """Record a check on a finished order's goods on hold: release ``passed``, write off ``rejected``, keep the rest on hold."""
 
-    order = ProductionOrder.objects.select_for_update().select_related("recipe__product", "location", "run__output_operation__destination_location").get(pk=order.pk)
+    # The order's row alone is locked: its run is a nullable relation, and PostgreSQL refuses FOR UPDATE on the nullable side of an outer join.
+    order = (ProductionOrder.objects.select_for_update(of=("self",))
+             .select_related("recipe__product", "location", "run__output_operation__destination_location").get(pk=order.pk))
     return _decide(order_subject(order), user, passed=passed, rejected=rejected, note=note, results=results, destination=None, lang=lang)
 
 
@@ -584,7 +586,7 @@ def check_purchase_line(line, user, *, passed="", rejected="", destination=None,
 
     from purchases.models import PurchaseLine
 
-    line = PurchaseLine.objects.select_for_update().select_related("invoice__receiving_location", "item").get(pk=line.pk)
+    line = PurchaseLine.objects.select_for_update(of=("self",)).select_related("invoice__receiving_location", "item").get(pk=line.pk)
     return _decide(purchase_subject(line), user, passed=passed, rejected=rejected, note=note, results=results, destination=destination, lang=lang)
 
 
@@ -609,7 +611,7 @@ def advance(order, user, *, results=None, good=None, defect=None, note="", minut
     from . import orders
 
     words = _words(lang)
-    order = ProductionOrder.objects.select_for_update().select_related("recipe").get(pk=order.pk)
+    order = ProductionOrder.objects.select_for_update(of=("self",)).select_related("recipe").get(pk=order.pk)
     criteria = stage_criteria(order)
     if not criteria:
         return orders.advance(order, user, good=good, defect=defect, note=note, minutes=minutes, lang=lang)
