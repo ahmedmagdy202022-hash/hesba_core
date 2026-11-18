@@ -1,0 +1,7 @@
+{# Manufacturing F5 (HG-136): the rows of a criteria list (a recipe's, or a bought item's). An empty row is skipped; the saved list is replaced. #}
+{% for row in criteria_rows %}<div class="op-form-grid" data-criterion-row>
+<div class="op-field"><label for="cr-a{{ forloop.counter0 }}">{{ qw.criterion_ar }} {{ forloop.counter }}</label><input id="cr-a{{ forloop.counter0 }}" name="crit_name_ar_{{ forloop.counter0 }}" value="{{ row.name_ar }}" maxlength="120"></div>
+<div class="op-field"><label for="cr-e{{ forloop.counter0 }}">{{ qw.criterion_en }}</label><input id="cr-e{{ forloop.counter0 }}" name="crit_name_en_{{ forloop.counter0 }}" value="{{ row.name_en }}" maxlength="120" dir="ltr"></div>
+<div class="op-field"><label for="cr-k{{ forloop.counter0 }}">{{ qw.kind }}</label><select id="cr-k{{ forloop.counter0 }}" name="crit_kind_{{ forloop.counter0 }}">{% for value, label in criteria_kinds %}<option value="{{ value }}"{% if row.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="cr-n{{ forloop.counter0 }}">{{ qw.min }}</label><input id="cr-n{{ forloop.counter0 }}" name="crit_min_{{ forloop.counter0 }}" value="{{ row.min_value|default_if_none:'' }}" inputmode="decimal" dir="ltr"></div>
+<div class="op-field"><label for="cr-x{{ forloop.counter0 }}">{{ qw.max }}</label><input id="cr-x{{ forloop.counter0 }}" name="crit_max_{{ forloop.counter0 }}" value="{{ row.max_value|default_if_none:'' }}" inputmode="decimal" dir="ltr"></div></div>{% endfor %}

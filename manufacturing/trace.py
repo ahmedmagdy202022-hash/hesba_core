@@ -36,15 +36,33 @@ def _rank(batch):
     return (batch.expiry_date or FAR_FUTURE, batch.received_on, batch.pk)
 
 
-def _arrival(batch):
-    """The pk of the stock movement a lot arrived on (run output or purchase receipt), or None for one registered by hand."""
+def _arrived(batch):
+    """The stock movement a lot arrived on at the place it is in: its run's output or its purchase's receipt; None for a
+    lot registered by hand.
+
+    Manufacturing F5 (HG-136): a lot that entered the quality hold place and was released is in another place than the
+    one it was made or received in; there it arrived on the release's transfer in, so nothing sold from that place
+    before the release is read as this lot's."""
 
     if batch.production_run_id:
         row = batch.production_run.output_operation.movements.filter(reversal_of__isnull=True).order_by("pk").first()
+        owner = {"stock_operation__quality_release__order__run_id": batch.production_run_id}
     elif batch.purchase_line_id:
         row = StockMovement.objects.filter(purchase_line_id=batch.purchase_line_id, reversal_of__isnull=True).order_by("pk").first()
+        owner = {"stock_operation__quality_release__purchase_line_id": batch.purchase_line_id}
     else:
         return None
+    if row is not None and row.location_id != batch.location_id:
+        released = (StockMovement.objects.filter(location_id=batch.location_id, movement_type=StockMovementType.TRANSFER_IN, reversal_of__isnull=True,
+                                                 stock_operation__status="posted", **owner).order_by("pk").first())
+        return released or row
+    return row
+
+
+def _arrival(batch):
+    """The pk of the stock movement a lot arrived on (see ``_arrived``), or None for one registered by hand."""
+
+    row = _arrived(batch)
     return row.pk if row is not None else None
 
 
@@ -89,7 +107,7 @@ def sales_after(lot):
     from sales.models import SalesInvoice, SalesInvoiceStatus, SalesLine
 
     run = lot.production_run
-    made = run.output_operation.movements.filter(reversal_of__isnull=True).order_by("pk").first() if run is not None else None
+    made = _arrived(lot) if run is not None else None  # F5 (HG-136): the release's transfer in, for a lot released from the quality hold
     if made is None:
         return {"sales": [], "open": True, "from": lot.received_on, "to": None}
     movements = list(StockMovement.objects.filter(item_id=lot.item_id, location_id=lot.location_id).order_by("pk")

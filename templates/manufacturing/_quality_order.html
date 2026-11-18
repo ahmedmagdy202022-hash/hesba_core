@@ -1,0 +1,7 @@
+{% load hesba_format %}{# Manufacturing F5 (HG-136): the order page's quality card: whether the product goes on hold, what waits, and the order's checks. #}
+{% if quality_card %}<h2 data-quality-card>{{ qw.card_title }}</h2>
+{% if quality_card.will_hold %}<p class="op-message" data-will-hold>{{ qw.will_hold }}</p>{% endif %}
+{% if quality_card.position %}<section class="op-summary-grid" data-hold-position><article><small>{{ qw.made }}</small><strong>{{ quality_card.position.made|qty }}</strong></article><article><small>{{ qw.released }}</small><strong data-hold-released>{{ quality_card.position.passed|qty }}</strong></article><article><small>{{ qw.written_off }}</small><strong data-hold-rejected>{{ quality_card.position.rejected|qty }}</strong></article><article><small>{{ qw.still_held }}</small><strong data-hold-waiting>{{ quality_card.position.waiting|qty }}</strong></article></section>
+{% if quality_card.position.waiting > 0 %}<div class="op-form-actions"><a class="{% if can_check %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'manufacturing:quality_order' order.pk %}?lang={{ lang }}" data-check-now>{{ qw.check_now }}</a></div>{% endif %}{% endif %}
+{% if quality_checks %}{% include "manufacturing/_quality_checks_table.html" with check_rows=quality_checks %}{% endif %}
+{% endif %}

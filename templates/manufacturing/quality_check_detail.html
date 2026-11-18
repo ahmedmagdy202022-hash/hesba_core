@@ -1,0 +1,50 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}{# Manufacturing F5 (HG-136): one quality check: its decision, its criteria, its stock operations and its quality certificate. #}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=c2-1">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:quality' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ qw.title }}</a><h1>{{ qw.check_page }} <bdi dir="ltr" data-check-number>{{ check.number }}</bdi></h1><p>{{ row.what }} · <bdi dir="ltr">{{ row.source }}</bdi>{% if supplier %} · {{ supplier }}{% endif %} · {{ row.kind }} · <bdi>{{ check.checked_on|date:"Y-m-d" }}</bdi> · {{ check.checked_by|person }}</p><p><span class="op-status {{ row.result_class }}" data-check-result="{{ check.result }}">{{ row.result }}</span></p></div><div class="op-form-actions">{% if source_url %}<a class="op-secondary" href="{{ source_url }}?lang={{ lang }}" data-check-source>{% if check.order_id %}{{ qw.open_order }}{% else %}{{ qw.open_invoice }}{% endif %}</a>{% endif %}{% if form_url %}<a class="op-secondary" href="{{ form_url }}?lang={{ lang }}" data-check-form-link>{{ qw.check_title }}</a>{% endif %}</div></section>
+<section class="op-summary-grid" data-check-quantities><article><small>{{ qw.at_check }}</small><strong>{{ check.quantity|qty }}</strong></article><article><small>{{ qw.passed }}</small><strong data-check-passed>{{ check.passed_quantity|qty }}</strong></article><article><small>{{ qw.rejected }}</small><strong data-check-rejected>{{ check.rejected_quantity|qty }}</strong></article>{% if check.destination %}<article><small>{{ qw.went_to }}</small><strong data-check-destination>{% if lang == 'en' %}{{ check.destination.name_en|default:check.destination.name_ar }}{% else %}{{ check.destination.name_ar }}{% endif %}</strong></article>{% endif %}</section>
+{% if check.kind == 'stage' %}<p class="op-muted" data-stage-note>{{ qw.stage_note }}</p>{% endif %}
+{% if check.release_operation %}<p data-release-operation>{{ qw.release_op }}: <bdi dir="ltr">{{ check.release_operation.reference_number }}</bdi></p>{% endif %}
+{% if row.state.release_reversed %}<div class="op-message op-message-error" role="alert" data-release-reversed>{{ qw.release_reversed }}</div>{% endif %}
+{% if check.reject_operation %}<p data-reject-operation>{{ qw.reject_op }}: <bdi dir="ltr">{{ check.reject_operation.reference_number }}</bdi></p>{% endif %}
+{% if row.state.reject_reversed %}<div class="op-message op-message-error" role="alert" data-reject-reversed>{{ qw.reject_reversed }}</div>{% endif %}
+{% if check.kind == 'incoming' and check.rejected_quantity > 0 %}<p class="op-message" data-stays-for-return>{{ qw.stays_for_return }}</p>{% endif %}
+{% if check.note %}<p data-check-note><strong>{{ qw.note }}:</strong> {{ check.note }}</p>{% endif %}
+<h2>{{ qw.results }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-check-results><thead><tr><th>{{ qw.criterion }}</th><th>{{ qw.limits }}</th><th>{{ qw.reading }}</th><th>{{ qw.result }}</th></tr></thead><tbody>
+{% for item in results %}<tr data-result-ok="{% if item.row.ok %}1{% else %}0{% endif %}"><td>{{ item.name }}</td><td>{{ item.limits|default:"—" }}</td><td dir="ltr">{% if item.row.value is not None %}{{ item.row.value|qty }}{% else %}—{% endif %}</td><td class="op-cell-text"><span class="op-status {% if item.row.ok %}op-status-posted{% else %}op-status-cancelled{% endif %}">{% if item.row.ok %}{{ qw.ok }}{% else %}{{ qw.not_ok }}{% endif %}</span></td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ qw.no_results }}</td></tr>{% endfor %}
+</tbody></table></div>
+<section class="att-card" id="qc-certificate" data-attachments aria-labelledby="qc-certificate-title"
+ data-msg-failed="{% if lang == 'en' %}Something went wrong, try again.{% else %}حصلت مشكلة، جرّب تاني.{% endif %}"
+ data-msg-network="{% if lang == 'en' %}No connection right now, try again.{% else %}مفيش اتصال دلوقتي، جرّب تاني.{% endif %}"
+ data-msg-uploading="{% if lang == 'en' %}Uploading…{% else %}جاري الرفع…{% endif %}" data-msg-uploaded="{% if lang == 'en' %}Saved.{% else %}اتحفظ.{% endif %}"
+ data-msg-deleting="{% if lang == 'en' %}Deleting…{% else %}جاري المسح…{% endif %}" data-msg-confirm="{% if lang == 'en' %}Delete this file?{% else %}تمسح الملف ده؟{% endif %}">
+{% csrf_token %}
+<h2 id="qc-certificate-title">{{ qw.certificate }}</h2>
+<p class="att-help">{{ qw.cert_intro }}</p>
+<p class="att-help att-formats" data-att-formats>{{ att.formats }}</p>
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+{% if att.can_change %}
+<form class="att-upload att-med-upload" method="post" enctype="multipart/form-data" action="{{ att.upload_url }}" data-att-upload>{% csrf_token %}
+<input type="hidden" name="stage" value="report"><input type="hidden" name="lang" value="{{ lang }}">
+<div class="att-strip">
+<label class="att-add"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>{{ qw.camera }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" capture="environment" data-att-file></label>
+<label class="att-add att-add-alt"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg><span>{{ qw.choose_file }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*,application/pdf" multiple data-att-file></label>
+</div>
+</form>
+{% endif %}
+{% if att.items %}<ul class="att-list" data-att-list>{% for item in att.items %}<li class="att-item" data-attachment="{{ item.row.pk }}" data-kind="{{ item.row.kind }}">
+<a class="att-item-thumb" href="{{ item.url }}" target="_blank" rel="noopener" aria-label="{{ qw.open_file }} {{ item.row.original_filename }}">{% if item.is_image %}<img src="{{ item.url }}" alt="{{ qw.photo_of }}" loading="lazy" decoding="async">{% else %}<span class="att-pdf" aria-hidden="true"><svg class="att-ico" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg><b>{{ qw.pdf }}</b></span>{% endif %}</a>
+<div class="att-item-body"><a class="att-item-name" href="{{ item.url }}" target="_blank" rel="noopener"><bdi>{{ item.row.original_filename }}</bdi></a>
+<small class="att-item-meta">{{ item.when }} · {{ qw.added_by }} <bdi>{{ item.who }}</bdi></small></div>
+{% if att.can_change %}<button class="att-x att-item-x" type="button" data-att-delete data-url="{{ item.delete_url }}" aria-label="{{ qw.delete }} {{ item.row.original_filename }}"><span><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>{% endif %}
+</li>{% endfor %}</ul>
+{% else %}<p class="att-empty" data-att-empty>{{ qw.cert_none }}</p>{% endif %}
+</section>
+<script src="{% static 'hesba/js/attachments.js' %}?v=c2-1" defer></script>
+{% endblock %}

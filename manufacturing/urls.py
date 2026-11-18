@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import costs_views, mrp_views, order_views, schedule_views, trace_views, views, workcentre_views
+from . import costs_views, mrp_views, order_views, quality_views, schedule_views, trace_views, views, workcentre_views
 
 
 app_name = "manufacturing"
@@ -20,4 +20,10 @@ urlpatterns = [
     path("work-centres/new/", workcentre_views.centre_form, name="work_centre_new"),
     path("work-centres/<int:pk>/", workcentre_views.centre_form, name="work_centre"),
     path("orders/for-sale/<int:line_pk>/", order_views.make_for_sale, name="make_for_sale"),
+    # Manufacturing F5 (HG-136): quality checks, the hold before sale, release and reject
+    path("quality/", quality_views.quality_screen, name="quality"),
+    path("quality/orders/<int:pk>/", quality_views.order_check, name="quality_order"),
+    path("quality/purchase-lines/<int:pk>/", quality_views.purchase_check, name="quality_purchase_line"),
+    path("quality/checks/<int:pk>/", quality_views.check_detail, name="quality_check"),
+    path("quality/checks/<int:pk>/certificate/", quality_views.certificate_upload, name="quality_certificate"),
 ]

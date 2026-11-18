@@ -253,12 +253,15 @@ def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="
 
 @transaction.atomic
 def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar", conversion_cost=Decimal("0"), scrap=Decimal("0"), issued=None,
-            stand_in=None, output=None):
+            stand_in=None, output=None, output_location=None):
     """Post a run. ``issued`` are the operations an order already issued at
     its start; without them the components are consumed now, as before.
     ``stand_in``: HG-048, the narrower permission the caller's flow allows in place of inventory.adjust_stock.
     ``output`` (F11, HG-100): the good units that enter stock, said by the caller (an order's finish says its good
-    units). Without it the run makes the recipe's output times its batches, less the scrap, as before."""
+    units). Without it the run makes the recipe's output times its batches, less the scrap, as before.
+    ``output_location`` (F5, HG-136): where the product enters stock when that is not the run's own location (the
+    entity's quality hold place, for an order whose recipe needs release). Without it the product enters the run's
+    location, as before; the materials always leave the run's location."""
 
     from inventory.models import StockAdjustmentDirection
     from inventory.services import adjust_stock
@@ -283,7 +286,7 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
     # Manufacturing F12 (HG-132): an order's returns are adjustments in; they come off the materials (issues + extras − returns).
     total = sum(((-1 if operation.adjustment_direction == StockAdjustmentDirection.IN else 1) * operation.quantity * operation.unit_cost
                  for operation in consumed), Decimal("0"))
-    produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, location, StockAdjustmentDirection.IN, output, reason, user,
+    produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, output_location or location, StockAdjustmentDirection.IN, output, reason, user,
                             unit_cost=cost_round((total + conversion_cost) / output), stand_in=stand_in)
     run = ProductionRun.objects.create(number=number, recipe=recipe, batches=batches, location=location, run_date=run_date, output_quantity=output,
                                        total_cost=money_round(total), conversion_cost=conversion_cost, scrap_quantity=scrap,

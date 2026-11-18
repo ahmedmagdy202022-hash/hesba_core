@@ -169,7 +169,8 @@ class ArrangeTests(SchedulePlant):
         self.assertTrue(all(s.work_centre_id is None and s.planned_minutes is None for s in steps))
         schedule.arrange(DAY1, self.owner)
         days = [(schedule.day_of(s.planned_start), schedule.end_day(s)) for s in order.steps.all()]
-        self.assertEqual(days, [(DAY1, DAY1), (DAY2, DAY2), (DAY3, DAY3), (DAY4, DAY4)])   # one working day each, the Friday skipped
+        day5 = DAY4 + timedelta(days=1)                                                 # F5 (HG-136): the food list has five stages now
+        self.assertEqual(days, [(DAY1, DAY1), (DAY2, DAY2), (DAY3, DAY3), (DAY4, DAY4), (day5, day5)])   # one working day each, the Friday skipped
         self.assertEqual(self.totals(), {})                                            # it loads no work centre
 
     def test_arranging_leaves_finished_stages_alone(self):

@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}{# Manufacturing F5 (HG-136): «فحص الجودة». What waits in the quality hold place, incoming rejects waiting for their purchase return, and the latest checks. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ qw.back }}</a><h1>{{ qw.title }}</h1><p>{{ qw.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'manufacturing:orders' %}?lang={{ lang }}">{{ qw.orders_link }}</a></div></section>
+<section class="op-summary-grid" data-quality-tiles><article><small>{{ qw.waiting }}</small><strong data-waiting-count>{{ rows|length }}</strong></article><article><small>{{ qw.hold_place }}</small><strong data-hold-place>{% if place %}{% if lang == 'en' %}{{ place.name_en|default:place.name_ar }}{% else %}{{ place.name_ar }}{% endif %}{% else %}{{ qw.no_place }}{% endif %}</strong></article></section>
+<h2>{{ qw.waiting }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-quality-waiting><thead><tr><th>{{ qw.source }}</th><th>{{ qw.item }}</th><th>{{ qw.lot }}</th><th>{{ qw.expiry }}</th><th>{{ qw.held_qty }}</th><th>{{ qw.since }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-waiting="{{ row.number }}" data-waiting-kind="{{ row.kind }}"><td>{% if row.kind == 'order' %}{{ qw.order }}{% else %}{{ qw.purchase }}{% endif %} {% if row.source_url %}<a href="{{ row.source_url }}?lang={{ lang }}"><bdi dir="ltr">{{ row.number }}</bdi></a>{% else %}<bdi dir="ltr">{{ row.number }}</bdi>{% endif %}{% if row.party %} · {{ row.party }}{% endif %}</td><td>{{ row.item }}</td><td>{% if row.lot and row.lot.batch_no %}<bdi dir="ltr">{{ row.lot.batch_no }}</bdi>{% else %}—{% endif %}</td><td>{% if row.lot and row.lot.expiry_date %}<bdi>{{ row.lot.expiry_date|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td><td dir="ltr" data-waiting-qty>{{ row.waiting|qty }}</td><td><bdi>{{ row.since|date:"Y-m-d" }}</bdi></td><td class="op-cell-text"><a class="{% if can_check %}op-primary{% else %}op-secondary{% endif %}" href="{{ row.url }}?lang={{ lang }}" data-check-link>{{ qw.check }}</a></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty" data-waiting-empty>{{ qw.empty_waiting }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if returns %}<h2>{{ qw.to_return }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-quality-returns><thead><tr><th>{{ qw.invoice }}</th><th>{{ qw.item }}</th><th>{{ qw.quantity }}</th><th></th></tr></thead><tbody>
+{% for row in returns %}<tr data-return-line="{{ row.line.pk }}"><td><bdi dir="ltr">{{ row.line.invoice.invoice_number }}</bdi>{% if row.supplier %} · {{ row.supplier }}{% endif %}</td><td>{{ row.line.item.item_name }}</td><td dir="ltr" data-return-qty>{{ row.quantity|qty }}</td><td class="op-cell-text">{% if row.url %}<a class="op-secondary" href="{{ row.url }}?lang={{ lang }}">{{ qw.open_invoice }}</a>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<h2>{{ qw.incoming_title }}</h2><p class="op-muted" data-incoming-hint>{{ qw.incoming_hint }}</p>
+{% if not place and can_check %}<form method="post" data-prepare-hold>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prepare"><div class="op-form-actions"><button class="op-secondary" type="submit">{{ qw.prepare }}</button></div></form>{% endif %}
+<h2>{{ qw.recent }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-quality-recent><thead><tr><th>{{ qw.number }}</th><th>{{ qw.date }}</th><th>{{ qw.kind }}</th><th>{{ qw.item }}</th><th>{{ qw.result }}</th><th>{{ qw.passed }}</th><th>{{ qw.rejected }}</th><th>{{ qw.by }}</th></tr></thead><tbody>
+{% for row in recent %}<tr data-check="{{ row.check.number }}"><td dir="ltr"><a href="{% url 'manufacturing:quality_check' row.check.pk %}?lang={{ lang }}">{{ row.check.number }}</a></td><td><bdi>{{ row.check.checked_on|date:"Y-m-d" }}</bdi></td><td>{{ row.kind }}</td><td>{{ row.what }} · <bdi dir="ltr">{{ row.source }}</bdi></td><td class="op-cell-text"><span class="op-status {{ row.result_class }}" data-check-result="{{ row.check.result }}">{{ row.result }}</span></td><td dir="ltr">{{ row.check.passed_quantity|qty }}</td><td dir="ltr">{{ row.check.rejected_quantity|qty }}</td><td>{{ row.check.checked_by|person }}</td></tr>
+{% empty %}<tr><td colspan="8" class="op-empty">{{ qw.no_checks }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

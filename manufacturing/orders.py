@@ -34,6 +34,7 @@ from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
 from . import actuals, lots, schedule, services, workcentres
+from . import quality as quality_rules  # this module's own ``quality(order)`` is the defect rate
 from inventory.models import StockOperationStatus
 
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
@@ -45,13 +46,15 @@ MESSAGES = {
            "good": "الكمية السليمة لازم تكون رقم بين صفر وكمية الأمر.", "defect": "الكمية المعيبة لازم تكون رقم مش سالب.",
            "not_last": "لسه في مراحل متخلصتش.", "yield": "السليم والمعيب مع بعض مينفعش يزيدوا عن {units} وحدة داخلة المرحلة دي.",
            "reversed": "خامات الأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.", "reason": "اكتب سبب الإلغاء.", "done": "الأمر خلص ومينفعش يتلغي؛ ألغِ التشغيلة نفسها لو محتاج.",
-           "over": "في آخر مرحلة السليم ممكن يزيد عن كمية الأمر لحد 10% بس، يعني {cap} وحدة على الأكتر.", "over_reason": "السليم أكتر من كمية الأمر؛ اكتب السبب في الملاحظات."},
+           "over": "في آخر مرحلة السليم ممكن يزيد عن كمية الأمر لحد 10% بس، يعني {cap} وحدة على الأكتر.", "over_reason": "السليم أكتر من كمية الأمر؛ اكتب السبب في الملاحظات.",
+           "hold_place": "حجز الجودة مكان انتظار للفحص مش مكان إنتاج؛ اختار مكان تاني."},
     "en": {"recipe": "Choose the recipe (product).", "quantity": "Quantity must be a number above zero.", "location": "Choose where it is made.",
            "inactive": "This recipe is inactive.", "money": "Labour and overhead must be numbers, not negative.", "state": "The order is not at that step.",
            "good": "Good quantity must be between zero and the order quantity.", "defect": "Defect quantity cannot be negative.",
            "not_last": "There are stages still to finish.", "yield": "Good and defective together cannot be more than the {units} units entering this stage.",
            "reversed": "This order's materials were reversed from the inventory screen; cancel the order and open a new one.", "reason": "Write the reason for cancelling.", "done": "A finished order cannot be cancelled; cancel its run instead.",
-           "over": "At the final stage good units may be up to 10% more than the order, {cap} units at most.", "over_reason": "Good units are more than the order; write the reason in the notes."},
+           "over": "At the final stage good units may be up to 10% more than the order, {cap} units at most.", "over_reason": "Good units are more than the order; write the reason in the notes.",
+           "hold_place": "The quality hold is where goods wait for their check, not a place to produce in; choose another."},
 }
 
 
@@ -79,6 +82,8 @@ def create_order(data, user, lang="ar"):
         raise ValidationError(words["inactive"])
     if location is None:
         raise ValidationError(words["location"])
+    if quality_rules.is_hold_place(location):  # F5 (HG-136): goods wait for their check there; nothing is made there
+        raise ValidationError(words["hold_place"])
     quantity = services._decimal(data.get("quantity"))
     if quantity is None or quantity <= 0:
         raise ValidationError(words["quantity"])
@@ -197,14 +202,18 @@ def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
     # (quantity over the recipe's output, kept to three decimals) only say how much material the order takes:
     # 100 units with a batch of 3 are 33.333 batches, and 3 x 33.333 would put 99.999 into stock.
     good = good_units(order)
+    # Manufacturing F5 (HG-136): a recipe that needs release puts its product into the entity's quality hold place
+    # (not a selling location); the materials still come from the order's location. None: the order's location, as ever.
+    hold = quality_rules.hold_place_for(order, lang)
     run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
                            notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
                            conversion_cost=actuals.conversion(order)["total"], scrap=max(order.quantity - good, Decimal("0")),
-                           issued=issued or None, output=good)
+                           issued=issued or None, output=good, output_location=hold)
     order.run, order.status, order.finished_at = run, OrderStatus.DONE, timezone.now()
     order.save(update_fields=["run", "status", "finished_at"])
-    lots.after_finish(order, run, user, lot_no, lot_expiry)
-    _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost)})
+    lots.after_finish(order, run, user, lot_no, lot_expiry, location=hold)
+    _audit(order, user, "finish_production_order", {"run": run.number, "output": str(run.output_quantity), "material_cost": str(run.total_cost),
+                                                    **({"on_hold": hold.location_code} if hold is not None else {})})
     return order
 
 
