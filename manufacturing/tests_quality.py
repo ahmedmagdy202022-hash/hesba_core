@@ -996,6 +996,10 @@ class ScreenTests(QualityPlant):
 
         offered = list(make_to_order.locations_for(SimpleNamespace(entity=None)))     # the make-to-order form's own list
         self.assertEqual((place in offered, self.plant in offered), (False, True))
+        lab = make_location(location_code="QC-LAB", name_ar="مخزن المعمل")             # a warehouse the owner named that way himself is still a warehouse
+        self.assertIn(lab, list(quality.production_places(Location.objects.all())))
+        self.assertIn(lab, list(quality.destinations(place)))
+        self.assertFalse(quality.is_hold_place(lab))
 
     def test_the_run_page_says_the_product_is_on_hold_and_leads_to_its_check(self):
         order = self.made()

@@ -39,7 +39,8 @@ from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import CharField, Q, Sum, Value
+from django.db.models.functions import Cast, Concat
 from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
@@ -159,17 +160,24 @@ def hold_places():
     return [place for place in entity_scope.locations(Location.objects.filter(location_code__startswith=HOLD_PREFIX)) if is_hold_place(place)]
 
 
+def _own_code(prefix):
+    """The code ``<prefix><the location's own entity id>``, as an expression: exactly the system's place, never a
+    warehouse the owner happened to name «QC-...» himself."""
+
+    return Concat(Value(prefix), Cast("entity_id", CharField()))
+
+
 def production_places(queryset):
     """Locations a product can be made in: never a hold place."""
 
-    return queryset.exclude(location_code__startswith=HOLD_PREFIX)
+    return queryset.exclude(location_code=_own_code(HOLD_PREFIX))
 
 
 def destinations(place):
     """Where an incoming release may go: the active locations of the hold place's entity, less the hold and transit places."""
 
-    return (Location.objects.filter(active=True, entity_id=place.entity_id).exclude(location_code__startswith=HOLD_PREFIX)
-            .exclude(location_code__startswith="TRANSIT-").order_by("-is_default", "location_code"))
+    return (production_places(Location.objects.filter(active=True, entity_id=place.entity_id))
+            .exclude(location_code=_own_code("TRANSIT-")).exclude(location_code="TRANSIT-0").order_by("-is_default", "location_code"))
 
 
 def check_plain_run(recipe, lang="ar"):
