@@ -48,12 +48,12 @@ WORDS = {
         "record": "سجّل نتيجة الفحص", "hold": "استمرار الحجز", "reject_all": "ارفض الكمية كلها",
         "hint_final": "المقبول بيتنقل إلى {place} ويبقى متاح للبيع. المرفوض بيتشطب من المخزون كخسارة. والكمية اللي ملهاش قرار بتفضل محجوزة.",
         "hint_incoming": "المقبول بيتنقل للمخزن اللي تختاره. المرفوض بيفضل في حجز الجودة لحد ما يرجع للمورد بمرتجع شراء.",
-        "recorded": "اتسجّل الفحص {number}.", "nothing_waiting": "مفيش كمية منتظرة الفحص هنا دلوقتي.", "history": "الفحوصات السابقة",
+        "recorded": "الفحص {number} اتسجّل.", "nothing_waiting": "مفيش كمية منتظرة الفحص هنا دلوقتي.", "history": "الفحوصات السابقة",
         "view_only": "تسجيل نتيجة الفحص لصاحب صلاحية تحويل المخزون.", "open_order": "افتح أمر الإنتاج", "open_recipe": "افتح الوصفة",
         "item_criteria": "معايير فحص الصنف ده", "item_criteria_hint": "بتتطبق على كل فاتورة شراء للصنف ده تدخل حجز الجودة.", "criteria_saved": "اتحفظت المعايير.",
         "certificate": "شهادة الجودة", "cert_intro": "ارفع شهادة الجودة أو تقرير المعمل، صورة أو ملف PDF، وتفضل محفوظة مع الفحص.",
         "cert_formats": "المسموح: صور وملفات PDF لحد {limit} للملف.", "cert_none": "لسه مفيش شهادة مرفوعة.", "camera": "صوّر الشهادة", "choose_file": "اختار ملف",
-        "delete": "امسح", "open_file": "افتح", "added_by": "أضافها", "photo_of": "صورة شهادة الجودة", "pdf": "PDF",
+        "delete": "امسح", "open_file": "افتح", "added_by": "أضافها", "photo_of": "صورة شهادة الجودة", "pdf": "مستند",
         "release_op": "تحويل الإفراج", "reject_op": "تسوية الرفض", "at_check": "الكمية وقت الفحص", "went_to": "اتنقل إلى",
         "release_reversed": "تحويل الإفراج ده اتعكس من شاشة المخزون؛ الكمية رجعت حجز الجودة ومنتظرة فحص جديد.",
         "reject_reversed": "تسوية الرفض دي اتعكست من شاشة المخزون؛ الكمية رجعت حجز الجودة ومنتظرة فحص جديد.",
@@ -200,14 +200,18 @@ def quality_screen(request):
         returns=returns, place=quality.current_hold_place()))
 
 
-def _check_page(request, subject, criteria, *, heading, source_url, error, template_extra):
+def place_name(place, lang):
+    return (place.name_en or place.name_ar) if lang == "en" else place.name_ar
+
+
+def _check_page(request, subject, criteria, *, what, number, source_url, error, template_extra):
     lang = _lang(request)
     where = quality.position(subject)
     history = [_check_row(check, lang) for check in subject.checks().select_related(
         "order__recipe__product", "purchase_line__item", "purchase_line__invoice", "checked_by", "release_operation", "reject_operation")]
     posted = request.POST if request.method == "POST" else None
     return render(request, "manufacturing/quality_check.html", _base(
-        request, subject=subject, position=where, criteria=_criteria_inputs(criteria, lang, posted), heading=heading, source_url=source_url,
+        request, subject=subject, position=where, criteria=_criteria_inputs(criteria, lang, posted), what=what, number=number, source_url=source_url,
         error=error, history=history, lot=quality.product_lot(subject), post=posted or {}, waiting_plain=quality.plain(where["waiting"]), today=timezone.localdate(), **template_extra))
 
 
@@ -247,9 +251,9 @@ def order_check(request, pk):
         else:
             messages.success(request, words["recorded"].format(number=check.number))
             return redirect(f"{reverse('manufacturing:quality_check', args=[check.pk])}?lang={lang}")
-    return _check_page(request, subject, criteria, heading=f"{order.recipe.product.item_name} · {order.number}",
+    return _check_page(request, subject, criteria, what=order.recipe.product.item_name, number=order.number,
                        source_url=reverse("manufacturing:order", args=[order.pk]), error=error,
-                       template_extra={"order": order, "hint": words["hint_final"].format(place=order.location), "destinations": [],
+                       template_extra={"order": order, "hint": words["hint_final"].format(place=place_name(order.location, lang)), "destinations": [],
                                        "recipe_url": reverse("manufacturing:recipe", args=[order.recipe_id])})
 
 
@@ -290,7 +294,7 @@ def purchase_check(request, pk):
                 messages.success(request, words["recorded"].format(number=check.number))
                 return redirect(f"{reverse('manufacturing:quality_check', args=[check.pk])}?lang={lang}")
     see_purchases = user_has_permission(request.user, SEE_PURCHASES)
-    return _check_page(request, subject, criteria, heading=f"{line.item.item_name} · {line.invoice.invoice_number}",
+    return _check_page(request, subject, criteria, what=line.item.item_name, number=line.invoice.invoice_number,
                        source_url=reverse("purchases:detail", args=[line.invoice_id]) if see_purchases else "", error=error,
                        template_extra={"line": line, "hint": words["hint_incoming"], "destinations": list(quality.destinations(subject.place)),
                                        "criteria_error": criteria_error, "criteria_rows": quality.criteria_form_rows(criteria, criteria_posted),
