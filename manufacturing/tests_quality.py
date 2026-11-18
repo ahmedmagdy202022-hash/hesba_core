@@ -967,7 +967,7 @@ class ScreenTests(QualityPlant):
         self.assertContains(self.client.get(reverse("manufacturing:quality")), f'data-waiting="{order.number}"')
         self.assertContains(self.client.get(reverse("manufacturing:quality_order", args=[order.pk])), "data-check-reversed")
 
-    def test_the_production_forms_do_not_offer_the_hold_place(self):
+    def test_the_production_forms_do_not_offer_the_hold_place_and_an_order_cannot_be_opened_in_it(self):
         self.made(quantity="10")
         place = self.hold()
         for url in (reverse("manufacturing:orders"), reverse("manufacturing:recipe", args=[self.recipe.pk])):
@@ -975,6 +975,18 @@ class ScreenTests(QualityPlant):
                 page = self.client.get(url)
                 self.assertNotIn(place, list(page.context["locations"]))
                 self.assertIn(self.plant, list(page.context["locations"]))
+        with self.assertRaisesMessage(ValidationError, "حجز الجودة مكان انتظار للفحص مش مكان إنتاج"):
+            orders.create_order({"recipe": self.recipe, "location": place, "quantity": "10"}, self.owner)
+
+    def test_the_run_page_says_the_product_is_on_hold_and_leads_to_its_check(self):
+        order = self.made()
+        for lang, text in (("ar", "منتج التشغيلة دي دخل حجز الجودة"), ("en", "entered the quality hold")):
+            page = self.client.get(reverse("manufacturing:run", args=[order.run.pk]), {"lang": lang})
+            self.assertContains(page, "data-run-held")
+            self.assertContains(page, text)
+            self.assertContains(page, f'{reverse("manufacturing:quality_order", args=[order.pk])}?lang={lang}')
+        plain = services.save_recipe({"product": make_item(item_code="FG-P5", item_name="معطر", is_stock_tracked=True), "output_quantity": "10"}, [(self.base, "20")], self.owner)
+        self.assertNotContains(self.client.get(reverse("manufacturing:run", args=[self.made(recipe=plain).run.pk])), "data-run-held")
 
     def test_the_pages_use_no_banned_word_and_no_arabic_line_starts_or_ends_with_a_latin_word(self):
         import pathlib

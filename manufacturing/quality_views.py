@@ -66,6 +66,7 @@ WORDS = {
         "card_title": "فحص الجودة والإفراج", "will_hold": "الوصفة دي محتاجة إفراج: بعد إنهاء الأمر المنتج هيدخل «حجز الجودة»، ومش هيتباع غير بعد الفحص.",
         "check_now": "افحص وسجّل النتيجة", "stage_criteria": "معايير فحص الجودة", "stage_criteria_hint": "سجّل نتيجة كل معيار. الوحدات اللي مطابقتش اكتبها في خانة المعيب.",
         "quality_link": "فحص الجودة", "reversed": "اتعكس",
+        "run_held": "منتج التشغيلة دي دخل حجز الجودة، وبيتفرج عنه بعد الفحص.",
     },
     "en": {
         "title": "Quality checks", "back": "Manufacturing", "orders_link": "Production orders",
@@ -106,6 +107,7 @@ WORDS = {
         "card_title": "Quality check and release", "will_hold": "This recipe needs release: when the order finishes, the product enters the quality hold and is sold only after the check.",
         "check_now": "Check and record the result", "stage_criteria": "Quality criteria", "stage_criteria_hint": "Record every criterion. Units that failed go in the defective field.",
         "quality_link": "Quality checks", "reversed": "Reversed",
+        "run_held": "This run's product entered the quality hold; it is released after its check.",
     },
 }
 

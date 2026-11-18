@@ -141,7 +141,9 @@ def locations_for(order):
     entity = order.entity or main_entity()
     places = Location.objects.filter(active=True)
     places = places.filter(Q(entity=entity) | Q(entity__isnull=True)) if entity.is_main else places.filter(entity=entity)
-    return places.order_by("-is_default", "location_code")
+    from .quality import production_places  # F5 (HG-136): never the quality hold place
+
+    return production_places(places).order_by("-is_default", "location_code")
 
 
 # ---- the action ----

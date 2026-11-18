@@ -368,4 +368,18 @@ def run_detail(request, pk):
         lot=lot, lot_uses=lot_uses, early_warning=words["early_warning"].format(names=early_names) if early else "",
         labels_url=labels_url, labels_note=labels_note,
         can_trace=user_has_permission(request.user, VIEW),
+        **_run_hold(run, lang),
     ))
+
+
+def _run_hold(run, lang):
+    """F5 (HG-136): the run page says so when the product entered the quality hold place, with the way to its check."""
+
+    from . import quality_views
+    from .models import ProductionOrder
+
+    if not quality.is_hold_place(run.output_operation.destination_location):
+        return {}
+    order = ProductionOrder.objects.filter(run=run).first()
+    return {"qw": quality_views.WORDS[lang], "run_held": True,
+            "run_check_url": reverse("manufacturing:quality_order", args=[order.pk]) if order is not None and run.status == "posted" else ""}

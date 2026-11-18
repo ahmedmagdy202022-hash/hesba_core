@@ -46,13 +46,15 @@ MESSAGES = {
            "good": "الكمية السليمة لازم تكون رقم بين صفر وكمية الأمر.", "defect": "الكمية المعيبة لازم تكون رقم مش سالب.",
            "not_last": "لسه في مراحل متخلصتش.", "yield": "السليم والمعيب مع بعض مينفعش يزيدوا عن {units} وحدة داخلة المرحلة دي.",
            "reversed": "خامات الأمر ده اترجعت من شاشة المخزون؛ ألغِ الأمر وافتح أمر جديد.", "reason": "اكتب سبب الإلغاء.", "done": "الأمر خلص ومينفعش يتلغي؛ ألغِ التشغيلة نفسها لو محتاج.",
-           "over": "في آخر مرحلة السليم ممكن يزيد عن كمية الأمر لحد 10% بس، يعني {cap} وحدة على الأكتر.", "over_reason": "السليم أكتر من كمية الأمر؛ اكتب السبب في الملاحظات."},
+           "over": "في آخر مرحلة السليم ممكن يزيد عن كمية الأمر لحد 10% بس، يعني {cap} وحدة على الأكتر.", "over_reason": "السليم أكتر من كمية الأمر؛ اكتب السبب في الملاحظات.",
+           "hold_place": "حجز الجودة مكان انتظار للفحص مش مكان إنتاج؛ اختار مكان تاني."},
     "en": {"recipe": "Choose the recipe (product).", "quantity": "Quantity must be a number above zero.", "location": "Choose where it is made.",
            "inactive": "This recipe is inactive.", "money": "Labour and overhead must be numbers, not negative.", "state": "The order is not at that step.",
            "good": "Good quantity must be between zero and the order quantity.", "defect": "Defect quantity cannot be negative.",
            "not_last": "There are stages still to finish.", "yield": "Good and defective together cannot be more than the {units} units entering this stage.",
            "reversed": "This order's materials were reversed from the inventory screen; cancel the order and open a new one.", "reason": "Write the reason for cancelling.", "done": "A finished order cannot be cancelled; cancel its run instead.",
-           "over": "At the final stage good units may be up to 10% more than the order, {cap} units at most.", "over_reason": "Good units are more than the order; write the reason in the notes."},
+           "over": "At the final stage good units may be up to 10% more than the order, {cap} units at most.", "over_reason": "Good units are more than the order; write the reason in the notes.",
+           "hold_place": "The quality hold is where goods wait for their check, not a place to produce in; choose another."},
 }
 
 
@@ -80,6 +82,8 @@ def create_order(data, user, lang="ar"):
         raise ValidationError(words["inactive"])
     if location is None:
         raise ValidationError(words["location"])
+    if quality_rules.is_hold_place(location):  # F5 (HG-136): goods wait for their check there; nothing is made there
+        raise ValidationError(words["hold_place"])
     quantity = services._decimal(data.get("quantity"))
     if quantity is None or quantity <= 0:
         raise ValidationError(words["quantity"])
