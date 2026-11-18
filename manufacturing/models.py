@@ -90,6 +90,42 @@ class RecipeLine(models.Model):
         constraints = [models.UniqueConstraint(fields=["recipe", "component"], name="mfg_one_line_per_component")]
 
 
+class OutputKind(models.TextChoices):
+    BY_PRODUCT = "by_product", "By-product"
+    CO_PRODUCT = "co_product", "Co-product"
+
+
+class RecipeOutput(models.Model):
+    """Manufacturing F9 (HG-139): something else one batch of a recipe yields beside its product.
+
+    * a **by-product** (bran from milling, sawdust, offcuts sold by weight) enters stock at ``value_per_unit``, a fixed
+      value the owner sets; that value comes off the run's joint cost (materials + labour and overhead) and it carries
+      no share of the labour and overhead;
+    * a **co-product** (butter beside cheese) shares what is left of the joint cost with the recipe's product:
+      ``share_percent`` of it, or, when every co-product of the recipe leaves the percent empty, by sale value
+      (quantity x the item's default sale price, the product's included).
+
+    The recipe's product stays ``Recipe.product``: it takes the rest. ``quantity`` is per batch, in the item's base unit."""
+
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="outputs")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="recipe_outputs")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, help_text="Per batch.")
+    kind = models.CharField(max_length=12, choices=OutputKind.choices)
+    value_per_unit = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    share_percent = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["recipe", "item"], name="mfg_one_output_per_item"),
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="mfg_recipeoutput_quantity"),
+            models.CheckConstraint(condition=(models.Q(kind="by_product") & models.Q(value_per_unit__gt=0) & models.Q(share_percent__isnull=True))
+                                   | (models.Q(kind="co_product") & models.Q(value_per_unit__isnull=True)
+                                      & (models.Q(share_percent__isnull=True) | (models.Q(share_percent__gt=0) & models.Q(share_percent__lt=100)))),
+                                   name="mfg_recipeoutput_value_or_share"),
+        ]
+
+
 class RunStatus(models.TextChoices):
     POSTED = "posted", "Posted"
     CANCELLED = "cancelled", "Cancelled"
@@ -130,6 +166,32 @@ class ProductionConsumption(models.Model):
 
     class Meta:
         ordering = ["pk"]
+
+
+class RunOutput(models.Model):
+    """Manufacturing F9 (HG-139): one extra output of a run (a by-product or a co-product) and the stock operation that put
+    it into stock: the engine's own adjustment in, at ``cost`` over ``quantity``.
+
+    ``cost`` is what it took of the run's joint cost (a by-product: quantity x its fixed value; a co-product: its share
+    of what was left). ``conversion_share`` is the part of the run's labour and overhead inside that cost (always 0 for a
+    by-product): the ledger credits it to absorbed production cost on this output's own entry, and the rest of the
+    output's value to work in progress. ``kind`` is the output's kind on the day of the run."""
+
+    run = models.ForeignKey(ProductionRun, on_delete=models.CASCADE, related_name="outputs")
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, related_name="+")
+    kind = models.CharField(max_length=12, choices=OutputKind.choices)
+    operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, related_name="run_output")
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    cost = models.DecimalField(max_digits=14, decimal_places=2)
+    conversion_share = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.UniqueConstraint(fields=["run", "item"], name="mfg_one_run_output_per_item"),
+            models.CheckConstraint(condition=models.Q(quantity__gt=0) & models.Q(cost__gte=0) & models.Q(conversion_share__gte=0),
+                                   name="mfg_runoutput_amounts"),
+        ]
 
 
 class IssueKind(models.TextChoices):
