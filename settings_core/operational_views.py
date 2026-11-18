@@ -227,6 +227,8 @@ ROLE_ABOUT = {
                       "Projects and the bill of quantities, quantities done on a draft certificate, materials issued to the site."),
     "doctor": ("يكشف على المرضى: يقرأ ملفاتهم ويسجّل الكشوفات، ويشوف دوره في قائمة الانتظار؛ من غير الفواتير والخزنة والتقارير.",
                "Treats patients: reads their files and records visits, and sees their turn in the waiting list; no invoices, cashbox or reports."),
+    "production_worker": ("شاشة العامل: يبدأ مرحلة أمر الإنتاج ويسجّل نهايتها والسليم والمعيب، من غير تكلفة ولا بيع ولا خزنة.",
+                          "The floor screen: starts a production order's stage and records its finish with good and defective units; no costs, sales or cash."),
 }
 
 
@@ -274,7 +276,8 @@ ROLE_WORDS = {
 #: A permission section that belongs to one activity or module (UI-TRACK F25): a clothes shop is not offered medical files.
 SECTION_NEEDS = {"medical": ("activity", "medical"), "restaurant": ("module", "tables_orders"), "projects": ("module", "projects")}
 #: TRACK-START S06: a ready-made role whose work is one module's (HG-048) shows only where that module is used.
-ROLE_NEEDS = {"waiter": ("module", "tables_orders"), "site_engineer": ("module", "projects"), "doctor": ("activity", "medical")}  # HG-084
+ROLE_NEEDS = {"waiter": ("module", "tables_orders"), "site_engineer": ("module", "projects"), "doctor": ("activity", "medical"),  # HG-084
+              "production_worker": ("module", "manufacturing")}  # HG-140 (Manufacturing F8)
 
 
 def _section_fits(module, needs=SECTION_NEEDS):

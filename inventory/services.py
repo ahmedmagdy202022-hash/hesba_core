@@ -149,7 +149,8 @@ def _require_permission(user, permission_code):
 #: HG-048: the only narrower permissions that stand in for inventory.adjust_stock, each for the one
 #: flow that names it (making a plate at payment, issuing materials to a project site). Nothing else
 #: may pass one, and a general adjustment still needs inventory.adjust_stock.
-ADJUSTMENT_STAND_INS = frozenset({"restaurant.prepare_at_payment", "projects.issue_to_site"})
+#: HG-140 (Manufacturing F8): the floor screen's first stage, which issues an order's materials.
+ADJUSTMENT_STAND_INS = frozenset({"restaurant.prepare_at_payment", "projects.issue_to_site", "manufacturing.record_stage"})
 
 
 def _require_adjust(user, stand_in):

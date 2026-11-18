@@ -3,6 +3,8 @@
 Written before Manufacturing F8 (HG-140) touched the permission seed, so that adding one permission and one role can be
 shown to give no existing role a code and take none away. A change to any seeded role's grants fails here and has to be
 made on purpose, in this file, in the same change.
+
+HG-140 then added one row (``production_worker``) and one code (``manufacturing.record_stage``), and changed no other row.
 """
 
 from django.test import TestCase
@@ -61,6 +63,10 @@ MATRIX = {
     "doctor": """
         medical.treat_patients
     """,
+    # HG-140 (Manufacturing F8): the only row this change adds. Every row above is as it was before it.
+    "production_worker": """
+        inventory.view_stock manufacturing.record_stage
+    """,
 }
 
 
@@ -81,3 +87,23 @@ class SeededRoleMatrixPinTests(TestCase):
         self.assertEqual(RolePermission.objects.filter(allow=False).count(), 0)
         granted = {code for text in MATRIX.values() for code in text.split()}
         self.assertEqual(set(Permission.objects.values_list("code", flat=True)), granted)
+
+
+class ProductionWorkerRoleTests(TestCase):
+    """HG-140 (Manufacturing F8): the floor permission belongs to the production worker and to no role that existed before."""
+
+    CODE = "manufacturing.record_stage"
+
+    def test_the_production_worker_holds_exactly_two_codes(self):
+        role = Role.objects.get(code="production_worker")
+        self.assertTrue(role.is_system_role and role.active)
+        self.assertEqual((role.name_ar, role.name_en), ("عامل إنتاج", "Production worker"))
+        self.assertEqual(seeded_matrix()["production_worker"], ["inventory.view_stock", self.CODE])
+
+    def test_no_other_role_holds_the_floor_permission(self):
+        self.assertEqual(list(RolePermission.objects.filter(permission__code=self.CODE).values_list("role__code", flat=True)), ["production_worker"])
+
+    def test_the_permission_sits_in_the_inventory_section_and_is_not_a_finance_or_report_one(self):
+        permission = Permission.objects.get(code=self.CODE)
+        self.assertEqual((permission.module, permission.is_sensitive_finance, permission.is_report_permission, permission.active),
+                         ("inventory", False, False, True))
