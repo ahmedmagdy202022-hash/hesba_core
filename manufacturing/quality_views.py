@@ -189,8 +189,12 @@ def quality_screen(request):
         if not user_has_permission(request.user, quality.RELEASE):
             raise PermissionDenied("Setting up the quality hold place needs inventory.transfer_stock.")
         if request.POST.get("action") == "prepare":
-            quality.current_hold_place(create=True)
-            messages.success(request, words["prepared"])
+            try:
+                quality.current_hold_place(create=True, lang=lang)
+            except ValidationError as exc:
+                messages.error(request, _translated(exc, lang))
+            else:
+                messages.success(request, words["prepared"])
         return redirect(f"{reverse('manufacturing:quality')}?lang={lang}")
     see_purchases = user_has_permission(request.user, SEE_PURCHASES)
     recent = (quality.scoped_checks().select_related("order__recipe__product", "purchase_line__item", "purchase_line__invoice", "checked_by",

@@ -1227,6 +1227,31 @@ class EntityTests(QualityPlant):
             quality.check_purchase_line(PurchaseLine.objects.get(invoice_id=invoice.pk), self.owner, passed="10", destination=far_store, results={})
         self.assertEqual(self.at(place, self.base), D("10"))
 
+    def test_another_entitys_warehouse_that_carries_the_hold_code_is_never_used_as_the_hold_place(self):
+        from entities.services import save_entity
+
+        branch = save_entity({"code": "BRQ3", "name_ar": "فرع السادات", "activity_slug": "manufacturing", "sub_activity_slug": "chemicals"}, self.owner)
+        branch_plant = make_location(location_code="BR-PLANT-3", name_ar="مصنع الفرع", entity=branch)
+        stock_in(self.base, branch_plant, 400, "20.00", movement_date=TODAY)
+        # a warehouse of the main entity that the owner happened to code as the branch's hold place would be
+        named = make_location(location_code=f"QC-{branch.pk}", name_ar="مخزن قديم", entity=self.plant.entity, is_selling_location=True)
+        far = orders.create_order({"recipe": self.recipe, "location": branch_plant, "quantity": "30"}, self.owner)
+        for _ in far.stages:
+            quality.advance(far, self.owner, results=self.good())
+        message = f"الكود QC-{branch.pk} متسجل على مخزن تاني؛ غيّر كود المخزن ده الأول عشان مكان حجز الجودة يتعمل."
+        with self.assertRaisesMessage(ValidationError, message):
+            orders.finish(far, self.owner)
+        far.refresh_from_db()
+        named.refresh_from_db()
+        self.assertEqual((far.status, far.run_id, named.is_selling_location, self.at(named)), (OrderStatus.IN_PROGRESS, None, True, D("0")))
+        self.assertIsNone(quality.hold_place(branch.pk, create=False))
+        self.assertFalse(quality.is_hold_place(named))
+        named.location_code = "OLD-STORE"
+        named.save(update_fields=["location_code"])
+        orders.finish(far, self.owner)
+        place = quality.hold_place(branch.pk, create=False)
+        self.assertEqual((place.entity, self.at(place), self.at(branch_plant)), (branch, D("30"), D("0")))
+
 
 class NothingElseMovesTests(QualityPlant):
     def test_a_hold_check_and_the_criteria_write_no_stock_cost_or_journal_row(self):

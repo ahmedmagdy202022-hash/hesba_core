@@ -76,6 +76,7 @@ MESSAGES = {
         "criterion_limit": "حدود المعيار «{name}» لازم تكون أرقام، والحد الأدنى مش أكبر من الأقصى.",
         "plain_run": "الوصفة دي محتاجة إفراج جودة قبل البيع؛ شغّلها من أمر إنتاج عشان المنتج يدخل حجز الجودة.",
         "state": "الأمر ده مش في مرحلة فحص الجودة.",
+        "hold_code": "الكود {code} متسجل على مخزن تاني؛ غيّر كود المخزن ده الأول عشان مكان حجز الجودة يتعمل.",
     },
     "en": {
         "hold_name": "Quality hold", "nothing": "Nothing is waiting for a check here.",
@@ -93,6 +94,7 @@ MESSAGES = {
         "criterion_limit": "The limits of “{name}” must be numbers, and the minimum not above the maximum.",
         "plain_run": "This recipe needs a quality release before sale; make it through a production order so the product enters the quality hold.",
         "state": "This order is not at its quality stage.",
+        "hold_code": "The code {code} belongs to another location; change that location's code first so the quality hold place can be made.",
     },
 }
 
@@ -120,17 +122,22 @@ def hold_code(entity_id):
     return f"{HOLD_PREFIX}{_entity_id(entity_id)}"
 
 
-def hold_place(entity_id, create=True):
+def hold_place(entity_id, create=True, lang="ar"):
     """The entity's quality hold place, made the first time it is needed. Never a selling location: if someone ticked
-    «مكان بيع» on it from the locations screen, it is switched back here before anything new is put on hold."""
+    «مكان بيع» on it from the locations screen, it is switched back here before anything new is put on hold.
 
-    code = hold_code(entity_id)
+    A location of another entity that the owner happened to code ``QC-<this entity's id>`` is not the hold place: it is
+    never used (nor its selling tick touched), and making the hold place is refused until that code is changed."""
+
+    code, wanted = hold_code(entity_id), _entity_id(entity_id)
     if not create:
-        return Location.objects.filter(location_code=code).first()
+        return Location.objects.filter(location_code=code, entity_id=wanted).first()
     place, _ = Location.objects.get_or_create(location_code=code, defaults={
-        "name_ar": MESSAGES["ar"]["hold_name"], "name_en": MESSAGES["en"]["hold_name"], "entity_id": _entity_id(entity_id),
+        "name_ar": MESSAGES["ar"]["hold_name"], "name_en": MESSAGES["en"]["hold_name"], "entity_id": wanted,
         "is_default": False, "is_receiving_location": True, "is_selling_location": False,
         "description": "HG-136: goods waiting for a quality check. Not a selling location."})
+    if place.entity_id != wanted:
+        raise ValidationError(_words(lang)["hold_code"].format(code=code))
     if place.is_selling_location:
         place.is_selling_location = False
         place.save(update_fields=["is_selling_location", "updated_at"])
@@ -141,17 +148,17 @@ def is_hold_place(location):
     return location is not None and location.location_code == f"{HOLD_PREFIX}{location.entity_id}"
 
 
-def hold_place_for(order):
+def hold_place_for(order, lang="ar"):
     """Where an order's product enters stock at the finish when its recipe needs release; None for every other order."""
 
-    return hold_place(order.location.entity_id) if order.recipe.needs_release else None
+    return hold_place(order.location.entity_id, lang=lang) if order.recipe.needs_release else None
 
 
-def current_hold_place(create=False):
+def current_hold_place(create=False, lang="ar"):
     """The hold place of the entity being worked in (the main entity when the whole group is shown)."""
 
     chosen = entity_scope.entity()
-    return hold_place(chosen.pk if chosen is not None else None, create=create)
+    return hold_place(chosen.pk if chosen is not None else None, create=create, lang=lang)
 
 
 def hold_places():
