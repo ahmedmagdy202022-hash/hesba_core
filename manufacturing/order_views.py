@@ -15,7 +15,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import actuals, make_to_order, orders
+from . import actuals, make_to_order, orders, workcentres
 from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .views import COST, PRODUCE, VIEW, _lang, _pick
@@ -44,7 +44,11 @@ WORDS = {
            "employee": "الموظف (اختياري)", "nobody": "—", "hours": "الساعات", "hour_rate": "سعر الساعة", "amount": "أو المبلغ", "description": "البيان",
            "add_line": "ضيف التكلفة", "line_added": "التكلفة اتسجلت.", "line_cancel": "إلغاء السطر", "line_cancelled": "السطر اتلغى.", "cancelled_line": "ملغي",
            "over_hint": "في آخر مرحلة: لو السليم طلع أكتر من كمية الأمر (لحد 10%)، اكتب السبب في الملاحظات.", "outside": "تشغيل خارجي",
-           "costs_link": "تقرير الفروق"},
+           "costs_link": "تقرير الفروق",
+           "minutes": "الدقايق اللي خدتها المرحلة (اختياري)", "routing": "المراحل ومراكز العمل", "centre": "مركز العمل", "planned_min": "دقايق مخططة", "recorded_min": "دقايق فعلية",
+           "min_unit": "دقيقة", "planned_conv": "تكلفة المراحل المخططة بسعر مراكز العمل النهارده", "planned_conv_note": "رقم للقراءة بس: مش بيتسجل على الأمر ولا بيدخل المخزون.",
+           "suggested": "تكلفة مقترحة من دقايق المراحل", "suggested_hint": "الدقايق × سعر ساعة مركز العمل. مفيش حاجة بتتسجل لحد ما تأكد السطر، ومفيش حاجة بتدخل المخزون قبل إنهاء الأمر.",
+           "confirm": "أكّد التكلفة", "confirmed_tag": "اتسجلت", "no_suggested": "لسه مفيش دقايق متسجلة على مراحل ليها مركز عمل.", "cost_confirmed": "التكلفة اتسجلت على الأمر."},
     "en": {"title": "Production orders", "intro": "Each production order moves through the factory's stages: the first stage issues the materials from stock to work in progress, and when the order finishes the good units go into stock at the cost of materials, labour and overhead.",
            "new": "New production order", "recipe": "Product (recipe)", "quantity": "Quantity", "location": "Made at", "customer": "For customer (optional)",
            "due": "Due on", "labor": "Labour cost", "overhead": "Overhead (power, rent...)", "notes": "Notes", "save": "Open order",
@@ -67,7 +71,11 @@ WORDS = {
            "employee": "Employee (optional)", "nobody": "—", "hours": "Hours", "hour_rate": "Hourly rate", "amount": "Or the amount", "description": "Description",
            "add_line": "Add the cost", "line_added": "The cost was recorded.", "line_cancel": "Cancel the line", "line_cancelled": "The line was cancelled.", "cancelled_line": "Cancelled",
            "over_hint": "At the final stage: if good units are more than the order (up to 10%), write the reason in the notes.", "outside": "Outside processing",
-           "costs_link": "Variance report"},
+           "costs_link": "Variance report",
+           "minutes": "Minutes the stage took (optional)", "routing": "Stages and work centres", "centre": "Work centre", "planned_min": "Planned minutes", "recorded_min": "Recorded minutes",
+           "min_unit": "min", "planned_conv": "Planned stage cost at today's work centre rates", "planned_conv_note": "A figure to read only: it is not put on the order and does not enter stock.",
+           "suggested": "Suggested cost from the stages' minutes", "suggested_hint": "Minutes x the work centre's hourly rate. Nothing is recorded until you confirm a line, and nothing enters stock before the order finishes.",
+           "confirm": "Confirm the cost", "confirmed_tag": "Recorded", "no_suggested": "No minutes are recorded yet on a stage that has a work centre.", "cost_confirmed": "The cost was recorded on the order."},
 }
 
 
@@ -139,6 +147,12 @@ def board(request):
     columns += [{"key": s[0], "label": _stage_name(s, lang), "orders": []} for s in stage_list]
     columns.append({"key": "ready", "label": words["all_done"].split(" — ")[0], "orders": []})
     index = {c["key"]: c for c in columns}
+    for order in active:  # F6a (HG-133): a routed order's stages are its own, so each gets a column of its own, before "ready"
+        for stage in order.stages:
+            column = f"{stage[0]}:{stage[1]}" if len(stage) >= 5 else stage[0]
+            if column not in index and stage[0] not in index:
+                index[column] = {"key": column, "label": _stage_name(stage, lang), "orders": []}
+                columns.insert(len(columns) - 1, index[column])
     for order in active:
         order.late = bool(order.due_date and order.due_date < today)
         if order.status == OrderStatus.PLANNED:
@@ -146,8 +160,9 @@ def board(request):
         elif order.stage_index >= len(order.stages):
             index["ready"]["orders"].append(order)
         else:
-            key = order.stages[order.stage_index][0]
-            index.setdefault(key, index["planned"])["orders"].append(order)
+            stage = order.stages[order.stage_index]
+            key = f"{stage[0]}:{stage[1]}" if len(stage) >= 5 else stage[0]
+            index.setdefault(key if key in index else stage[0], index["planned"])["orders"].append(order)
     recent = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.DONE, OrderStatus.CANCELLED)).select_related("recipe__product", "run")[:15]
     locations = entity_scope.locations(Location.objects).filter(active=True)
     return render(request, "manufacturing/orders.html", _ctx(
@@ -170,7 +185,7 @@ def order_detail(request, pk):
         action = request.POST.get("action")
         try:
             if action == "advance":
-                orders.advance(order, request.user, good=request.POST.get("good"), defect=request.POST.get("defect"), note=request.POST.get("note", ""), lang=lang)
+                orders.advance(order, request.user, good=request.POST.get("good"), defect=request.POST.get("defect"), note=request.POST.get("note", ""), minutes=request.POST.get("minutes"), lang=lang)
                 messages.success(request, words["advanced"])
             elif action == "finish":
                 if not user_has_permission(request.user, COST):
@@ -197,6 +212,9 @@ def order_detail(request, pk):
                                       employee=_employee(request.POST.get("employee")), hours=request.POST.get("hours"), rate=request.POST.get("rate"),
                                       amount=request.POST.get("amount"), lang=lang)
                 messages.success(request, words["line_added"])
+            elif action == "confirm_cost":  # F6a (HG-133): a suggested labour line from a stage's minutes, once
+                workcentres.confirm(order, request.user, request.POST.get("log"), lang)
+                messages.success(request, words["cost_confirmed"])
             elif action == "cancel_cost":
                 line = get_object_or_404(OrderCostLine, pk=request.POST.get("line") if str(request.POST.get("line", "")).isdigit() else 0, order=order)
                 actuals.cancel_cost_line(line, request.user, lang)
@@ -225,10 +243,16 @@ def order_detail(request, pk):
         operation = issue.operation
         material_rows.append({"issue": issue, "label": choice_label(issue, "kind", lang), "operation": operation, "sign": actuals.sign(operation),
                               "value": operation.quantity * operation.unit_cost})
-    lines = [{"line": line, "label": choice_label(line, "kind", lang)} for line in order.cost_lines.select_related("employee")] if can_cost else []
+    lines = [{"line": line, "label": choice_label(line, "kind", lang)} for line in order.cost_lines.select_related("employee", "work_centre")] if can_cost else []
+    routing = workcentres.plan_rows(order, lang)  # F6a (HG-133)
+    recorded = {log.stage_key: log.minutes for log in order.stage_logs.all()}
+    for row in routing:
+        row["recorded"] = recorded.get(row["key"])
     return render(request, "manufacturing/order.html", _ctx(
         request, order=order, status_label=choice_label(order, "status", lang), stages=stage_rows, logs=logs, error=error,
-        material_rows=material_rows, on_floor=on_floor, cost_lines=lines, spent=actuals.conversion(order) if can_cost else None,
+        material_rows=material_rows, on_floor=on_floor, routing=routing,
+        planned_conversion=workcentres.planned_conversion(order) if routing and can_cost else None,
+        suggested=workcentres.suggestions(order, lang) if can_cost else [], cost_lines=lines, spent=actuals.conversion(order) if can_cost else None,
         lines_open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS),
         returnable=actuals.returnable(order) if on_floor and can_cost else [],
         extra_items=_stock_items().exclude(pk=order.recipe.product_id) if on_floor else [],

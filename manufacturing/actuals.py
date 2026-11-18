@@ -272,8 +272,10 @@ def _open_for_lines(order, words):
 
 
 @transaction.atomic
-def add_cost_line(order, user, *, kind, description="", employee=None, hours=None, rate=None, amount=None, lang="ar"):
-    """One actual labour or overhead line: hours × rate, or an amount when no hours are given."""
+def add_cost_line(order, user, *, kind, description="", employee=None, hours=None, rate=None, amount=None, work_centre=None, stage_log=None, lang="ar"):
+    """One actual labour or overhead line: hours × rate, or an amount when no hours are given.
+
+    Manufacturing F6a (HG-133): ``work_centre`` and ``stage_log`` are set only by a confirmed suggestion (``workcentres.confirm``)."""
 
     from permissions.services import user_has_permission
 
@@ -294,9 +296,10 @@ def add_cost_line(order, user, *, kind, description="", employee=None, hours=Non
     if total <= 0:
         raise ValidationError(words["line_amount"])
     line = OrderCostLine.objects.create(order=order, kind=kind, description=(description or "").strip()[:255], employee=employee,
-                                        hours=hours, rate=rate, amount=total, created_by=user)
+                                        hours=hours, rate=rate, amount=total, work_centre=work_centre, stage_log=stage_log, created_by=user)
     _audit(order, user, "add_order_cost_line", {"line": line.pk, "kind": kind, "amount": str(total), "hours": str(hours or ""),
-                                                "rate": str(rate or ""), "employee": employee.code if employee else ""})
+                                                "rate": str(rate or ""), "employee": employee.code if employee else "",
+                                                "work_centre": work_centre.code if work_centre else "", "stage_log": stage_log.pk if stage_log else ""})
     return line
 
 
