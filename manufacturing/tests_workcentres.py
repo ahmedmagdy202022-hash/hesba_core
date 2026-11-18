@@ -71,6 +71,11 @@ class RoutingTests(RoutedPlant):
         self.assertEqual(self.cake_order("20").stages[0][4], "70.00")             # 10 + 30 x 2
         self.assertEqual(self.cake_order("25").stages[1][4], "112.50")            # 45 x 2.5
         self.assertEqual(self.cake_order("1").stages[1][4], "4.50")               # 45 x 0.1
+        # The batches are not rounded before the minutes: one unit of a 3,000-unit batch at 900 minutes is 0.30, not 0.
+        self.recipe.output_quantity = D("3000")
+        self.recipe.save(update_fields=["output_quantity"])
+        self.route(self.recipe, [("خَبز", "Baking", self.oven, "900", "0")])
+        self.assertEqual(self.cake_order("1").stages[0][4], "0.30")
 
     def test_a_recipe_without_steps_keeps_the_food_stage_list(self):
         plain = services.save_recipe({"product": make_item(item_code="FG-PLAIN", item_name="خبز", is_stock_tracked=True), "output_quantity": "10"}, [(self.flour, "1")], self.owner)
@@ -142,6 +147,10 @@ class MinutesAndSuggestionTests(RoutedPlant):
         self.assertEqual((first.kind, first.amount, first.work_centre, first.stage_log), ("labour", D("70.00"), self.mixer, rows[0]["log"]))
         self.assertEqual((second.amount, second.work_centre), (D("190.00"), self.oven))
         self.assertIsNone(first.hours)                                             # priced from minutes, never from rounded hours (1.17 h x 60.00 = 70.20)
+        # A rate changed later does not change what a confirmed stage shows: the saved 190.00 the finish absorbs.
+        self.oven.rate_per_hour = D("240.00")
+        self.oven.save(update_fields=["rate_per_hour"])
+        self.assertEqual([r["amount"] for r in workcentres.suggestions(order)], [D("70.00"), D("190.00")])
         self.assertEqual(actuals.conversion(order)["labour"], D("260.00"))
         self.assertEqual(self.counts(), before)                                    # stock, cost and journals are unchanged until the finish
 

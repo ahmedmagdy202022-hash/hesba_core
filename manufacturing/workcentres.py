@@ -7,7 +7,7 @@ Rules, stated once:
   the screens and the routing only ever see the current entity's centres. Seeing a rate needs ``inventory.view_cost``;
   setting one needs ``master_data.manage_items`` and ``inventory.view_cost`` (you cannot set what you cannot see).
 * **Routing**: a recipe's steps. A new order copies them as its stages, ``[key, name_ar, name_en, work_centre_id,
-  planned_minutes]``, planned minutes = setup + minutes per batch x batches (the order's batches, three decimals, kept to
+  planned_minutes]``, planned minutes = setup + minutes per batch x batches (the order's batches unrounded; the minutes kept to
   two). A recipe without a step keeps the factory's stage list exactly as ``stages.py`` gives it (three items each).
   An order keeps the list it was opened with; editing the routing later never touches an open order.
 * **Load**: the planned minutes of the stages still ahead on open orders, per work centre and day, against
@@ -233,7 +233,10 @@ def save_routing(recipe, rows, user, lang="ar"):
 
 
 def batches_of(quantity, recipe):
-    return (quantity / recipe.output_quantity).quantize(Decimal("0.001")) if recipe.output_quantity else ZERO
+    """The order's batches, unrounded: planned minutes round once, at the end (Codex review on #440: one unit of a
+    3,000-unit batch at 900 minutes is 0.30 minutes, not 0.000 batches x 900 = 0)."""
+
+    return Decimal(quantity) / recipe.output_quantity if recipe.output_quantity else ZERO
 
 
 def planned_minutes(step, batches):
@@ -301,9 +304,11 @@ def suggestions(order, lang="ar"):
         centre = centres.get(plans.get(log.stage_key))
         if log.minutes is None or centre is None:
             continue
-        amount = money_round(log.minutes * centre.rate_per_hour / 60)
+        line = live.get(log.pk)
+        # A confirmed stage shows what its cost line saved (and the finish absorbs), not today's rate (Codex review on #440).
+        amount = line.amount if line is not None else money_round(log.minutes * centre.rate_per_hour / 60)
         rows.append({"log": log, "label": names.get(log.stage_key, log.stage_key), "centre": centre, "minutes": log.minutes, "amount": amount,
-                     "line": live.get(log.pk)})
+                     "line": line})
     return rows
 
 
