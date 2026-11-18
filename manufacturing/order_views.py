@@ -15,7 +15,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import actuals, make_to_order, orders, quality, quality_views, schedule, workcentres
+from . import actuals, make_to_order, orders, outside_views, quality, quality_views, schedule, workcentres
 from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .schedule_views import schedule_context
@@ -44,7 +44,7 @@ WORDS = {
            "planned_fig": "المخطط", "actual_fig": "الفعلي", "lines_none": "لسه مفيش تكاليف فعلية.", "cost_kind": "نوع التكلفة", "labour_kind": "عمالة", "overhead_kind": "مصاريف تشغيل",
            "employee": "الموظف (اختياري)", "nobody": "—", "hours": "الساعات", "hour_rate": "سعر الساعة", "amount": "أو المبلغ", "description": "البيان",
            "add_line": "ضيف التكلفة", "line_added": "التكلفة اتسجلت.", "line_cancel": "إلغاء السطر", "line_cancelled": "السطر اتلغى.", "cancelled_line": "ملغي",
-           "over_hint": "في آخر مرحلة: لو السليم طلع أكتر من كمية الأمر (لحد 10%)، اكتب السبب في الملاحظات.", "outside": "تشغيل خارجي",
+           "over_hint": "في آخر مرحلة: لو السليم طلع أكتر من كمية الأمر (لحد 10%)، اكتب السبب في الملاحظات.", "outside": "تشغيل لدى الغير",
            "costs_link": "تقرير الفروق",
            "minutes": "الدقايق اللي خدتها المرحلة (اختياري)", "routing": "المراحل ومراكز العمل", "centre": "مركز العمل", "planned_min": "دقايق مخططة", "recorded_min": "دقايق فعلية",
            "min_unit": "دقيقة", "planned_conv": "تكلفة المراحل المخططة بسعر مراكز العمل النهارده", "planned_conv_note": "رقم للقراءة بس: مش بيتسجل على الأمر ولا بيدخل المخزون.",
@@ -154,6 +154,7 @@ def board(request):
             if column not in index and stage[0] not in index:
                 index[column] = {"key": column, "label": _stage_name(stage, lang), "orders": []}
                 columns.insert(len(columns) - 1, index[column])
+    outside_views.mark_board(active)  # F4 (HG-137): «عند <المورّد>: الكمية» on the card of an order whose stage is out
     late = schedule.late_orders(active, today)  # F6b (HG-134): past its due date, or its last planned end is after it
     for order in active:
         order.late, order.late_reason = order.pk in late, late.get(order.pk, "")
@@ -172,7 +173,7 @@ def board(request):
         recipes=Recipe.objects.filter(active=True).select_related("product"), locations=locations,
         default_location=(locations.filter(is_default=True).first() or locations.first()), can_open_sale=_can_open_sale(request.user),
         customers=Customer.objects.filter(active=True).exclude(customer_code="WALK-IN").order_by("name")[:300],
-        late_count=sum(1 for o in active if o.late)))
+        late_count=sum(1 for o in active if o.late), ow=outside_views.WORDS[lang]))
 
 
 @require_permission(VIEW)
@@ -269,7 +270,7 @@ def order_detail(request, pk):
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
         ready=order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages),
         open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=late_reason != "", late_reason=late_reason, **plan_context,
-        **quality_views.order_quality_context(request, order, lang)))
+        **quality_views.order_quality_context(request, order, lang), **outside_views.order_context(request, order, lang)))
 
 
 @require_permission(PRODUCE)

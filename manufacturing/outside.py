@@ -409,10 +409,11 @@ def _bill_location(order):
 def _bill_number(order):
     from purchases.models import PurchaseInvoice
 
+    stem = f"OUT-{order.number.removeprefix('PO-')}"  # OUT-20261118-004-01: the order's own date and serial, then the bill's
     sequence = 1
-    while PurchaseInvoice.objects.filter(invoice_number=f"OUT-{order.number}-{sequence:02d}").exists():
+    while PurchaseInvoice.objects.filter(invoice_number=f"{stem}-{sequence:02d}").exists():
         sequence += 1
-    return f"OUT-{order.number}-{sequence:02d}"
+    return f"{stem}-{sequence:02d}"
 
 
 @transaction.atomic
