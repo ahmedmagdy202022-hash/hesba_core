@@ -343,7 +343,7 @@ class ScreenTests(MakeToOrderSetup):
         order = self.make()
         orders.advance(order, self.owner)
         self.assertContains(self.page(), "في مرحلة طهي")
-        for _ in range(3):
+        for _ in range(4):   # F5 (HG-136): cooking, cooling, the food quality stage, packing
             orders.advance(order, self.owner)
         self.assertContains(self.page(), 'data-production-state="ready"')
         orders.finish(order, self.owner)

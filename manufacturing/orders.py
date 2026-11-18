@@ -33,7 +33,8 @@ from django.utils import timezone
 from audit.models import AuditEventType, AuditLog
 from config.money import cost_round, money_round
 
-from . import actuals, lots, quality, schedule, services, workcentres
+from . import actuals, lots, schedule, services, workcentres
+from . import quality as quality_rules  # this module's own ``quality(order)`` is the defect rate
 from inventory.models import StockOperationStatus
 
 from .models import OrderMaterialIssue, OrderStageLog, OrderStatus, ProductionOrder
@@ -199,7 +200,7 @@ def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
     good = good_units(order)
     # Manufacturing F5 (HG-136): a recipe that needs release puts its product into the entity's quality hold place
     # (not a selling location); the materials still come from the order's location. None: the order's location, as ever.
-    hold = quality.hold_place_for(order)
+    hold = quality_rules.hold_place_for(order)
     run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
                            notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
                            conversion_cost=actuals.conversion(order)["total"], scrap=max(order.quantity - good, Decimal("0")),

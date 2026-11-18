@@ -21,7 +21,7 @@ class ProductionOrderTests(MfgSetup):
 
     def test_an_order_walks_the_food_stages_then_posts_one_run(self):
         order = self.open()
-        self.assertEqual([s[0] for s in order.stages], ["prep", "cooking", "cooling", "packing"])
+        self.assertEqual([s[0] for s in order.stages], ["prep", "cooking", "cooling", "quality", "packing"])   # F5 (HG-136): food has a quality stage
         self.assertEqual(order.status, OrderStatus.PLANNED)
         # HG-036: starting the order issues its materials to work in progress.
         orders.advance(order, self.owner)
@@ -32,6 +32,7 @@ class ProductionOrderTests(MfgSetup):
         with self.assertRaises(ValidationError):
             orders.finish(order, self.owner)
         orders.advance(order, self.owner, good="19", defect="1", note="كيكة اتحرقت")
+        orders.advance(order, self.owner)
         orders.advance(order, self.owner)
         orders.advance(order, self.owner)
         with self.assertRaises(ValidationError):
