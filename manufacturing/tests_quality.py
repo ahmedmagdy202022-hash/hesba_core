@@ -267,7 +267,7 @@ class HoldTests(QualityPlant):
 
 
 class ReleaseTests(QualityPlant):
-    INVENTORY = "finished_goods"
+    INVENTORY, INVENTORY_CODE = "finished_goods", "110503"
 
     def test_forty_eight_pass_and_two_are_rejected(self):
         order = self.made()
@@ -288,7 +288,9 @@ class ReleaseTests(QualityPlant):
                          (StockOperationType.ADJUSTMENT, "out", place, D("2.000"), D("40.0000")))
         self.assertIn(f"مرفوض في فحص الجودة {check.number}", reject.reason)
         self.assertEqual(self.journal(reject), {"stock_loss": D("80.00"), self.INVENTORY: D("-80.00")})   # debit 5211 80.00, credit finished goods 80.00
-        self.assertEqual({line.account.code for line in JournalLine.objects.filter(entry__source_id=reject.pk, entry__source_type="stock_operation", debit__gt=0)}, {"5211"})
+        lines = JournalLine.objects.filter(entry__source_id=reject.pk, entry__source_type="stock_operation").select_related("account")
+        self.assertEqual(sorted((line.account.code, line.debit, line.credit) for line in lines),
+                         sorted([("5211", D("80.00"), D("0.00")), (self.INVENTORY_CODE, D("0.00"), D("80.00"))]))
         # Stock: 48 cartons at 40.00 = 1,920.00; the average did not move.
         self.assertEqual((get_item_stock_value(self.soap), get_item_authoritative_average_cost(self.soap)), (D("1920.00"), D("40.0000")))
         after = self.books()
@@ -302,6 +304,9 @@ class ReleaseTests(QualityPlant):
         self.assertEqual(quality.waiting_rows(), [])
         self.assertEqual([(row.name_ar, row.value, row.ok) for row in check.results.all()], [("درجة الحموضة", D("7.000"), True), ("إحكام الغطا", None, True)])
         self.balanced()
+        with self.assertRaises(ValidationError):                                     # F11's rule: the product has left the place it entered
+            services.cancel_run(order.run, self.owner, reason="بعد الإفراج")
+        self.assertEqual((order.run.status, self.at(self.plant)), (RunStatus.POSTED, D("48")))
 
     def test_a_release_alone_changes_no_ledger_value_and_the_rest_stays_on_hold(self):
         order = self.made()
@@ -444,7 +449,7 @@ class ReleaseTests(QualityPlant):
 class ReleaseOnARestaurantChartTests(BakeryChart, ReleaseTests):
     """A bakery with the module on: one inventory account, so the reject credits it; the loss account is the same."""
 
-    INVENTORY = "inventory"
+    INVENTORY, INVENTORY_CODE = "inventory", "1105"
 
 
 class HoldOnARestaurantChartTests(BakeryChart, HoldTests):
@@ -780,6 +785,14 @@ class IncomingTests(QualityPlant):
         screen = self.client.get(reverse("manufacturing:quality"))
         self.assertContains(screen, f'data-waiting="{line.invoice.invoice_number}" data-waiting-kind="purchase"')
         self.assertContains(screen, "كيماويات النيل")
+        viewer = person(RoleCode.SITE_ENGINEER, "qc_incoming_viewer")                 # sees stock, not purchases: no supplier name, no invoice link
+        self.assertFalse(user_has_permission(viewer, "purchases.view_purchase_invoices"))
+        self.client.force_login(viewer)
+        plain = self.client.get(reverse("manufacturing:quality"))
+        self.assertContains(plain, f'data-waiting="{line.invoice.invoice_number}"')
+        self.assertNotContains(plain, "كيماويات النيل")
+        self.assertNotContains(plain, reverse("purchases:detail", args=[line.invoice_id]))
+        self.client.force_login(self.owner)
         url = reverse("manufacturing:quality_purchase_line", args=[line.pk])
         page = self.client.get(url)
         self.assertContains(page, 'name="destination"')
@@ -977,6 +990,12 @@ class ScreenTests(QualityPlant):
                 self.assertIn(self.plant, list(page.context["locations"]))
         with self.assertRaisesMessage(ValidationError, "حجز الجودة مكان انتظار للفحص مش مكان إنتاج"):
             orders.create_order({"recipe": self.recipe, "location": place, "quantity": "10"}, self.owner)
+        from types import SimpleNamespace
+
+        from . import make_to_order
+
+        offered = list(make_to_order.locations_for(SimpleNamespace(entity=None)))     # the make-to-order form's own list
+        self.assertEqual((place in offered, self.plant in offered), (False, True))
 
     def test_the_run_page_says_the_product_is_on_hold_and_leads_to_its_check(self):
         order = self.made()
