@@ -7,6 +7,7 @@
 {% if position.waiting > 0 %}{% if can_check %}<form class="op-form" method="post" data-check-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check">
 <h2>{{ qw.criteria }}</h2>
 {% if criteria %}{% include "manufacturing/_quality_inputs.html" with criteria_inputs=criteria %}{% else %}<p class="op-muted" data-no-criteria>{% if order %}{{ qw.no_criteria_recipe }}{% else %}{{ qw.no_criteria_item }}{% endif %}</p>{% endif %}
+<h2>{{ qw.decision }}</h2>
 <div class="op-form-grid">
 <div class="op-field"><label for="qc-passed">{{ qw.passed_qty }}</label><input id="qc-passed" name="passed" value="{% if post.passed is not None %}{{ post.passed }}{% else %}{{ waiting_plain }}{% endif %}" inputmode="decimal" dir="ltr"></div>
 {% if line or can_reject %}<div class="op-field"><label for="qc-rejected">{{ qw.rejected_qty }}</label><input id="qc-rejected" name="rejected" value="{{ post.rejected|default:'' }}" inputmode="decimal" dir="ltr" placeholder="0"></div>{% endif %}

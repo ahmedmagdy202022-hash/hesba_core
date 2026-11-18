@@ -65,7 +65,7 @@ WORDS = {
         "quality_saved": "اتحفظت إعدادات الجودة.", "criteria_none": "لسه مفيش معايير.", "release_on": "محتاجة إفراج قبل البيع", "release_off": "بتدخل المخزن على طول",
         "card_title": "فحص الجودة والإفراج", "will_hold": "الوصفة دي محتاجة إفراج: بعد إنهاء الأمر المنتج هيدخل «حجز الجودة»، ومش هيتباع غير بعد الفحص.",
         "check_now": "افحص وسجّل النتيجة", "stage_criteria": "معايير فحص الجودة", "stage_criteria_hint": "سجّل نتيجة كل معيار. الوحدات اللي مطابقتش اكتبها في خانة المعيب.",
-        "quality_link": "فحص الجودة", "reversed": "اتعكس",
+        "quality_link": "فحص الجودة", "reversed": "اتعكس", "decision": "القرار",
         "run_held": "منتج التشغيلة دي دخل حجز الجودة، وبيتفرج عنه بعد الفحص.",
     },
     "en": {
@@ -106,7 +106,7 @@ WORDS = {
         "quality_saved": "The quality settings were saved.", "criteria_none": "No criteria yet.", "release_on": "Needs release before sale", "release_off": "Goes straight into stock",
         "card_title": "Quality check and release", "will_hold": "This recipe needs release: when the order finishes, the product enters the quality hold and is sold only after the check.",
         "check_now": "Check and record the result", "stage_criteria": "Quality criteria", "stage_criteria_hint": "Record every criterion. Units that failed go in the defective field.",
-        "quality_link": "Quality checks", "reversed": "Reversed",
+        "quality_link": "Quality checks", "reversed": "Reversed", "decision": "Decision",
         "run_held": "This run's product entered the quality hold; it is released after its check.",
     },
 }
