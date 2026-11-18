@@ -360,6 +360,29 @@ class GarmentsExampleTests(GarmentsPlant):
         self.balanced()
 
 
+class AuditTests(GarmentsPlant):
+    def test_every_step_leaves_an_audit_row_on_the_job(self):
+        from audit.models import AuditLog
+
+        order = self.at_finishing()
+        job = outside.send(order, self.owner, supplier=self.supplier)
+        outside.cancel_sending(job, self.owner)
+        job = outside.send(order, self.owner, supplier=self.supplier)
+        outside.set_price(job, self.owner, "3.00")
+        job = self.back(job)
+        outside.make_bill(job, self.owner)
+        outside.withdraw_bill(job, self.owner)
+        job = self.billed(job)
+        self.walk(order)
+        rows = AuditLog.objects.filter(module="manufacturing", object_type="manufacturing.OutsideJob").order_by("pk")
+        self.assertEqual([row.action for row in rows], ["send_stage_out", "cancel_stage_out", "send_stage_out", "price_stage_out", "receive_stage_back",
+                                                        "bill_stage_out", "withdraw_stage_bill", "bill_stage_out", "absorb_stage_bill"])
+        self.assertTrue(all(row.actor == self.owner for row in rows))
+        priced, absorbed = rows[3], rows[8]
+        self.assertEqual((priced.before_data, priced.after_data), ({"unit_price": "0.00"}, {"unit_price": "3.00"}))
+        self.assertEqual((absorbed.object_id, absorbed.after_data["amount"], absorbed.after_data["order"]), (str(job.pk), "294.00", order.number))
+
+
 class NoVatTests(GarmentsPlant):
     VAT = False
 
@@ -626,7 +649,7 @@ class ScreenTests(GarmentsPlant):
         job = OutsideJob.objects.get()
         self.assertEqual((job.order, job.supplier, job.quantity_sent, job.unit_price, job.note), (order, self.supplier, D("100.000"), D("3.00"), "تطريز الصدر"))
         self.assertContains(sent, "data-receive-back")
-        self.assertContains(sent, "المرحلة دي عند «مصنع النور للتطريز»")
+        self.assertContains(sent, "المرحلة دي عند <strong>مصنع النور للتطريز</strong>")
         self.assertNotContains(sent, "data-advance")
         self.assertNotContains(sent, "data-send-out")
         self.assertContains(sent, 'data-outside-state="sent"')
@@ -780,7 +803,7 @@ class ScreenTests(GarmentsPlant):
     def test_the_english_order_page(self):
         job = self.sent()
         page = self.page(job.order, "en")
-        self.assertContains(page, "This stage is at «مصنع النور للتطريز»")
+        self.assertContains(page, "This stage is at <strong>مصنع النور للتطريز</strong>")
         self.assertContains(page, "The stage is back from the supplier")
         self.assertContains(page, "Record the return")
         self.back(job)
