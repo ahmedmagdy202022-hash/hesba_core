@@ -194,11 +194,13 @@ def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang=
 
 
 @transaction.atomic
-def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
+def finish(order, user, lang="ar", lot_no="", lot_expiry=None, extra_outputs=None):
     """All stages done: post the production run for the order's quantity.
 
     Manufacturing F3 (HG-131): ``lot_no`` and ``lot_expiry`` are the product lot's own number and expiry when the person
-    typed them (otherwise the run number and run date + the recipe's shelf life)."""
+    typed them (otherwise the run number and run date + the recipe's shelf life).
+    Manufacturing F9 (HG-139): ``extra_outputs`` is {RecipeOutput pk: quantity} for the by-products and co-products whose
+    real quantity the person typed (otherwise the recipe's quantity times the order's batches)."""
 
     words = MESSAGES[lang]
     lot_no, lot_expiry = lots.check_lot(lot_no, lot_expiry, lang)
@@ -224,7 +226,7 @@ def finish(order, user, lang="ar", lot_no="", lot_expiry=None):
     run = services.produce(order.recipe, user, batches=_batches(order), location=order.location,
                            notes=f"{order.number}{' · ' + order.notes if order.notes else ''}"[:255], lang=lang,
                            conversion_cost=actuals.conversion(order)["total"], scrap=max(order.quantity - good, Decimal("0")),
-                           issued=issued or None, output=good, output_location=hold)
+                           issued=issued or None, output=good, output_location=hold, extra_outputs=extra_outputs)
     order.run, order.status, order.finished_at = run, OrderStatus.DONE, timezone.now()
     order.save(update_fields=["run", "status", "finished_at"])
     lots.after_finish(order, run, user, lot_no, lot_expiry, location=hold)
@@ -277,9 +279,23 @@ def cost_card(order):
     per_unit = cost_round(total / output) if output else Decimal("0")
     material_unit = cost_round(material / output) if output else Decimal("0")
     absorbed = bool(order.run_id and order.run.conversion_cost)
-    return {"material": money_round(material), "labor": spent["labour"], "overhead": spent["overhead"], "outside": outside, "total": total,
+    card = {"material": money_round(material), "labor": spent["labour"], "overhead": spent["overhead"], "outside": outside, "total": total,
             "output": output, "per_unit": per_unit, "material_per_unit": material_unit, "estimate": stage == "estimate",
             "stage": stage, "absorbed": absorbed, "scrap": order.run.scrap_quantity if order.run_id else order.quantity - good_units(order)}
+    # Manufacturing F9 (HG-139): what the by-products and co-products take of the order's cost, so the product's own cost
+    # per unit is what is left. Posted: the run's own rows and the product's posted unit cost. Before the finish: the
+    # split as it stands today. An order whose recipe has no extra output gets neither key changed.
+    from . import byproducts
+
+    if order.run_id:
+        rows = list(order.run.outputs.all())
+        if rows:
+            card.update(extras=money_round(sum((row.cost for row in rows), Decimal("0"))), per_unit=order.run.output_operation.unit_cost)
+    elif order.recipe.output_quantity:
+        shared, _why = byproducts.estimate(order.recipe, _batches(order), material, spent["labour"] + spent["overhead"] + outside, output)
+        if shared is not None:
+            card.update(extras=money_round(shared.extras_cost), per_unit=shared.main_unit_cost)
+    return card
 
 
 def quality(order):

@@ -61,7 +61,7 @@ def owners(operation_ids):
 def _owners(operation_ids):
     """(``owners``, {operation pk: run pk} for those that belong to a run)."""
 
-    from .models import OrderMaterialIssue, ProductionConsumption, ProductionRun
+    from .models import OrderMaterialIssue, ProductionConsumption, ProductionRun, RunOutput
 
     ids = [int(pk) for pk in operation_ids]
     found, runs = {}, {}
@@ -72,6 +72,9 @@ def _owners(operation_ids):
     for operation, run, number in ProductionConsumption.objects.filter(operation_id__in=ids).values_list("operation_id", "run_id", "run__number"):
         found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
     for operation, run, number in ProductionRun.objects.filter(output_operation_id__in=ids).values_list("output_operation_id", "pk", "number"):
+        found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
+    # Manufacturing F9 (HG-139): a run's extra output (a by-product or a co-product) is the run's too.
+    for operation, run, number in RunOutput.objects.filter(operation_id__in=ids).values_list("operation_id", "run_id", "run__number"):
         found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
     return found, runs
 
