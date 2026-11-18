@@ -5781,3 +5781,121 @@ The product now enters stock at what the order really used (issues + extras − 
 - `manufacturing/`: `models.py`, `migrations/0010_outside.py`, `outside.py` (new), `outside_views.py` (new), `orders.py`, `order_views.py`, `costs_views.py` (one label), `urls.py`, `tests_outside.py` (new).
 - `templates/manufacturing/`: `outside.html`, `_outside_table.html`, `_outside_order.html`, `_outside_send.html`, `_outside_receive.html` (all new), `order.html`, `orders.html`, `home.html`.
 - Outside `manufacturing/` and `templates/manufacturing/`: `settings_core/display_labels.py` (one Arabic label), `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 16, 72.5% to 77.5%).
+
+## HG-138 — Manufacturing F7: a quotation line with specifications and a cost sheet (`manufacturing/0011_quote_cost_sheet`), made into a custom production order on its own job item; one filter line in `sales/pos.py` keeps `JOB-` items off the till; no sales-posting, purchase-posting, inventory-engine, projector, average-cost or permission change
+
+- **Status:** implemented on `claude/manufacturing-f7-quote-specs` (on `develop` after F4, #448; so F1's make-to-order link, F4's outside processing and F5's quality are already there), PR #449, **merged by the Maestro under Ahmed's delegation after review**. **T2** (new tables, a write into `orders` rows, one line in a shared sales file; no money moves until the job is produced and invoiced through the existing paths). Roadmap: `docs/MARKET_PARITY_ROADMAP.md`, «7. تصنيعي», item 17 «عرض سعر بمواصفات (أثاث، طباعة)».
+- **Why:** a printer or a furniture maker quotes a job by its specifications and prices it from a cost sheet. The T1 quotation held a price and a free description only: no specifications, no costing, nothing carried into production. Two made-to-measure jobs made as one shared item would also blend their costs through the item's average (plan trap 13).
+- **Why no existing table serves:** a `SalesOrderLine` holds a price and free text; a `Recipe` is a product's standard, not an estimate tied to one customer's line; an `OrderCostLine` belongs to a production order that does not exist while the job is still a quotation.
+
+### Where today's code disagreed with the plan (the code wins)
+
+1. **The job item must replace the line's item.** `orders.services.invoice_initial` and `link_invoice` match invoice lines to order lines **by item** (one line per item per order). The plan says «the job item is invoiced from the sales order as usual», which only works if the order line points at it. So the conversion **writes `SalesOrderLine.item`** (a data write into an `orders` row, not schema), under the order's row lock, and only while the line has **no live invoice or draft link and no live production order** (both refused). Audited (`point_line_at_job_item`, the placeholder's code before, the job's code after).
+2. **The order number has five digits.** `config.numbering.next_in_series` gives `SO-00007`, so the job item is `JOB-SO-00007-1`, not the plan's `JOB-SO-0007-1`. `<line>` is the line's position on the order (1-based, by creation). A code someone typed by hand long ago is never taken over (`-2`, `-3` is added).
+3. **The recipe per unit can lose material to rounding** (recipe quantities have three decimals, trap 10): 5 reams over 7 packs is 0.714 a pack, and 0.714 × 7 = 4.998. So the recipe is **per unit (output 1) when every material divides exactly to three decimals** (the plan's example: 0.5 ream, 0.3 kg), **otherwise one batch is the whole job** (output = the line's quantity, the sheet's quantities as they are), so the start issues exactly what the sheet says. The same material on two sheet lines becomes one recipe line (`save_recipe` refuses a component twice).
+4. **F4 has merged, and an outside line still does not become an `OutsideJob`.** The plan says «outside lines become an F4 job when F4 has merged»; the brief, and F4's own rules, say a stage is sent out only when it is on the floor (`outside.send` needs the order in progress at that stage). So an outside line becomes **a note on the production order** naming the work («في مراحل متوقع تتعمل لدى الغير (تجليد بالدبوس)…»), **never an amount** (the order page shows notes to anyone with `inventory.view_stock`). `make_to_order.make` gained a `notes` pass-through for it.
+5. **The VAT the customer accepted.** `orders._keep_vat` froze the line's VAT from the placeholder item at the confirm, and the later invoice computes VAT from the job item's own rate. The job item therefore takes **the placeholder's `taxes.ItemTaxRate` link** when it has one (a row written into `taxes` master data; no tax service is touched). Tested with VAT on at a 5% rate: the invoice's VAT equals what the order accepted (684.38).
+6. **F1's plain «اعمل أمر إنتاج» on a line with a sheet would make the wrong item** if the placeholder had a recipe. `make_to_order.line_states` no longer offers it there (it says the line is made from its specifications and cost page), and `make_to_order.make` refuses such a line.
+7. **The unit price is read, not stored.** The plan lists a stored «computed unit price»; the sheet stores `margin_percent` and an optional `price_override`, and the price is always recomputed from the lines (which cannot change after the conversion). What the customer was offered is the quotation line's own `unit_price`, written when the price is saved.
+8. **The plan's label «حوّله لشغلانة» is not approved wording.** The action is **«حوّله لأمر إنتاج خاص»** (English «Make it a custom production order»): the rest of the app calls a production order «أمر الإنتاج», so a second term («أمر تشغيل») would confuse.
+9. **The general template is «شغل حسب المقاس»** (key `custom`), for every factory that is neither printing nor furniture; the plan called it «workshop», whose Arabic would be a banned word.
+
+### Schema (`manufacturing/0011_quote_cost_sheet`, depends on `0010_outside`; generated, no data step)
+
+- **`CostSheet(sales_order_line → orders.SalesOrderLine one-to-one CASCADE, template 20, spec JSON, margin_percent 7,2 default 0, price_override 14,2 NULL, job_item → master_data.Item NULL PROTECT, job_recipe → Recipe NULL PROTECT, converted_at NULL, created_by, created_at, updated_at)`**. Checks: margin from 0 to 1000; override not negative. **CASCADE** on the line because `orders.services.remove_line` deletes a quoted line: its sheet goes with it (tested).
+- **`CostSheetLine(sheet → CostSheet CASCADE, kind 10 (material, labour, overhead, outside), item → Item NULL PROTECT, description 255, quantity 14,3, unit_cost 14,4)`**. Checks: quantity above zero, unit cost not negative; **a material names an item and nothing else does**.
+- **No column on `orders`, `master_data`, `sales`, `inventory`, `ledger` or `permissions`.** `makemigrations --check --dry-run`: clean.
+
+### Rules (`manufacturing/quotes.py`)
+
+- **Specification templates in code** (`TEMPLATES`, like `stages.py`): printing (size, pages, paper and weight, colours, finishing and binding, copies per unit), furniture (width, depth, height in cm, wood, finish, colour, upholstery), made to measure (dimensions, material, finish). The sub-activity picks the default (printing → printing, furniture → furniture, anything else → made to measure); the user may choose another. Answers are trimmed to 120 characters; blank ones are dropped.
+- **The cost sheet:** lines of a quantity × a unit cost **for the whole line** (not per unit). A material is an active stock-tracked item (never a `JOB-` item); its unit cost left blank is **its authoritative average cost today** (`inventory.services.get_item_authoritative_average_cost`, read only), to four decimals; any other cost may be typed. Labour, overhead and outside work carry a description. Amount per line = quantity × unit cost to the piastre. **Unit price = cost × (1 + margin ÷ 100) ÷ the line's quantity, to the piastre**, or the override.
+- **The price goes on the line only while the quotation is offered** (draft or sent), under the same guards as the quotation's own edits: the quotations capability, `sales.create_sales_invoice`, the order row locked. After the customer accepts, the price is fixed («بعد موافقة العميل السعر بيتثبت»).
+- **Editable** while the quotation is offered and on an open order not yet converted (a sheet made after the confirm is allowed, so the job can still be converted); **locked once converted** and on a closed, rejected or cancelled order.
+- **«حوّله لأمر إنتاج خاص»** (`convert`), one transaction, the order row and the sheet row locked: refused before the customer accepts, without a sheet, without a material line, a second time, with an invoice or draft on the line, or with a live production order on it. Then: the job item (`JOB-<order>-<line>`, named after the line's description or the placeholder's name, stock-tracked, sold at the line's price, the placeholder's unit, category and VAT link); its recipe through the unchanged `services.save_recipe` (shape in point 3; notes name the sales order); the line pointed at the job item; the sheet marked converted; **the production order through F1** (`make_to_order.make`, so `orders.create_order` unchanged) for the whole line, at the chosen place of the order's entity (default: its default place), with **planned labour and overhead = the sheet's labour and overhead totals**, the customer and the delivery date from the sales order, and the outside note.
+- **The till** skips codes starting `JOB-` (one line, `sales/pos.py`). The ordinary invoice form still lists them: the job is invoiced from there.
+- Every write is audited on the sheet (`save_quote_spec`, `add_quote_cost_line`, `remove_quote_cost_line`, `price_quote_line` with the price before and after, `convert_quote_line`) and on the order line (`point_line_at_job_item`); F1 writes its own `make_production_order_for_sale`.
+
+### Money, in plain words (the plan's printing example, reproduced to the piastre)
+
+- **The sheet:** paper 5 reams at 1,400.00 = 7,000.00; ink 3 kg at 450.00 = 1,350.00; labour 1,200.00; overhead 600.00; outside binding 800.00. **Cost 10,950.00; margin 25% → 13,687.50; unit price 1,368.75** a pack of 100 catalogues, written on the quotation line.
+- **Writing the sheet, confirming and converting move nothing:** no stock movement or operation, no cashbox row, no journal entry or line (counted, and `Projector().rebuild()` gives the same count).
+- **The conversion:** item `JOB-SO-00001-1`, recipe per pack paper 0.500 and ink 0.300, a production order of 10 packs (10 batches) with **planned labour 1,200.00 and overhead 600.00**.
+- **Production** is the ordinary order: the start issues 5 reams and 3 kg at their averages then (7,000.00 + 1,350.00), the finish adds 1,800.00: **10,150.00, 1,015.0000 a pack**. The 800.00 binding is **not** in it unless that stage is sent out with F4 and its bill posted; the sheet's 10,950.00 is an estimate, not the product's cost.
+- **The invoice from the sales order:** sales 13,687.50, **cost of goods sold 10,150.00** (the job item's own average), profit 3,537.50.
+- **Two jobs of the same description:** the first finished at 10,150.00; paper then bought at 1,600.00 (the paper average becomes 1,500.0000); the second job finishes at 7,500.00 + 1,350.00 + 1,800.00 = **10,650.00**. Invoiced in the other order, each invoice line's cost equals its own run (10,150.00 and 10,650.00); cost of goods sold 20,800.00; trial balance balanced, reconciliation clean.
+- **No sales-posting, purchase-posting, inventory-engine, projector or average-cost change.** The sale takes the authoritative average of the job's own item (HG-003), which only that job ever filled.
+
+### Permissions (existing codes only; no new permission, no role matrix change)
+
+- **The page** (`/manufacturing/quotes/lines/<line>/`): `sales.view_sales_invoices` with the quotations capability on (off: 404), like the quotation itself.
+- **Specifications:** `sales.create_sales_invoice` (who may make quotations; the cashier and the manager may).
+- **The cost sheet:** shown only with `inventory.view_cost` (today the owner's role only); written with `inventory.view_cost` **and** `sales.create_sales_invoice`. Everyone else sees the specifications and the line's price, and no sheet amount is in the HTML (tested for a manager).
+- **«حوّله لأمر إنتاج خاص»:** `inventory.adjust_stock` and `master_data.manage_items` (it creates an item and a recipe and opens an order). The manager may convert without seeing the sheet; the cashier may not.
+- Each post is checked in the view (403) and again in the rule (`PermissionDenied`).
+- **Entity-scoped:** a line is reached only through the sales orders of the entity being worked in (`orders.services.scoped`); another entity's line returns **404** on the page and on every post, and nothing changes. The production order is opened at a place of the sales order's own entity.
+
+### Screens (Arabic and English; existing `op-*`/`mfg-*` classes and `--hs-*` tokens; one print rule)
+
+- **«مواصفات وتكلفة البند»** (new): the line (customer, line, quantity, price), the specifications form (template and fields) or their reading, the cost sheet with its add form and figures (materials, labour, overhead, outside, cost and per unit, the line's price and margin, the computed unit price and the price used), «احفظ وحط السعر على البند», and «أمر إنتاج خاص» with the place and «حوّله لأمر إنتاج خاص»; after the conversion, the job item, the recipe and the production order with links.
+- **The sales order page:** under each line its specifications and a link «المواصفات والتكلفة» (or «المواصفات» without the cost right); F1's column says the line is made from that page.
+- **The quotation's print** (and its share link, which renders the same document): the specifications in small type under the line; never a cost (tested).
+- `static/hesba/css/print.css`: one rule (`.pr-specs`, tokens only). No new colour literal, no new script.
+- **Seen as headless Chromium screenshots** at 390 px and 1280 px on a local copy of the printing example (the page as a quotation in Arabic and English, as an open order ready to convert, after conversion; the manager's view; the sales order page as a quotation and as an order; the print): no page scrolls sideways at either width. A first look showed the line's specifications broken into narrow columns on the sales order's phone card; fixed by keeping them in one column (`mfg-title`). **Not seen on a real phone; Ahmed's «موافق» on the new page and on the changed sales order page and print is still to be taken.**
+
+### Owner questions (the default built in bold)
+
+- **21 — Custom jobs: one stock item per job, hidden from the till?** **Yes: `JOB-<order>-<line>`, skipped by the till's catalogue.**
+- **New, raised by the build:**
+  1. **Deactivate the job item once fully invoiced and its stock is 0?** **Not built:** it needs a hook in invoicing (protected). The job items stay active (and off the till); the item list grows by one per job.
+  2. **The placeholder item on the quotation.** T1 allows one line per item per order, so two custom jobs on one quotation need two different placeholder items («كتالوج مطبوع», «بروشور مطبوع»). **Built as is**; a «custom job» line type on the quotation would be an `orders` change.
+  3. **Who sees the cost sheet?** **`inventory.view_cost` (today the owner only).** A manager quotes the price the owner set and can convert, without seeing the costs.
+  4. **Outside work in the product's cost:** **only through F4 on the floor.** Absorbing the sheet's outside amount at the finish without a bill is not built (owner question 11 again).
+  5. **Change the specifications after the customer accepted?** **Allowed until the conversion, audited**; the order's print then shows the new ones.
+
+### Not built (and why)
+
+- Deactivating finished job items (question 1), a line type for custom jobs (question 2), an automatic `OutsideJob` (point 4).
+- **Re-quoting from a job's actual cost** (estimate against actual per job): the order's cost card and F12's variance report show the actual; nothing compares it with the sheet.
+- **Drawings and photos on the line:** attachments (S1) are not wired to the sheet.
+- **A specification template per product, or edited from the screen:** templates are in code, like the stage lists.
+- **Demo data:** `prepare_demo.py` is not touched (left for F14).
+
+### Protected and shared lines touched (all named)
+
+- `manufacturing/models.py`, `migrations/0011_quote_cost_sheet.py`: two new tables.
+- `manufacturing/make_to_order.py`: `make` refuses a line with an unconverted sheet and passes a note through; `line_states` does not offer the plain action on such a line. Nothing else.
+- **`sales/pos.py`: one filter line** (`and not row["code"].startswith("JOB-")` in the till's catalogue) and its comment. Tested: the job item is not in the catalogue nor in the quick picks even when pinned, every other item still lists; the same test fails without the line. **No other change in `sales/`.**
+- `orders/views.py`: the detail view adds the specifications context (as F1 added its column); `_doc` adds each line's specifications to the printed document. `templates/orders/detail.html` (the line cell), `templates/orders/_production_cell.html` (one message), `templates/printing/document.html` (the specifications under a line, empty for every other document), `static/hesba/css/print.css` (one rule).
+- **Data writes outside `manufacturing` tables:** `orders.SalesOrderLine.unit_price` (saving the sheet's price while offered), `orders.SalesOrderLine.item` (the conversion), a new `master_data.Item`, a new `taxes.ItemTaxRate` copied from the placeholder.
+- **Not touched:** sales posting, purchase posting, `inventory/services.py`, `ledger/projector.py` and the chart, average cost, `orders/services.py` and `orders/models.py`, `taxes/services.py`, `manufacturing/services.py` (`save_recipe` is called), `orders.py`, `outside.py`, the permission core and the role matrix, `prepare_demo.py`.
+
+### Risks
+
+- **A crafted till post can still sell a `JOB-` item**: `sales.pos.parse_cart` accepts any active item by its id, as it does for the deposits fee item today. The catalogue filter hides it; it does not forbid it. The till's button settings page (`sales/pos_buttons.py`) still lists `JOB-` items as candidates (pinning one has no effect, tested).
+- **The order line's item changes after the customer accepted.** Reports grouped by item show the job item, not the placeholder; the quotation's print shows the line's description, so the customer sees the same text.
+- **The sheet is an estimate.** The job's real cost is the materials at their average when the order starts plus the planned labour and overhead (and F4 bills); a sheet priced at old averages can quote below cost. The page shows the computed price; nothing warns when the averages move.
+- **Two conversions of two lines of one order at once** are serialised by the order's row lock; a job code typed by hand in between would make the second take `-2`.
+- **Placeholder VAT only:** if the placeholder had no rate link and the default rate changes between the confirm and the invoice, the job item takes the new default (the same as any item today).
+- The screens have not been seen by Ahmed.
+
+### Tests (`manufacturing/tests_quotes.py`, 26)
+
+- **The printing example:** the sheet's lines (paper at today's average 1,400.0000), materials 8,350.00, labour 1,200.00, overhead 600.00, outside 800.00, **cost 10,950.00, margin 2,737.50, 13,687.50, 1,368.75** on the line and the quotation total; the specifications in order; the override (1,350.00) and back; margins refused (−1, 1001, a word); the price fixed after the confirm.
+- **The conversion:** `JOB-SO-00001-1` named after the line and sold at 1,368.75; the recipe per pack 0.500 and 0.300; the production order of 10 at the default place with **labour 1,200.00 and overhead 600.00**, the customer, the printing stages, the outside note with no amount, nothing left uncovered.
+- **The job's own cost:** 8,350.00 materials, 10,150.00, 1,015.0000 a pack; the invoice 13,687.50 with cost 10,150.00 and profit 3,537.50; the order fully invoiced. **Two jobs of the same description at 10,150.00 and 10,650.00**, invoiced in the other order, each at its own run's cost; cost of goods sold 20,800.00; trial balance and reconciliation.
+- **Rounding:** 7 packs make one batch of 7 issuing exactly 5 reams and 3 kg; the same material twice is one recipe line.
+- **Nothing posts:** stock operations, movements, journal entries and lines, cashbox movements and operations, sales invoices counted after the sheet, the confirm and the conversion.
+- **Rules:** not confirmed, a second conversion, no sheet, no material (no item, recipe or order made); locked after conversion; each cost-line check; an unknown template; a removed quotation line takes its sheet; F1's plain action withheld and refused on a line with a sheet; a line already in production or on an invoice refused and left unchanged.
+- **VAT** at 5%: the job item's link and the invoice's VAT and total equal what the order accepted.
+- **The till:** no `JOB-` code in the catalogue or the quick picks, even pinned; the invoice form still lists it.
+- **Screens:** the whole page by posts (specs, five lines, the price, the figures, the sales order's specifications and link); converting from the page (and a place that does not exist refused); the print shows the specifications and no cost, in both languages; the English page; no banned word («شغلانة» included) in the new files and pages, and no Arabic line starts or ends with a Latin word or a placeholder.
+- **Permissions and entities:** the manager (specs and price, no sheet amount in the HTML, every cost post 403 and nothing changed, the rule refuses too, converts); the cashier (writes specs, cannot convert, 403); the stock keeper (403); a cost viewer without the quotation right (sees, cannot write); quotations off (404, refused); another entity's line 404 on the page and on all five posts, nothing changed, and converted at the branch's own place from the branch.
+- **On PostgreSQL:** `manufacturing orders sales.tests_pos offline_pos ledger inventory config.tests_demo_restart restaurant.tests_kitchen printing` together: **703 tests, all pass** (run at the tests commit). After the last screen fix, `manufacturing.tests_quotes manufacturing.tests_make_to_order orders printing`: 116 tests, all pass.
+- **Existing tests edited: none.**
+
+### Files
+
+- `manufacturing/`: `models.py`, `migrations/0011_quote_cost_sheet.py`, `quotes.py` (new), `quote_views.py` (new), `make_to_order.py`, `urls.py`, `tests_quotes.py` (new).
+- `templates/manufacturing/`: `quote_sheet.html`, `_quote_line.html` (both new).
+- Outside `manufacturing/` and `templates/manufacturing/`: `sales/pos.py` (one filter line), `orders/views.py`, `templates/orders/detail.html`, `templates/orders/_production_cell.html`, `templates/printing/document.html`, `static/hesba/css/print.css`, `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 17, 77.5% to 82.5%).
