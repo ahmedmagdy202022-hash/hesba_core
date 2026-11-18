@@ -242,20 +242,48 @@ def purchase_subject(line):
     return Subject(CheckKind.INCOMING, line.item, invoice.receiving_location, line.quantity, line=line)
 
 
-def _returned(line):
-    """What a purchase line has sent back to the supplier on posted returns."""
+def _return_split(line):
+    """(``to_return``, ``gone``) for a purchase line received into a hold place.
+
+    ``to_return``: its rejected quantity still in the hold place, waiting for a purchase return. ``gone``: what its
+    posted returns took of the quantity no check had rejected (a delivery sent back whole, or partly, without a check).
+    Each return is read against the rejections recorded before it, in the order they were written, so a return made
+    before a rejection is never read as that rejection's."""
 
     from purchases.models import PurchaseReturnLine
 
-    return PurchaseReturnLine.objects.filter(source_line=line, purchase_return__status=POSTED).aggregate(total=Sum("quantity"))["total"] or ZERO
+    events = [(check.created_at, 0, check.rejected_quantity)
+              for check in QualityCheck.objects.filter(kind=CheckKind.INCOMING, purchase_line=line, rejected_quantity__gt=0)]
+    events += [(row.purchase_return.created_at, 1, row.quantity)
+               for row in PurchaseReturnLine.objects.filter(source_line=line, purchase_return__status=POSTED).select_related("purchase_return")]
+    to_return = gone = ZERO
+    for _when, is_return, quantity in sorted(events, key=lambda event: event[:2]):
+        if is_return:
+            used = min(to_return, quantity)
+            to_return -= used
+            gone += quantity - used
+        else:
+            to_return += quantity
+    return to_return, gone
+
+
+def _rejects_there(item, place):
+    """The incoming rejects of an item still in a hold place, over every purchase line received there: goods that wait
+    for a purchase return, never for a check."""
+
+    lines = (QualityCheck.objects.filter(kind=CheckKind.INCOMING, rejected_quantity__gt=0, purchase_line__item=item,
+                                         purchase_line__invoice__receiving_location=place)
+             .order_by().values_list("purchase_line_id", flat=True).distinct())
+    return sum((_return_split(line_id)[0] for line_id in lines), ZERO)
 
 
 def position(subject):
     """{"made", "passed", "rejected", "waiting", "to_return"} for what a subject put on hold.
 
     Passed counts while its release is posted; a finished-goods reject counts while its write-off is posted; an
-    incoming reject is a record (the goods stay in the hold place until the purchase return). ``waiting`` is never more
-    than the hold place really holds of the item (less the incoming rejects still there)."""
+    incoming reject is a record (the goods stay in the hold place until the purchase return). What a purchase line
+    sent back without a check no longer waits. ``waiting`` is never more than the hold place really holds of the item,
+    less the incoming rejects still there (this line's and any other's)."""
 
     from inventory.services import get_item_location_stock_quantity
 
@@ -265,9 +293,9 @@ def position(subject):
             passed += check.passed_quantity
         if subject.kind == CheckKind.INCOMING or (check.reject_operation_id and check.reject_operation.status == POSTED):
             rejected += check.rejected_quantity
-    to_return = max(rejected - _returned(subject.line), ZERO) if subject.kind == CheckKind.INCOMING else ZERO
-    there = get_item_location_stock_quantity(subject.item, subject.place) - to_return
-    waiting = max(min(subject.made - passed - rejected, there), ZERO)
+    to_return, gone = _return_split(subject.line) if subject.kind == CheckKind.INCOMING else (ZERO, ZERO)
+    there = get_item_location_stock_quantity(subject.item, subject.place) - _rejects_there(subject.item, subject.place)
+    waiting = max(min(subject.made - passed - rejected - gone, there), ZERO)
     return {"made": subject.made, "passed": passed, "rejected": rejected, "waiting": waiting, "to_return": to_return}
 
 

@@ -779,6 +779,47 @@ class IncomingTests(QualityPlant):
         create_purchase_return("PR-ALL", TODAY, line.invoice_id, [{"source_line": line, "quantity": D("100")}], "رجعت كلها", self.owner)
         self.assertEqual((self.at(self.place, self.base), quality.waiting_rows(), quality.return_rows()), (D("0"), [], []))
 
+    def test_a_delivery_returned_whole_does_not_wait_again_when_the_same_item_arrives_on_another_invoice(self):
+        first = self.received(number="PI-QA")
+        create_purchase_return("PR-QA", TODAY, first.invoice_id, [{"source_line": first, "quantity": D("100")}], "رجعت كلها", self.owner)
+        second = self.received(number="PI-QB")                                       # the same item, another delivery: 100 in the hold place
+        self.assertEqual(self.at(self.place, self.base), D("100"))
+        self.assertEqual(quality.position(quality.purchase_subject(first))["waiting"], D("0"))
+        self.assertEqual([(row["subject"].line, row["position"]["waiting"]) for row in quality.waiting_rows()], [(second, D("100.000"))])
+        before = self.counts()
+        with self.assertRaisesMessage(ValidationError, "مفيش كمية منتظرة الفحص هنا."):
+            self.incoming(first, passed="100", destination=self.plant)               # the second delivery is not released on the first one's check
+        self.assertEqual((self.counts(), self.at(self.place, self.base)), (before, D("100")))
+        self.incoming(second, passed="100", destination=self.plant)
+        self.assertEqual((self.at(self.place, self.base), quality.waiting_rows()), (D("0"), []))
+
+    def test_a_part_sent_back_before_the_check_is_not_read_as_the_return_of_a_later_rejection(self):
+        line = self.received()
+        create_purchase_return("PR-QE", TODAY, line.invoice_id, [{"source_line": line, "quantity": D("8")}], "شكاير ناقصة", self.owner)
+        where = quality.position(quality.purchase_subject(line))
+        self.assertEqual((where["waiting"], where["to_return"], self.at(self.place, self.base)), (D("92.000"), D("0"), D("92")))
+        with self.assertRaisesMessage(ValidationError, "الكمية المنتظرة 92"):
+            self.incoming(line, passed="95", destination=self.plant)
+        self.incoming(line, rejected="5", results={})
+        where = quality.position(quality.purchase_subject(line))
+        self.assertEqual((where["waiting"], where["to_return"]), (D("87.000"), D("5.000")))   # the eight went before the five were rejected
+        create_purchase_return("PR-QF", TODAY, line.invoice_id, [{"source_line": line, "quantity": D("5")}], "مرفوض في فحص الجودة", self.owner)
+        where = quality.position(quality.purchase_subject(line))
+        self.assertEqual((where["waiting"], where["to_return"], self.at(self.place, self.base)), (D("87.000"), D("0"), D("87")))
+        self.incoming(line, passed="87", destination=self.plant)
+        self.assertEqual((self.at(self.place, self.base), self.at(self.plant, self.base), quality.waiting_rows(), quality.return_rows()),
+                         (D("0"), D("487"), [], []))
+
+    def test_another_deliverys_rejects_in_the_hold_place_are_never_released_on_this_ones_check(self):
+        first = self.received(number="PI-QC")
+        self.incoming(first, rejected="100", results={})                             # all of it stays in the hold place for its return
+        second = self.received(quantity="40", number="PI-QD")
+        self.assertEqual(self.at(self.place, self.base), D("140"))
+        self.assertEqual([(row["subject"].line, row["position"]["waiting"]) for row in quality.waiting_rows()], [(second, D("40.000"))])
+        self.assertEqual([(row["line"], row["quantity"]) for row in quality.return_rows()], [(first, D("100.000"))])
+        with self.assertRaisesMessage(ValidationError, "الكمية المنتظرة 40"):
+            self.incoming(second, passed="41", destination=self.plant)
+
     def test_the_screens_of_an_incoming_check(self):
         line = self.received()
         self.client.force_login(self.owner)
