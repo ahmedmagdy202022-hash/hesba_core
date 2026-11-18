@@ -15,7 +15,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import actuals, make_to_order, orders, outside_views, quality, quality_views, schedule, workcentres
+from . import actuals, byproducts_views, make_to_order, orders, outside_views, quality, quality_views, schedule, workcentres
 from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .schedule_views import schedule_context
@@ -198,7 +198,9 @@ def order_detail(request, pk):
                     lot_expiry = date.fromisoformat(request.POST.get("lot_expiry", "")) if request.POST.get("lot_expiry") else None
                 except ValueError:
                     raise ValidationError(words["lot_date"])
-                orders.finish(order, request.user, lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry)
+                # Manufacturing F9 (HG-139): what really came out of each by-product and co-product, when the form showed them.
+                orders.finish(order, request.user, lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry,
+                              extra_outputs=byproducts_views.typed_quantities(request, order.recipe))
                 messages.success(request, words["finished"])
             elif action == "cancel":
                 orders.cancel(order, request.user, request.POST.get("reason", ""), lang)
@@ -254,6 +256,7 @@ def order_detail(request, pk):
     recorded = {log.stage_key: log.minutes for log in order.stage_logs.all()}
     for row in routing:
         row["recorded"] = recorded.get(row["key"])
+    cost = orders.cost_card(order)
     return render(request, "manufacturing/order.html", _ctx(
         request, order=order, status_label=choice_label(order, "status", lang), stages=stage_rows, logs=logs, error=error,
         material_rows=material_rows, on_floor=on_floor, routing=routing,
@@ -264,7 +267,7 @@ def order_detail(request, pk):
         extra_items=_stock_items().exclude(pk=order.recipe.product_id) if on_floor else [],
         employees=_employees() if can_cost and order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) else [],
         final_stage=order.stage_index == len(order.stages) - 1,
-        cost=orders.cost_card(order), quality=orders.quality(order), plan=plan,
+        cost=cost, quality=orders.quality(order), plan=plan, **byproducts_views.order_outputs_context(request, order, cost),
         sale=order.sales_order_line.order if order.sales_order_line_id else None, can_open_sale=_can_open_sale(request.user),
         short=bool(plan and any(row["short"] for row in plan["rows"])),
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
