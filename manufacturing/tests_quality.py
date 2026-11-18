@@ -820,6 +820,19 @@ class IncomingTests(QualityPlant):
         with self.assertRaisesMessage(ValidationError, "الكمية المنتظرة 40"):
             self.incoming(second, passed="41", destination=self.plant)
 
+    def test_a_cancelled_invoices_rejects_do_not_hold_back_the_next_delivery(self):
+        from purchases.services import cancel_posted_purchase_invoice
+
+        first = self.received(number="PI-QG")
+        self.incoming(first, rejected="100", results={})
+        cancel_posted_purchase_invoice(first.invoice_id, self.owner, "اتسجلت بالغلط")   # the receipt is reversed; the check stays as a record
+        self.assertEqual((self.at(self.place, self.base), QualityCheck.objects.filter(purchase_line=first).count()), (D("0"), 1))
+        self.assertEqual((quality.waiting_rows(), quality.return_rows()), ([], []))
+        second = self.received(number="PI-QH")
+        self.assertEqual([(row["subject"].line, row["position"]["waiting"]) for row in quality.waiting_rows()], [(second, D("100.000"))])
+        self.incoming(second, passed="100", destination=self.plant)
+        self.assertEqual((self.at(self.place, self.base), self.at(self.plant, self.base)), (D("0"), D("500")))
+
     def test_the_screens_of_an_incoming_check(self):
         line = self.received()
         self.client.force_login(self.owner)

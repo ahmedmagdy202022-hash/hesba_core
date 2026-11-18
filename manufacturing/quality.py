@@ -269,10 +269,11 @@ def _return_split(line):
 
 def _rejects_there(item, place):
     """The incoming rejects of an item still in a hold place, over every purchase line received there: goods that wait
-    for a purchase return, never for a check."""
+    for a purchase return, never for a check. Only posted invoices count: a cancelled invoice's receipt was reversed,
+    so its rejected goods are no longer there (its checks stay as a record)."""
 
     lines = (QualityCheck.objects.filter(kind=CheckKind.INCOMING, rejected_quantity__gt=0, purchase_line__item=item,
-                                         purchase_line__invoice__receiving_location=place)
+                                         purchase_line__invoice__receiving_location=place, purchase_line__invoice__status=POSTED)
              .order_by().values_list("purchase_line_id", flat=True).distinct())
     return sum((_return_split(line_id)[0] for line_id in lines), ZERO)
 
