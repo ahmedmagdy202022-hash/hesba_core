@@ -145,7 +145,10 @@ def _overview(request, lang):
     can_cost = user_has_permission(request.user, COST)
     open_orders = list(entity_scope.scope(ProductionOrder.objects, "location__entity")
                        .filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
-                       .select_related("recipe__product", "customer", "location").prefetch_related("recipe__lines__component").order_by("due_date", "pk"))
+                       .select_related("recipe__product", "customer", "location", "sales_order_line__order").prefetch_related("recipe__lines__component").order_by("due_date", "pk"))
+    from . import schedule
+
+    late = schedule.late_orders(open_orders, today)  # F6b (HG-134): past its due date, or its last planned end is after it
     recipes = list(Recipe.objects.select_related("product").prefetch_related("lines__component").order_by("-active", "code"))
     item_ids = {line.component_id for recipe in recipes for line in recipe.lines.all()}
     item_ids |= {line.component_id for order in open_orders for line in order.recipe.lines.all()}
@@ -173,7 +176,7 @@ def _overview(request, lang):
         order.progress = int(min(order.stage_index, total) * 100 / total)
         order.stage_label = (order.stages[order.stage_index][2 if lang == "en" else 1] if order.status == OrderStatus.IN_PROGRESS and order.stage_index < len(order.stages)
                              else "")
-        order.late = bool(order.due_date and order.due_date < today)
+        order.late = order.pk in late
         batches = (order.quantity / order.recipe.output_quantity) if order.recipe.output_quantity else Decimal("0")
         # Every open order together, per material and warehouse: two orders
         # that each fit can still be short side by side.

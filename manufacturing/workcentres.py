@@ -11,7 +11,8 @@ Rules, stated once:
   two). A recipe without a step keeps the factory's stage list exactly as ``stages.py`` gives it (three items each).
   An order keeps the list it was opened with; editing the routing later never touches an open order.
 * **Load**: the planned minutes of the stages still ahead on open orders, per work centre and day, against
-  ``hours_per_day`` x 60. The day is the order's due date (F6b will bring real dates); an overdue order is counted today;
+  ``hours_per_day`` x 60. The day is the stage's planned day once F6b has planned it (``schedule``), else the order's due
+  date; an overdue order is counted today;
   an order due after the window or with no date is counted apart and never against a day. A holiday
   (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity.
 * **Cost**: the minutes typed on a finished stage, times the stage's work centre's rate per hour, are a *suggested*
@@ -354,15 +355,26 @@ def load(today, days=DAYS):
     """Per active work centre of the entity: ``days`` days from ``today`` with the planned minutes, the capacity in
     minutes and whether it is over, plus the minutes with no date and those due after the window."""
 
-    from attendance.models import Holiday
+    from . import schedule
 
     last = today + timedelta(days=days - 1)
-    holidays = set(Holiday.objects.filter(date__range=(today, last)).values_list("date", flat=True))
+    holidays = schedule.holidays()
     centres = list(scoped().filter(active=True).order_by("code"))
     per_day, unscheduled, later = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
-    orders = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN)
+    orders = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN).prefetch_related("steps__work_centre")
     for order in orders:
-        for stage in order.stages[order.stage_index:]:
+        # Manufacturing F6b (HG-134): a stage with planned dates loads the days and the centre it is planned on; the rest keep the due-date rule.
+        planned = {step.index: step for step in order.steps.all() if step.planned_start and step.planned_end and step.finished_at is None and step.work_centre_id}
+        for index, stage in enumerate(order.stages):
+            if index < order.stage_index:
+                continue
+            if index in planned:
+                for day, minutes in schedule.day_minutes(planned[index], holidays):
+                    if day > last:
+                        later[planned[index].work_centre_id] += minutes
+                    else:
+                        per_day[(planned[index].work_centre_id, max(day, today))] += minutes
+                continue
             centre_id, minutes = stage_plan(stage)
             if not centre_id:
                 continue
