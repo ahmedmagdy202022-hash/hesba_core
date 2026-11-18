@@ -278,6 +278,8 @@ class ScreenTests(RoutedPlant):
         page = self.client.get(url)
         self.assertContains(page, 'data-suggested-line="mixing"')
         self.assertContains(page, "data-confirm-cost", count=2)
+        # Each row has one cell per heading: the oven's 95 minutes, then its 190.00 (95 x 120.00 / 60).
+        self.assertContains(page, '<td dir="ltr" data-suggested-minutes>95</td><td dir="ltr" data-suggested-amount>190.00</td>', html=False)
         log = order.stage_logs.get(stage_key="mixing")
         self.client.post(url, {"action": "confirm_cost", "log": log.pk, "lang": "ar"})
         self.client.post(url, {"action": "confirm_cost", "log": log.pk, "lang": "ar"})      # a second click
