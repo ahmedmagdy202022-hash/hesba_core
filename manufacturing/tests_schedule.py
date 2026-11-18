@@ -346,6 +346,19 @@ class LoadTests(SchedulePlant):
         days = {r["date"]: r["minutes"] for b in workcentres.load(TODAY) if b["centre"].pk == self.oven.pk for r in b["days"]}
         self.assertEqual((days[DAY1], days[DAY2], days[DAY3]), (D("480"), D("480"), D("240")))
 
+    def test_the_days_of_a_long_stage_sum_to_its_minutes_when_the_centres_hours_change(self):
+        self.bake(1200, due=None)
+        schedule.arrange(DAY1, self.owner)                                          # three working days at 480 a day
+        oven_days = lambda: {r["date"]: r["minutes"] for b in workcentres.load(TODAY) if b["centre"].pk == self.oven.pk for r in b["days"]}  # noqa: E731
+        WorkCentre.objects.filter(pk=self.oven.pk).update(hours_per_day=D("16"))    # longer days, the same planned dates
+        days = oven_days()
+        self.assertEqual((days[DAY1], days[DAY2], days[DAY3]), (D("960"), D("240"), D("0")))   # 1,200 in all, not 960 + 960
+        WorkCentre.objects.filter(pk=self.oven.pk).update(hours_per_day=D("4"))     # shorter days: what does not fit lands on the last, over capacity
+        days = oven_days()
+        self.assertEqual((days[DAY1], days[DAY2], days[DAY3]), (D("240"), D("240"), D("720")))
+        row = next(r for b in workcentres.load(TODAY) if b["centre"].pk == self.oven.pk for r in b["days"] if r["date"] == DAY3)
+        self.assertTrue(row["over"])
+
     def test_an_order_not_yet_planned_keeps_the_due_date_rule(self):
         self.bake(300, DAY2)
         row = next(r for b in workcentres.load(TODAY) if b["centre"].pk == self.oven.pk for r in b["days"] if r["date"] == DAY2)

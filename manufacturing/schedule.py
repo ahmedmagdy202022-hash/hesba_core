@@ -328,7 +328,7 @@ def set_rank(order, raw, user, lang="ar"):
 
 def _step_days(step, closed):
     """[(day, minutes)] a planned step loads on its centre: all on one day when it fits one; a longer one fills each working day
-    with a whole day's capacity and the remainder on its last."""
+    up to the centre's capacity as it is now and puts what is left on its last, so the days always sum to the planned minutes."""
 
     start, end = day_of(step.planned_start), end_day(step)
     minutes = step.planned_minutes or ZERO
@@ -342,8 +342,14 @@ def _step_days(step, closed):
     if len(days) == 1:
         return [(start, minutes)]
     capacity = (step.work_centre.hours_per_day * 60).quantize(Decimal("0.01")) if step.work_centre_id else DEFAULT_CAPACITY
-    rows = [(d, capacity) for d in days[:-1]]
-    rows.append((days[-1], max(minutes - capacity * (len(days) - 1), ZERO)))
+    # The days always sum to the planned minutes, whatever the centre's hours are now (a step moved to a centre with longer
+    # days, or a centre whose hours were edited): each day takes what is left up to its capacity, the last takes the rest.
+    rows, left = [], minutes
+    for d in days[:-1]:
+        take = min(capacity, left)
+        rows.append((d, take))
+        left -= take
+    rows.append((days[-1], left))
     return rows
 
 
