@@ -5904,3 +5904,166 @@ The product now enters stock at what the order really used (issues + extras − 
 - `manufacturing/`: `models.py`, `migrations/0011_quote_cost_sheet.py`, `quotes.py` (new), `quote_views.py` (new), `make_to_order.py`, `orders.py` (the smallest batch count), `urls.py`, `tests_quotes.py` (new).
 - `templates/manufacturing/`: `quote_sheet.html`, `_quote_line.html` (both new).
 - Outside `manufacturing/` and `templates/manufacturing/`: `sales/pos.py` (one filter line), `orders/views.py`, `templates/orders/detail.html`, `templates/orders/_production_cell.html`, `templates/printing/document.html`, `static/hesba/css/print.css`, `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 17, 77.5% to 82.5%).
+
+## HG-139 — Manufacturing F9: by-products and co-products from one run (`manufacturing/0012_byproducts`); the run's joint cost is split between several outputs, each entering stock through the engine's own adjustment, and the ledger projector books each extra output like the product; no inventory-engine, average-cost, sales-posting, purchase-posting or permission change
+
+- **Status:** implemented on `claude/manufacturing-f9-byproducts` (cut from the F7 branch at `8ac7f3f`, so F12's actuals, F5's quality, F4's outside processing and F7's quotations are already there). **Committed only: not pushed, no PR, not merged; it waits for the Maestro's review and Ahmed's approval.** **T3**: it splits the stock cost of a run between several outputs and changes how the general-ledger projector books a run. Roadmap: `docs/MARKET_PARITY_ROADMAP.md`, «7. تصنيعي», item 19 «منتجات ثانوية»: ناقص → موجود, 82.5% → 87.5% on this branch.
+- **Why:** a mill gets bran with its flour, a dairy gets butter with its cheese, a carpenter sells sawdust and offcuts by weight. A run had one output: the product carried the whole cost, and whatever else came out could only be typed in as a stock adjustment (booked as a stock-count gain, 4202, at a cost someone guessed), so the product was overcosted and the gain was income the factory never earned.
+- **Why no existing table serves:** `ProductionRun.output_operation` is one OneToOne operation, and a `Recipe` has one `product`. A run's extra outputs need their own rows, each with the cost and the share of labour and overhead it took.
+
+### Where today's code disagreed with the plan (the code wins)
+
+1. **The projector already books the product's entry by F12's rule, not HG-036's.** The plan (written before F12 was built) says the 5102 credit is «split by each output's conversion share instead of being taken from the main output alone (today's `min(conversion, remainder)` …)». Today's product entry is F12's (HG-132): work in progress gives back exactly what the run's materials put into it, and the rest of the product's value goes to 5102. So the change is smaller than the plan's: the product's entry gives back **what the extra outputs left** of the run's materials, and each extra output's own entry credits **its** conversion share to 5102 and the rest of its value to work in progress. HG-036's `min(conversion, remainder)` branch is still there, untouched, for a run with no consumption row (none exist).
+2. **The plan's journal sentence is the step before the residue rule.** It reads «credit 5102 1,000.00; credit work in progress 11,999.97 — leaving 0.03 in work in progress for F12's residue rule (… so work in progress must end at 0.00 and 5102 at −999.97)». As built, the entries already are the end state: work in progress is credited 12,000.00 in all (600.00 on the bran's entry, 11,400.00 on the flour's) and 5102 **999.97**, on the flour's entry.
+3. **Finished goods: items a recipe lists and items a run made.** The plan says `_Accounts.inventory` counts `RecipeOutput` items. Built: `RecipeOutput` items **and `RunOutput` items**, so taking a by-product off a recipe later does not send the bran the runs already made back to raw materials on the next rebuild (tested).
+4. **`RunOutput` also keeps `kind`** (the output's kind on the day of the run), beside the plan's run, item, operation, quantity, cost and conversion share, so a run's page still says what each output was after the recipe changes.
+5. **A lot per extra output cannot be written without a `batches` migration.** `batches.Batch.production_run` is a OneToOne (HG-131): one lot per run, the product's. So extra outputs get no lot here (see «Not built»).
+6. **F5 is built, and the plan's F9 does not say what an extra output does on a recipe that needs release.** Decided here (owner question B below): a quality check decides on the recipe's product only (`quality.Subject` is one item per order), so a **by-product goes straight to the order's own location** and is never held, and a **co-product is refused on a recipe that needs release** (and release is refused on a recipe that has a co-product), in both directions, with a message that says why.
+7. **The quantity that really came out can be typed.** The plan takes each extra output at the recipe's quantity × the batches. Bran never weighs the same twice, so the plain-run form and the order's finish show each extra output with that quantity filled in, and the person may change it (0 = none came out). `produce(extra_outputs=…)` and `orders.finish(extra_outputs=…)` carry it; without it the figure is the recipe's, as the plan says.
+8. **The plan's milling example is «780 kg flour, 200 kg bran, 20 kg lost».** The test makes it an order of 800 kg with 20 kg defective at a stage, so the 20 kg are the run's scrap (`scrap_quantity` 20) beside the bran: trap 6 is in the example itself. The figures are the plan's.
+
+### Schema (`manufacturing/0012_byproducts`, depends on `0011_quote_cost_sheet`, `inventory/0007`, `master_data/0003`; generated, no data step)
+
+- `RecipeOutput(recipe → Recipe CASCADE, item → master_data.Item PROTECT, quantity 14,3 per batch, kind by_product/co_product, value_per_unit 14,4 NULL, share_percent 5,2 NULL)`. Unique per (recipe, item); quantity > 0; a by-product has a value above zero and no percent; a co-product has no value and a percent either empty or above 0 and below 100 (check constraints).
+- `RunOutput(run → ProductionRun CASCADE, item → Item PROTECT, kind, operation → inventory.StockOperation OneToOne PROTECT related_name="run_output", quantity 14,3, cost 14,2, conversion_share 14,2 default 0)`. Unique per (run, item); quantity > 0, cost and conversion share not negative.
+- `makemigrations --check --dry-run`: clean.
+
+### Rules (`manufacturing/byproducts.py`)
+
+- **Joint cost** = the run's materials (for an order: issues + extras − returns, F12) + its conversion (labour, overhead, outside fees).
+- **By-product:** cost = `money_round(quantity × value_per_unit)`; it enters stock at `value_per_unit` (four decimals); it carries **no** conversion share. The by-products' total comes off the joint cost.
+- **Co-products** share what is left: each takes `money_round(left × its share)` and `money_round(conversion × its share)` of the labour and overhead, and enters stock at `cost_round(cost ÷ quantity)`. The share is the co-product's percent; when **no** co-product of the recipe has a percent, it is quantity × `Item.default_sale_price` over the same sum for the product and every co-product, on the day of the run. A recipe that mixes (some with a percent, some without) is refused when it is saved, and so is a total of 100% or more (the product must keep a share).
+- **The product** takes the rest: `main_cost = left − the co-products' costs`, and enters stock at `cost_round(main_cost ÷ good units)`, in the same `adjust_stock` call as before.
+- **Refused at the run, with nothing left behind** (the whole finish is one transaction): by-products worth the joint cost or more («قيمة المنتجات الثانوية … فمفيش تكلفة تفضل للمنتج الأساسي»); a split by sale value with an item that has no sale price; a typed quantity that is not a number or is negative.
+- **Engine API used, exactly:** `inventory.services.adjust_stock(f"{run.number}-OUT{index:02d}", run_date, item, run.location, StockAdjustmentDirection.IN, quantity, reason, user, unit_cost=…, stand_in=stand_in)` for each extra output (`-OUT02`, `-OUT03`, …; the product keeps `-OUT`), linked by a `RunOutput` row. `stand_in` is passed on as `produce` got it.
+- **Scrap with a sale value is a by-product, never also scrap (trap 6):** a run's scrap is counted in units of the product that never entered stock and has no value; a by-product is another stock item with a value. `RecipeOutput.item` can be neither the recipe's product nor one of its components (refused when the outputs are saved, and again when the recipe is edited: `services.save_recipe` asks `byproducts.check_recipe`), so the same units are never both and each by-product's value comes off once. The recipe page says so.
+- **Cancelling a run (`services.cancel_run`):** the run row is locked, then the product's operation, then the extra outputs' operations, then their items in pk order; `check_cancellable` asks F11's «nothing left since» question (`_left_since`, now with an optional operation) about the product **and about each extra output**, and refuses naming the item that left; then the engine's `cancel_stock_operation` reverses the product, each extra output, and only then the materials. The run page asks `check_cancellable` first, so a cancel that cannot happen is not sent for a second person's approval (FB-27), exactly as before.
+- **The stock screen** («التحويلات والتسويات») leaves an extra output's operation to its run: `guards._owners` now also finds `RunOutput` operations (HG-102's rule, three lines).
+- **Saving the recipe's extra outputs** (`save_outputs`): the whole list is replaced; refused while an order issued from the recipe is on the floor (the rule `save_recipe` has, HG-036); audited (`save_recipe_outputs`, `produce_outputs`).
+
+### The projector change (the protected part), exactly
+
+`ledger/projector.py`, four places and nothing else in the file:
+
+1. `_Accounts.inventory`, after the set of recipe products is read:
+
+```python
+from manufacturing.models import RecipeOutput, RunOutput
+
+self.products |= set(RecipeOutput.objects.values_list("item_id", flat=True)) | set(RunOutput.objects.values_list("item_id", flat=True))
+```
+
+2. `Projector.__init__`: `self._extra_outputs = None`.
+
+3. `_place_stock_operation`, inside F12's branch for a run's product, one line after `if net is not None:`:
+
+```python
+net -= self.extra_outputs()[1].get(op.production_output.pk, ZERO)
+```
+
+and, right after that branch and before HG-036's (which is unchanged):
+
+```python
+if op.pk in self.extra_outputs()[0]:
+    wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+    absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+    conversion = min(self.extra_outputs()[0][op.pk], abs(remainder))
+    conversion = conversion if remainder > 0 else -conversion
+    g.add(absorbed, conversion, g.entity_id)
+    g.add(wip, remainder - conversion, g.entity_id)
+    return
+```
+
+4. A new method `extra_outputs()`: one read per rebuild of every original movement (`reversal_of IS NULL`) of a `RunOutput` operation, giving `({operation pk: min(conversion share, its journal value)}, {run pk: the sum of (journal value − that share)})`, the journal value being `money_round(quantity × unit cost)` as everywhere in the projector.
+
+- **Line by line:** (1) an item is finished goods when it is a recipe's product (as before), a recipe's extra output, or something a run made as an extra output. (3, first part) the product's entry used to give work in progress back the whole of the run's materials; it now gives back what the extra outputs did not already take. For a run with no `RunOutput` row the dictionary has no entry, `ZERO` is subtracted, and every figure is what it was. (3, second part) an extra output's entry: its share of the run's labour and overhead (0 for a by-product, never more than its own value) is credited to 5102, the rest of its value to work in progress; the fallbacks are HG-036's (work in progress → 5101, absorbed → work in progress, on a chart without them); a reversal on another day has the opposite sign and mirrors it; a reversal on the same day nets to nothing in one group and never reaches here. Before this branch an extra output's operation would have fallen through to «stock-count gain», so the branch is what makes it a production entry at all.
+- **Why work in progress still ends at nothing:** the extra outputs credit work in progress Σ(value − share); the product's entry credits it (the run's materials − that sum); together, the run's materials. Everything else of the outputs' value (the conversion, and the piastres of every four-decimal unit cost) is 5102: the co-products' shares on their own entries, the product's share and all the piastres on the product's entry (F12's residue rule, question 10).
+- **Characterization first:** `manufacturing/tests_run_journal.py` (11 tests) was written and committed (`40533c1`) **before** any line of the projector, `produce` or `cancel_run` changed. It pins, per account code and to the piastre, the journal lines of every stock operation a run owns and the control balances each scenario ends with: a plain run and its cancellation on a later day; an order with labour and overhead, an extra issue, a return, an actual overhead line and a defect (F12); an order whose unit cost leaves three piastres (13,000.03; 5102 −1,000.03); an order finished into the quality hold place (F5); an order with an outside fee (F4); each on the manufacturing chart and on a restaurant bakery's chart with the module on; and a restaurant kitchen preparation on the restaurant's own chart (a kitchen has no other). **It passed on `40533c1` and passes, unedited, after the projector commit (`229932a`) and at the head of the branch.** Its expected figures were recorded from the running code and then checked by hand against the fixtures.
+- **Effect on history:** none. No database has a `RecipeOutput` or `RunOutput` row before this migration, so the next rebuild writes the same journal for every existing run, and no item changes account.
+- **Cost of the change per rebuild:** two reads for the classification, one for the extra outputs; nothing per operation.
+
+### Other protected and shared lines touched (all named)
+
+- `manufacturing/services.py`: `produce` gained the keyword `extra_outputs=None` and three statements: `shared = byproducts.split(…)`; `product_cost = total + conversion_cost if shared is None else shared.main_cost` (the product's `adjust_stock` call now divides `product_cost`, which is the old expression whenever the recipe has no extra output); and `byproducts.post(…)` after the consumption rows. Every existing keyword and default is as it was; the restaurant kitchen calls it unchanged. `save_recipe`: one call to `byproducts.check_recipe` when an existing recipe is edited. `_left_since`, `check_cancellable`, `cancel_run`: as described above.
+- `manufacturing/orders.py`: `finish(extra_outputs=None)` passes it on; `cost_card` adds `extras` and makes `per_unit` the product's own cost **only** when the order's recipe (or its run) has extra outputs.
+- `manufacturing/quality.py`: `save_recipe_quality` asks `byproducts.check_release` (one call). `manufacturing/guards.py`: the three lines above. `manufacturing/variance.py`: the standard unit cost leaves the extra outputs what they took (`− Σ RunOutput.cost`; 0 for every other order).
+- **Not touched:** `inventory/services.py` (the engine, `adjust_stock`, `cancel_stock_operation`, average cost), sales and purchase posting, customer and supplier ledgers, cashboxes, `reports/` calculations, closing, the chart (`ledger/chart.py`), the permission core and the role matrix (no new code), `restaurant/`, `lots.py`, `actuals.py`, `outside.py`, `mrp.py`, `prepare_demo.py`, `settings_core/`. **No other protected change was needed or made.**
+
+### The money, in plain words (the plan's numbers, reproduced to the piastre)
+
+- **The mill.** 1,000 kg of wheat at 12.00 is 12,000.00; labour is 1,000.00; the joint cost is **13,000.00**. Out come 780 kg of flour, 200 kg of bran and 20 kg lost. The bran is worth 3.00 a kilo by the recipe: **600.00**. That comes off, so the flour costs (13,000.00 − 600.00) ÷ 780 = **15.8974** a kilo and is worth 780 × 15.8974 = **12,399.97** in stock; the bran sits in stock at 600.00 and that is what its sale will cost. Without this change the flour would have cost 16.6667 a kilo.
+- **The journal at the finish (manufacturing chart).** The bran's entry: debit finished goods 600.00, credit work in progress 600.00. The flour's entry: debit finished goods 12,399.97, credit work in progress 11,400.00, credit 5102 999.97. Work in progress received 12,000.00 at the start and gave back 600.00 + 11,400.00: **0.00**. **Where the 0.03 ends:** the outputs are worth 12,999.97 against a joint cost of 13,000.00, so absorbed production cost ends at **−999.97**, three piastres short of the 1,000.00 of labour, on the flour's entry (F12's residue rule). On a restaurant bakery's chart the same entries read stock (1105) against cost of sales (5101).
+- **The dairy.** 1,000 litres of milk at 4.00 is 4,000.00; labour 600.00 and overhead 400.00; joint cost **5,000.00**. Cheese (the product, 100 kg) and butter (a co-product, 50 kg at 40%): butter **2,000.00** (40.0000 a kilo), cheese **3,000.00** (30.0000). The butter's entry: debit finished goods 2,000.00, credit 5102 400.00, credit work in progress 1,600.00. The cheese's: debit 3,000.00, credit work in progress 2,400.00, credit 5102 600.00.
+- **By sale value** (no percent): cheese 100 kg × 80.00 = 8,000.00 and butter 50 kg × 160.00 = 8,000.00, so half each: 2,500.00 and 2,500.00 (25.0000 and 50.0000 a kilo).
+- **Both:** whey 400 litres at 0.50 = 200.00 comes off first; of the 4,800.00 left, butter 40% = 1,920.00 (38.4000) and cheese 2,880.00 (28.8000).
+- **A co-product's piastres:** butter at 33.33% over 900 units costs 1,666.50, enters at 1.8517 and is worth 1,666.53; work in progress still ends at 0.00 and 5102 at −1,000.03, the three piastres on the cheese's entry.
+- **Balance sheet:** bran is under finished goods (110503), not raw materials (110501): 12,999.97 against 18,850.00 in the test.
+- **Cancelling** takes the flour and the bran out at the costs they came in at and brings the wheat back at the cost it left at; the entries of the run's day are mirrored on the day of the cancellation. Once 10 kg of bran are sold the cancel is refused and nothing moves.
+
+### Permissions (existing codes only; no new permission, no role matrix change)
+
+- Seeing the pages: `inventory.view_stock` (as before). The recipe's extra outputs are **saved** only by someone who holds **both** `master_data.manage_items` (it is part of the recipe) **and** `inventory.view_cost` (a value or a percent sets a stock cost): the service raises `PermissionDenied`, the page answers 403, and the form is not shown. A recipe writer without the cost permission sees the items, kinds and quantities and a line saying who may change them.
+- A plain run and an order's finish need `inventory.adjust_stock` and `inventory.view_cost`, as before; typing what really came out adds nothing to that. Cancelling a run: `inventory.adjust_stock`, held for approval where the owner asked for it, as before.
+- **Money is shown only with `inventory.view_cost`:** the value per unit, the percent, each output's cost, unit cost, value in stock and share of labour and overhead, the split tiles and the cost card's tile are put in the context only then. Tested with a stock keeper (`view_stock` + `adjust_stock`) on the recipe, order and run pages in both languages: the outputs and their quantities are there; none of 15.8974, 12,399.97, 600.00, 14.25, 12,000.00, 13,000.00 is in the HTML.
+
+### Screens (Arabic and English; existing `op-*`/`mfg-*` classes and `--hs-*` tokens; no new CSS, no new colour)
+
+- **Recipe page:** a section «منتجات ثانوية ومشتركة» (`templates/manufacturing/_outputs_recipe.html`): what it is in two sentences; the recipe's extra outputs with the quantity per batch and the quantity the plan above would yield; for the cost permission the value per unit, the percent (or «بقيمة البيع»), the cost and the unit cost, and tiles for the product's own unit cost, the by-products' value taken off and the product's share; two notes (scrap that is sold is recorded here and not also as defective; an item recorded here shows under finished goods, trap 7); a note when the recipe needs release; the form (six rows, two shown). The plan's own «تكلفة الوحدة» tile shows the product's own cost when the recipe has extra outputs. The plain-run form asks «الكميات اللي طلعت فعلًا».
+- **Order page:** before the finish, «المخرجات المتوقعة من الأمر» (the product and each extra output as the order stands) and the same quantity inputs on the finish form; after it, «مخرجات الأمر». The cost card gets a tile «منتجات ثانوية ومشتركة (مخصومة من تكلفة المنتج)» and its «تكلفة القطعة» is the product's own.
+- **Run page:** «مخرجات التشغيلة»: the product and each extra output with its quantity, unit cost, value in stock, share of labour and overhead, and whether it is in stock or was reversed. A run with no extra output shows none of this: its page is as it was.
+- **Manufacturing home:** «خامات الوحدة» of a recipe with extra outputs is the product's own (less the by-products' value, the product's share beside its co-products); one more read for the whole table, whatever the number of recipes (the board's query-count test passes unchanged).
+- **Seen in headless Chromium at 390 px and 1280 px** (the recipe page in Arabic and English, an order waiting for its finish, a finished order, a planned order, a posted run, a cancelled run, a dairy run in English, the home, and the recipe, order and run pages as a stock keeper): no horizontal overflow on any of them; the tables become the existing label-and-value cards on the phone. **Not yet seen by Ahmed.**
+- Words: no banned word («ورشة», «الأسطى», «بتاع», «دوس», «لينك», «شغلانة») in the new files or on the pages, and no Arabic line starts or ends with a Latin word or a placeholder (tested on the words and on the rendered pages, as `tests_outside` does).
+
+### Owner questions (the default built in bold)
+
+- **Question 18 — by-products and co-products: fixed values, fixed percentages, or relative sales value?** **By-products at a fixed value per unit set on the recipe; co-products by their percent, or by sale value when no co-product of the recipe has one.** A by-product's value is the owner's own figure (what it sells for, less what selling it costs); it is not read from the item's sale price, and changing it changes later runs only.
+- **A. May a by-product be worth nothing?** **No: a value above zero is required.** Something with no value is scrap; putting it in stock at 0.00 would pull its average cost down.
+- **B. A recipe that needs a quality release (F5) and has extra outputs?** **A by-product goes straight to the order's location, unheld; a co-product is refused on such a recipe (and release is refused on a recipe with a co-product).** The alternative is a check that covers several items, which F5 does not have.
+- **C. May the person type what really came out of each extra output?** **Yes, on the plain-run form and at the order's finish; left alone it is the recipe's quantity × the batches; 0 means none came out.**
+- **D. The split by sale value: at which price?** **The item's default sale price on the day of the run** (price lists and promotions are not read). A run is refused while an item in the split has no sale price.
+- **E. Who may set a by-product's value or a co-product's percent?** **Someone with both the items permission and the cost permission.**
+
+### Not built (and why)
+
+- **A lot for an extra output**, and so its place in the trace from an ingredient lot (F3): `batches.Batch.production_run` is OneToOne; it needs a `batches` migration and a change to the trace. With lots on, the run's product still gets its lot, as before (tested).
+- **A quality check that holds and releases several outputs** (question B).
+- **Extra outputs in the MRP**: bran a run will yield is not counted as supply, and a by-product is never suggested for production.
+- **A standard for the extra outputs in the variance report**: the report's standard unit cost leaves them exactly what they really took, so their own yield shows no variance of its own.
+- **`reports/insights.py` and `reports/activity_panel.py`** (report calculations, protected) still read a run's cost as materials + conversion over the product's units: for a recipe with extra outputs that is the joint cost per unit of the product, not the product's own cost. The manufacturing screens show the product's own.
+- **Net realisable value** (a by-product valued at its sale price less its selling costs, read from sales) and **a by-product processed further** before it is sold: the value is the fixed figure on the recipe.
+- **Demo data:** no by-product in the food demo (the plan's question 22 default); `prepare_demo.py` is not touched.
+- **The ledger's freshness fingerprint is not widened:** adding an item as a recipe's extra output moves that item's existing stock to finished goods at the next rebuild, which the next posted movement of any kind triggers, exactly as a new recipe's product does today (trap 7).
+
+### Risks
+
+1. **A by-product's value is an estimate the owner types.** Set too high, the product is undercosted and the by-product sits in stock above what it sells for (its sale then shows a loss); set too low, the reverse. Nothing compares it with what the by-product really sold for.
+2. **A split by sale value moves when prices move**: two identical runs a month apart can cost differently. A percent does not.
+3. **Once any of an extra output has left its place, the whole run cannot be cancelled** (F11's rule, by design): a wrong run is then corrected with ordinary adjustments.
+4. **Nothing checks a mass balance**: 780 kg + 200 kg from 1,000 kg is the owner's own arithmetic; outputs are in each item's own unit, so the system cannot add them up.
+5. **Rounding (trap 10):** an extra output's quantity is the recipe's per batch × the batches, to three decimals; typing what really came out is the correction. A co-product's stock value can differ by piastres from the cost it was given; they end in 5102 on the product's entry.
+6. **`RunOutput.cost` is the cost the output was given** (to the piastre); its stock value is quantity × its four-decimal unit cost. The pages show the stock value; the two differ by piastres for a co-product.
+7. **The cost card's «تكلفة الخامات للقطعة»** is still the order's materials over its good units, before the extra outputs; the «تكلفة القطعة» beside it is the product's own.
+8. **An item listed as an extra output is finished goods for all of its stock**, bought or made, and stays so once a run has made it (trap 7).
+9. **Reports outside manufacturing** read the joint cost (above).
+10. **Migration numbering:** another branch adding a `manufacturing` migration and merging first makes `0012_byproducts` renumber.
+11. The screens have not been seen by Ahmed.
+
+### Tests (`manufacturing/tests_byproducts.py`, 60; `manufacturing/tests_run_journal.py`, 11)
+
+- **The milling example** on both charts: the run (12,000.00, 1,000.00, 780 good, 20 scrap); bran 200 kg at 3.0000 = 600.00 with no conversion share; flour **15.8974**, **12,399.97**; the bran's and the flour's journal per account; work in progress 0.00, 5102 −999.97, finished goods 12,999.97; trial balance and reconciliation. A plain run with no labour (14.2500, 11,400.00). Scrap carries no value and the bran comes off once. A typed 180 kg (540.00; 15.9744; 12,460.03; 5102 −1,000.03) and a typed 0 (an ordinary run: 16.6667, 13,000.03). What cannot be split is refused with nothing left behind.
+- **The dairy** on both charts: 60% / 40% (3,000.00 and 2,000.00, conversion 600.00 and 400.00, both entries per account); by sale value (2,500.00 each); a missing sale price refused; a by-product and a co-product together; a co-product's piastres ending in 5102 on the product's entry.
+- **Balance sheet:** bran's lines in 110503, the balance sheet's rows, the classification kept after the output is taken off the recipe; an item found in stock moves to finished goods once a recipe lists it.
+- **Cancelling** on both charts: flour, bran, then wheat, in that order, stock back exactly, each entry mirrored on the day of the cancellation; an order with labour cancelled the same day nets to nothing; refused after a sale of bran (Arabic and English, naming the bran; nothing moved; the books as the sale left them) and after a sale of flour; the stock screen's guard.
+- **Unchanged** on both charts: a recipe with no extra output beside a mill that has one (9.5000 and 15.2632, the same entries, no `RunOutput`, no `extras` on its cost card); the quality hold takes the flour and the bran goes to the plant; a co-product and release refused both ways; lots on; the cost card at each stage and the variance; the board.
+- **Rules:** ten refusals when the outputs are saved (each leaving the list as it was), the recipe's own edit, an order on the floor.
+- **Screens:** the recipe page in both languages, the form and a refusal that keeps what was typed, a plain run from the page with a typed quantity, the order page before and after the finish, a cancelled run, the words rules.
+- **Permissions and entities:** the rule itself (items alone, cost alone, both); a stock keeper on every page in both languages (quantities, no money, 403 on the save and on the finish); a recipe writer without cost; a reader of stock and a cashier; a branch's run keeps its by-product in the branch, its entry is the branch's, and its page is 404 from the main entity.
+- **On PostgreSQL** (`--parallel 2 --noinput`), at the tests commit (`7943e17`; only these two documents changed after it): `manufacturing ledger batches inventory restaurant.tests_kitchen config.tests_demo_restart sales.tests_pos reports.tests_demo_catalogs purchases` together: **830 tests, all pass**. Also `approvals restaurant orders reports barcode offline_pos` together (the callers of a run's cancel and the readers of the journal): **1,561 tests, all pass**. On SQLite (the first CI job's engine): `manufacturing.tests_byproducts manufacturing.tests_run_journal manufacturing.tests_f11 manufacturing.tests_board`: 132 tests, all pass. `manage.py check` and `makemigrations --check --dry-run`: clean. **The whole repository's suite was not run.**
+- **Existing tests edited: none.** None skipped or weakened.
+
+### Files
+
+- `manufacturing/`: `models.py`, `migrations/0012_byproducts.py`, `byproducts.py` (new), `byproducts_views.py` (new), `services.py`, `orders.py`, `guards.py`, `quality.py`, `variance.py`, `views.py`, `order_views.py`, `tests_run_journal.py` (new), `tests_byproducts.py` (new).
+- `templates/manufacturing/`: `_outputs_recipe.html`, `_outputs_inputs.html`, `_outputs.html` (all new), `recipe.html`, `run.html`, `order.html`.
+- Outside `manufacturing/` and `templates/manufacturing/`: `ledger/projector.py` (the change above), `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 19, 82.5% to 87.5% on this branch).
