@@ -78,6 +78,15 @@ def can_use(user):
     return user_has_permission(user, RECORD) or user_has_permission(user, PRODUCE)
 
 
+def in_menu(user):
+    """Whether «شغلي» is in this user's menu and tab bar: for someone whose work is the floor. A supervisor (who holds
+    inventory.adjust_stock, and the floor permission only to hand it out) reaches the screen from the orders board."""
+
+    from permissions.services import user_has_permission
+
+    return user_has_permission(user, RECORD) and not user_has_permission(user, PRODUCE)
+
+
 def _require(user):
     if not can_use(user):
         raise PermissionDenied("The floor screen needs manufacturing.record_stage.")

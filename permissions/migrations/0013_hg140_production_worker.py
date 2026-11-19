@@ -2,7 +2,12 @@
 
 ``manufacturing.record_stage`` lets its holder see the floor screen and record the stages of production orders. The new
 role «عامل إنتاج» holds it and ``inventory.view_stock``, and nothing else: no cost, no sales, no cash, and no general
-stock adjustment. No existing role is given the new permission and none loses a grant.
+stock adjustment.
+
+The owner and the manager are given the new permission too, as HG-048 and HG-084 did with theirs: nobody hands out a
+permission they do not hold (FB-ROLES), so without it the owner could neither copy the ready role nor tick this
+permission in a role of their own. It lets them do nothing new: both already hold ``inventory.adjust_stock``, which opens
+the floor screen and every action on it. No other existing role is given it and none loses a grant.
 
 The role code is not limited to a list of choices since ``0011_role_code_custom``, so this is a seed only (HG-048's
 ``0010`` also altered the column's choices, which no longer exist).
@@ -19,6 +24,9 @@ PERMISSION = ("manufacturing.record_stage", "تسجيل مراحل أوامر ا
 #: Existing permissions the new role also holds.
 EXISTING = ("inventory.view_stock",)
 
+#: Existing roles that also hold the new permission, so that they can hand it out (see the note above).
+ALSO_GRANTED = ("owner", "manager")
+
 
 def seed(apps, schema_editor):
     Permission = apps.get_model("permissions", "Permission")
@@ -34,6 +42,8 @@ def seed(apps, schema_editor):
     RolePermission.objects.update_or_create(role=role, permission=permission, defaults={"allow": True})
     for existing in Permission.objects.filter(code__in=EXISTING):
         RolePermission.objects.update_or_create(role=role, permission=existing, defaults={"allow": True})
+    for holder in Role.objects.filter(code__in=ALSO_GRANTED, is_system_role=True):
+        RolePermission.objects.update_or_create(role=holder, permission=permission, defaults={"allow": True})
 
 
 def unseed(apps, schema_editor):

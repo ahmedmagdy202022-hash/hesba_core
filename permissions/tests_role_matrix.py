@@ -4,7 +4,8 @@ Written before Manufacturing F8 (HG-140) touched the permission seed, so that ad
 shown to give no existing role a code and take none away. A change to any seeded role's grants fails here and has to be
 made on purpose, in this file, in the same change.
 
-HG-140 then added one row (``production_worker``) and one code (``manufacturing.record_stage``), and changed no other row.
+HG-140 then added one row (``production_worker``) and one code (``manufacturing.record_stage``). The owner and the manager
+hold that code too (so that they can hand it out, as with HG-048's and HG-084's codes); no other row changed.
 """
 
 from django.test import TestCase
@@ -17,9 +18,9 @@ MATRIX = {
         accounting.manage_accounts accounting.view_ledger approvals.approve audit.view_audit_log barcode.print_labels cashboxes.manage_cashboxes
         cashboxes.move_cash cashboxes.record_expenses cashboxes.view_cashboxes cashboxes.view_expenses cashboxes.view_finance closing.reopen_period
         closing.run_closing giftcards.breakage giftcards.sell imports.run_import inventory.adjust_stock inventory.manage_movements inventory.transfer_stock
-        inventory.view_cost inventory.view_group_stock inventory.view_stock master_data.adjust_opening_balances master_data.manage_items
-        master_data.manage_locations master_data.manage_parties master_data.view_master_data master_data.view_suppliers medical.treat_patients
-        medical.view_records medical.write_records permissions.manage_roles projects.issue_to_site projects.record_progress projects.view_projects
+        inventory.view_cost inventory.view_group_stock inventory.view_stock manufacturing.record_stage master_data.adjust_opening_balances
+        master_data.manage_items master_data.manage_locations master_data.manage_parties master_data.view_master_data master_data.view_suppliers
+        medical.treat_patients medical.view_records medical.write_records permissions.manage_roles projects.issue_to_site projects.record_progress projects.view_projects
         purchases.create_purchase_invoice purchases.pay_supplier purchases.return_purchase purchases.view_purchase_invoices reports.export_reports
         reports.view_all_sales_report reports.view_cashbox_report reports.view_customer_report reports.view_inventory_report reports.view_profit_report
         reports.view_purchase_report reports.view_sales_report reports.view_supplier_report restaurant.prepare_at_payment restaurant.take_orders
@@ -29,8 +30,8 @@ MATRIX = {
     "manager": """
         accounting.view_ledger approvals.approve barcode.print_labels cashboxes.manage_cashboxes cashboxes.view_cashboxes cashboxes.view_expenses
         giftcards.breakage giftcards.sell inventory.adjust_stock inventory.manage_movements inventory.transfer_stock inventory.view_group_stock
-        inventory.view_stock master_data.manage_items master_data.manage_locations master_data.manage_parties master_data.view_master_data
-        master_data.view_suppliers medical.treat_patients medical.view_records medical.write_records projects.issue_to_site projects.record_progress
+        inventory.view_stock manufacturing.record_stage master_data.manage_items master_data.manage_locations master_data.manage_parties
+        master_data.view_master_data master_data.view_suppliers medical.treat_patients medical.view_records medical.write_records projects.issue_to_site projects.record_progress
         projects.view_projects purchases.create_purchase_invoice purchases.return_purchase purchases.view_purchase_invoices reports.view_all_sales_report
         reports.view_customer_report reports.view_inventory_report reports.view_purchase_report reports.view_sales_report restaurant.prepare_at_payment
         restaurant.take_orders sales.create_sales_invoice sales.receive_customer_payment sales.return_sale sales.view_sales_invoices settings.view_settings
@@ -63,7 +64,7 @@ MATRIX = {
     "doctor": """
         medical.treat_patients
     """,
-    # HG-140 (Manufacturing F8): the only row this change adds. Every row above is as it was before it.
+    # HG-140 (Manufacturing F8): the only row this change adds. Above it, the owner and the manager gained the one new code.
     "production_worker": """
         inventory.view_stock manufacturing.record_stage
     """,
@@ -90,7 +91,8 @@ class SeededRoleMatrixPinTests(TestCase):
 
 
 class ProductionWorkerRoleTests(TestCase):
-    """HG-140 (Manufacturing F8): the floor permission belongs to the production worker and to no role that existed before."""
+    """HG-140 (Manufacturing F8): the floor permission belongs to the production worker; the owner and the manager hold it
+    only so that they can hand it out (both already hold inventory.adjust_stock, which allows everything it allows)."""
 
     CODE = "manufacturing.record_stage"
 
@@ -100,8 +102,11 @@ class ProductionWorkerRoleTests(TestCase):
         self.assertEqual((role.name_ar, role.name_en), ("عامل إنتاج", "Production worker"))
         self.assertEqual(seeded_matrix()["production_worker"], ["inventory.view_stock", self.CODE])
 
-    def test_no_other_role_holds_the_floor_permission(self):
-        self.assertEqual(list(RolePermission.objects.filter(permission__code=self.CODE).values_list("role__code", flat=True)), ["production_worker"])
+    def test_only_the_owner_and_the_manager_hold_the_floor_permission_beside_the_worker(self):
+        holders = sorted(RolePermission.objects.filter(permission__code=self.CODE, allow=True).values_list("role__code", flat=True))
+        self.assertEqual(holders, ["manager", "owner", "production_worker"])
+        for code in ("owner", "manager"):  # it lets them do nothing new: the wider permission was already theirs
+            self.assertIn("inventory.adjust_stock", seeded_matrix()[code])
 
     def test_the_permission_sits_in_the_inventory_section_and_is_not_a_finance_or_report_one(self):
         permission = Permission.objects.get(code=self.CODE)

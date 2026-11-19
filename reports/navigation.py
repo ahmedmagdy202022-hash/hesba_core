@@ -103,8 +103,10 @@ NAV_ITEMS = (
     # C4 (HG-123): letters of guarantee and their renewal dates, with the projects module (owner question 11's managers).
     {"key": "guarantees", "ar": "خطابات الضمان", "en": "Letters of guarantee", "url_name": "guarantees:list", "module": "projects",
      "permission": ("cashboxes.manage_cashboxes", "sales.create_sales_invoice")},
-    # Manufacturing F8 (HG-140): the production worker's floor screen, in the menu only of those who hold its permission.
-    {"key": "floor", "ar": "شغلي", "en": "My work", "url_name": "manufacturing:floor", "module": "manufacturing", "permission": "manufacturing.record_stage"},
+    # Manufacturing F8 (HG-140): the production worker's floor screen, in the menu only of someone whose work is the floor
+    # (``allow``: a supervisor, who holds inventory.adjust_stock, reaches it from the orders board and keeps their menu).
+    {"key": "floor", "ar": "شغلي", "en": "My work", "url_name": "manufacturing:floor", "module": "manufacturing", "permission": "manufacturing.record_stage",
+     "allow": "manufacturing.floor.in_menu"},
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
      "permission": ("sales.view_sales_invoices", "projects.view_projects")},

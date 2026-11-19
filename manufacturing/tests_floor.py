@@ -483,13 +483,14 @@ class PermissionTests(FloorPlant):
             self.assertNotIn(text, body, text)
 
     def test_the_supervisor_uses_the_floor_through_stock_adjustment_without_holding_the_floor_permission(self):
-        self.assertFalse(user_has_permission(self.owner, RECORD))
-        self.assertTrue(user_has_permission(self.owner, "inventory.adjust_stock"))
+        keeper = person(RoleCode.STOCK_KEEPER, "floor_supervisor")           # holds inventory.adjust_stock, not the floor permission
+        self.assertFalse(user_has_permission(keeper, RECORD))
+        self.assertTrue(user_has_permission(keeper, "inventory.adjust_stock"))
         order = self.open()
-        self.start(order, user=self.owner)
-        order = self.done(order, user=self.owner)
+        self.start(order, user=keeper)
+        order = self.done(order, user=keeper)
         self.assertEqual((order.status, order.stage_index, order.stage_logs.get().done_by, orders.issued_value(order)),
-                         (OrderStatus.IN_PROGRESS, 1, self.owner, D("8100.00")))
+                         (OrderStatus.IN_PROGRESS, 1, keeper, D("8100.00")))
         self.assertContains(self.client.get(reverse("manufacturing:orders")), "data-floor-link")
 
 
@@ -523,9 +524,9 @@ class NavigationTests(FloorPlant):
         self.assertContains(page, "تسجيل مراحل أوامر الإنتاج من شاشة العامل")
         self.assertContains(page, "شاشة العامل: يبدأ مرحلة أمر الإنتاج")
 
-    def test_the_owner_gives_the_ready_role_but_cannot_yet_tick_its_permission_in_a_role_of_their_own(self):
-        """HG-140, owner question 1: no existing role was given the new code, and nobody hands out a permission they do not
-        hold (FB-ROLES), so until the owner role holds it, the code cannot go into a custom role. The ready role is given freely."""
+    def test_the_owner_gives_the_ready_role_and_can_put_its_permission_in_a_role_of_their_own(self):
+        """HG-140: nobody hands out a permission they do not hold (FB-ROLES), so the owner and the manager hold the floor
+        permission too. A stock keeper, who does not, still cannot hand it out."""
 
         from accounts.user_services import create_user_account
         from permissions.models import Role
@@ -534,9 +535,11 @@ class NavigationTests(FloorPlant):
         ready = Role.objects.get(code="production_worker")
         made = create_user_account(username="floor_new", password="Temp-pass-91", role=ready, actor=self.owner, display_name="عامل جديد", phone="", email="")
         self.assertTrue(user_has_permission(made, RECORD))
-        with self.assertRaisesMessage(ValidationError, "role_beyond_actor"):
-            create_role(name_ar="عامل ومخزن", codes=["inventory.view_stock", RECORD], actor=self.owner)
-        self.assertEqual(create_role(name_ar="مخزن بس", codes=["inventory.view_stock"], actor=self.owner).code, "custom_1")
+        role = create_role(name_ar="عامل ومخزن", codes=["inventory.view_stock", "inventory.view_group_stock", RECORD], actor=self.owner)
+        self.assertEqual(sorted(role.rolepermission_set.values_list("permission__code", flat=True)),
+                         ["inventory.view_group_stock", "inventory.view_stock", RECORD])
+        self.assertTrue(user_has_permission(self.owner, RECORD) and user_has_permission(person(RoleCode.MANAGER, "floor_manager"), RECORD))
+        self.assertFalse(user_has_permission(person(RoleCode.STOCK_KEEPER, "floor_keeper_role"), RECORD))
 
     def test_a_business_without_manufacturing_is_not_offered_the_role_and_has_no_floor(self):
         self.profile.delete()
