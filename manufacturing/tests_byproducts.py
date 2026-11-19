@@ -321,6 +321,53 @@ class DairyTests(Mill):
         self.books(finished="5000.03", raw=self.RAW - D("4000.00"), absorbed="1000.03")
 
 
+    def three_co_products(self):
+        cream = make_item(item_code="FG-CREAM", item_name="قشطة (كيلو)", is_stock_tracked=True, default_sale_price="120")
+        ghee = make_item(item_code="FG-GHEE", item_name="سمنة (كيلو)", is_stock_tracked=True, default_sale_price="300")
+        byproducts.save_outputs(self.dairy, self.owner, [self.co(self.butter, "50", "33.33"), self.co(cream, "50", "33.33"), self.co(ghee, "50", "33.33")])
+        return cream, ghee
+
+    def test_co_products_take_the_running_totals_piastres_and_never_more_than_is_left(self):
+        self.three_co_products()
+        # 33.33% of 101.00 is 33.6633: rounded each on its own that is 33.66 three times; by the running total it is
+        # 33.66, then 67.33 less 33.66, then 100.99 less 67.33. Together 100.99, which is 99.99% of 101.00 to the piastre.
+        shared = byproducts.split(self.dairy, D("1"), D("80.80"), D("20.20"), D("100"))
+        self.assertEqual([row.cost for row in shared.rows], [D("33.66"), D("33.67"), D("33.66")])
+        self.assertEqual([row.conversion for row in shared.rows], [D("6.73"), D("6.74"), D("6.73")])    # 20.20 the same way: 20.20 less 0.00
+        self.assertEqual((shared.main_cost, shared.main_conversion, shared.main_unit_cost), (D("0.01"), D("0.00"), D("0.0001")))
+        # Codex's case: 1.01 left and three shares of 33.33% took 0.34 each, 1.02 in all, and the product's cost went
+        # below zero. Now they take 1.01 between them, and a product left with nothing is refused in words.
+        with self.assertRaisesMessage(ValidationError, "نصيب المنتج الأساسي من تكلفة التشغيلة طلع صفر"):
+            byproducts.split(self.dairy, D("1"), D("1.01"), D("0"), D("100"))
+        with self.assertRaisesMessage(ValidationError, "The main product's share of the run's cost comes to nothing"):
+            byproducts.split(self.dairy, D("1"), D("1.01"), D("0"), D("100"), lang="en")
+        # A share that never reaches a piastre is refused too: a co-product that came out is worth something in stock.
+        byproducts.save_outputs(self.dairy, self.owner, [self.co(self.butter, "50", "0.01")])
+        with self.assertRaisesMessage(ValidationError, "نصيب «زبدة (كيلو)» من تكلفة التشغيلة طلع صفر"):
+            byproducts.split(self.dairy, D("1"), D("40"), D("0"), D("100"))
+
+    def test_a_run_whose_product_would_be_worth_nothing_is_refused_and_leaves_no_cost_in_work_in_progress_behind_a_run(self):
+        cream, ghee = self.three_co_products()
+        order = self.ready(self.open(self.dairy, "1"))                         # 10 litres of milk: 40.00 in work in progress
+        before = (StockMovement.objects.count(), StockOperation.objects.count(), ProductionRun.objects.count())
+        # The three take 13.33, 13.33 and 13.34: all 40.00. A cheese worth 0.00 would have no entry of its own, and
+        # what its entry gives back to work in progress would stay there; so the finish is refused and nothing posts.
+        with self.assertRaisesMessage(ValidationError, "نصيب المنتج الأساسي من تكلفة التشغيلة طلع صفر"):
+            orders.finish(order, self.owner)
+        order.refresh_from_db()
+        self.assertEqual((order.status, order.run_id), (OrderStatus.IN_PROGRESS, None))
+        self.assertEqual((StockMovement.objects.count(), StockOperation.objects.count(), ProductionRun.objects.count()), before)
+        self.assertFalse(RunOutput.objects.exists())
+        # The recipe's outputs do not change while its order is on the floor; the person says what really came out.
+        # Only the butter did: it takes 33.33% of 40.00, the cheese keeps the rest, and work in progress ends at nothing.
+        left_out = {row.pk: "0" for row in self.dairy.outputs.filter(item__in=[cream, ghee])}
+        orders.finish(order, self.owner, extra_outputs=left_out)
+        order.refresh_from_db()
+        self.assertEqual([row.item for row in order.run.outputs.all()], [self.butter])
+        self.assertEqual((self.extra(order.run, self.butter).cost, order.run.output_operation.unit_cost), (D("13.33"), D("26.6700")))
+        self.books(finished="40.00", raw=self.RAW - D("40.00"), absorbed="0.00")
+
+
 class BakeryDairyTests(BakeryMill, DairyTests):
     pass
 

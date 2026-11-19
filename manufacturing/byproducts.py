@@ -27,7 +27,7 @@ lines it always ran. Nothing here changes the inventory engine, average cost, or
 """
 
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -62,6 +62,8 @@ MESSAGES = {
         "out_qty": "كمية «{item}» اللي طلعت لازم تكون رقم مش سالب.",
         "by_over": "قيمة المنتجات الثانوية {value} وتكلفة التشغيلة كلها {joint}، فمفيش تكلفة تفضل للمنتج الأساسي؛ راجع قيمة الوحدة في الوصفة.",
         "sale_price": "التقسيم بقيمة البيع محتاج سعر بيع للصنف «{item}»؛ اكتب سعره أو حدد نسبة في الوصفة.",
+        "main_nothing": "نصيب المنتج الأساسي من تكلفة التشغيلة طلع صفر، لأن المنتجات المشتركة واخدة التكلفة كلها تقريباً؛ قلّل نسبها في الوصفة.",
+        "co_nothing": "نصيب «{item}» من تكلفة التشغيلة طلع صفر؛ زوّد نسبته في الوصفة أو شيله منها.",
     },
     "en": {
         "permission": "Changing by-products and co-products needs the items permission and the permission to see costs: the value and the percent set the stock cost.",
@@ -80,6 +82,8 @@ MESSAGES = {
         "out_qty": "The quantity of “{item}” that came out must be a number, not negative.",
         "by_over": "The by-products are worth {value} and the whole run cost {joint}, so no cost is left for the main product; check the value per unit on the recipe.",
         "sale_price": "A split by sale value needs a sale price for “{item}”; enter its price or set a percent on the recipe.",
+        "main_nothing": "The main product's share of the run's cost comes to nothing, because the co-products take almost all of it; lower their percents on the recipe.",
+        "co_nothing": "The share of “{item}” in the run's cost comes to nothing; raise its percent on the recipe or remove it.",
     },
 }
 
@@ -292,14 +296,28 @@ def split(recipe, batches, materials, conversion, output, quantities=None, lang=
             parts = [quantity * row.item.default_sale_price / total for row, quantity in co]
         else:
             parts = [(row.share_percent or ZERO) / HUNDRED for row, _quantity in co]
+        # Each co-product takes the running total's piastres less what the ones before it took, so the rounding of one
+        # share never adds to another's: together they take round(left x their percents), and never more than is left
+        # (three shares of 33.33% of 1.01 are 0.34, 0.33 and 0.34, not 0.34 three times). The same for labour and overhead.
+        ceiling, conversion_ceiling = left.quantize(Decimal("0.01"), rounding=ROUND_DOWN), conversion.quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        running, taken, converted = ZERO, ZERO, ZERO
         for (row, quantity), part in zip(co, parts):
-            cost = money_round(left * part)
-            shares.append(Share(row, quantity, cost, cost_round(cost / quantity), money_round(conversion * part),
-                                (part * HUNDRED).quantize(Decimal("0.01"))))
+            running += part
+            cost = min(money_round(left * running), ceiling) - taken
+            share_of_conversion = min(money_round(conversion * running), conversion_ceiling) - converted
+            taken, converted = taken + cost, converted + share_of_conversion
+            share = Share(row, quantity, cost, cost_round(cost / quantity), share_of_conversion, (part * HUNDRED).quantize(Decimal("0.01")))
+            if share.value <= 0:  # an output that came out is worth something in stock, as a by-product must be
+                raise ValidationError(words["co_nothing"].format(item=row.item.item_name))
+            shares.append(share)
         main_percent = ((1 - sum(parts, ZERO)) * HUNDRED).quantize(Decimal("0.01"))
     order = {row.pk: index for index, row in enumerate(outputs)}
     shares.sort(key=lambda share: order[share.output.pk])
     main_cost = left - sum((share.cost for share in shares if share.kind == OutputKind.CO_PRODUCT), ZERO)
+    if co and money_round(output * cost_round(main_cost / output)) <= 0:
+        # The product's own entry is where the ledger gives work in progress back what is left of the run's materials; a
+        # product worth nothing in stock has no entry, so that rest would stay in work in progress. Refused here instead.
+        raise ValidationError(words["main_nothing"])
     return Split(joint=joint, deducted=deducted, main_cost=main_cost, main_unit_cost=cost_round(main_cost / output),
                  main_conversion=conversion - sum((share.conversion for share in shares), ZERO), main_percent=main_percent,
                  by_sale_value=by_sale_value, rows=shares)
