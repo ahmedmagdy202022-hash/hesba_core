@@ -22,6 +22,9 @@ class WorkCentre(models.Model):
     rate_per_hour = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     active = models.BooleanField(default=True)
     entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    # Manufacturing F8 (HG-140): the employees who work at this centre. The floor screen shows a worker the stages of their
+    # own centres; a worker who is on no centre sees every centre's. A link only: no rate, cost or stock reads it.
+    workers = models.ManyToManyField("staff.Employee", blank=True, related_name="work_centres")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

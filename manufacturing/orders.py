@@ -23,6 +23,10 @@ labour and overhead lines (each kind's live lines replace its planned figure at
 the finish), the order's standard written at the start, and an over-yield of up
 to 10% at the final stage with a reason (owner question 8).
 
+Manufacturing F8 (HG-140) adds, through ``floor``: the worker's screen records a stage's start and closes it through the
+same ``advance`` below, with the minutes since the start. ``advance`` takes a ``stand_in`` for the first stage's issue and
+only that screen passes it; finishing, cancelling, costs and labour lines are not on it.
+
 Manufacturing F4 (HG-137) adds, through ``outside``: a stage that is at an outside supplier is not closed in the factory
 (it is closed by its return), an order is not cancelled while a stage is out, and the finish first turns each posted
 processing bill into an ``OrderCostLine(kind=outside)`` (and is refused while a bill is missing or still draft), so
@@ -146,10 +150,12 @@ def _locked(order):
 
 
 @transaction.atomic
-def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang="ar"):
+def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang="ar", stand_in=None):
     """Close the current stage (starting the order if needed) and move to the next.
 
-    Manufacturing F6a (HG-133): ``minutes`` is how long the stage took (optional, above zero); it prices a suggested labour line."""
+    Manufacturing F6a (HG-133): ``minutes`` is how long the stage took (optional, above zero); it prices a suggested labour line.
+    Manufacturing F8 (HG-140): ``stand_in`` is the narrower permission the first stage's material issue may use in place of
+    inventory.adjust_stock. Only ``floor.done`` passes one; nothing else about the stage changes with it."""
 
     words = MESSAGES[lang]
     minutes = workcentres.parse_minutes(minutes, lang)
@@ -181,7 +187,8 @@ def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang=
     if order.status == OrderStatus.PLANNED:
         order.status, order.started_at = OrderStatus.IN_PROGRESS, timezone.now()
         # Manufacturing F3 (HG-131): the same issue, plus the ingredient lots it used (and a refusal for an expired one).
-        operations = lots.issue(order.recipe, user, batches=_batches(order), location=order.location, reference=order.number, lang=lang, order=order)
+        operations = lots.issue(order.recipe, user, batches=_batches(order), location=order.location, reference=order.number, lang=lang, order=order,
+                                stand_in=stand_in)
         OrderMaterialIssue.objects.bulk_create([OrderMaterialIssue(order=order, operation=operation) for operation in operations])
         actuals.write_standard(order, operations)  # F12 (HG-132): what the variance report measures this order against
     stage = order.stages[order.stage_index]

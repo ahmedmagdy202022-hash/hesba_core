@@ -15,7 +15,7 @@ from permissions.decorators import require_permission
 from permissions.services import user_has_permission
 from settings_core.display_labels import choice_label
 
-from . import actuals, byproducts_views, make_to_order, orders, outside_views, quality, quality_views, schedule, workcentres
+from . import actuals, byproducts_views, floor, floor_views, make_to_order, orders, outside_views, quality, quality_views, schedule, workcentres
 from .models import OrderCostLine, OrderStatus, ProductionOrder, Recipe
 from .stages import current_stages
 from .schedule_views import schedule_context
@@ -173,7 +173,8 @@ def board(request):
         recipes=Recipe.objects.filter(active=True).select_related("product"), locations=locations,
         default_location=(locations.filter(is_default=True).first() or locations.first()), can_open_sale=_can_open_sale(request.user),
         customers=Customer.objects.filter(active=True).exclude(customer_code="WALK-IN").order_by("name")[:300],
-        late_count=sum(1 for o in active if o.late), ow=outside_views.WORDS[lang]))
+        late_count=sum(1 for o in active if o.late), ow=outside_views.WORDS[lang],
+        can_floor=floor.can_use(request.user), fw=floor_views.WORDS[lang]))  # F8 (HG-140): the way into the floor screen
 
 
 @require_permission(VIEW)
@@ -273,7 +274,8 @@ def order_detail(request, pk):
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
         ready=order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages),
         open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=late_reason != "", late_reason=late_reason, **plan_context,
-        **quality_views.order_quality_context(request, order, lang), **outside_views.order_context(request, order, lang)))
+        **quality_views.order_quality_context(request, order, lang), **outside_views.order_context(request, order, lang),
+        **floor_views.order_photos_context(request, order, lang)))  # F8 (HG-140): the photos of defects taken on the floor screen
 
 
 @require_permission(PRODUCE)

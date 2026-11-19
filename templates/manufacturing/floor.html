@@ -1,0 +1,53 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}{# Manufacturing F8 (HG-140): the production worker's floor screen. One card per order; no cost is shown anywhere on it. #}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/technician.css' %}?v=s9-1">
+<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=c2-1">
+<link rel="stylesheet" href="{% static 'hesba/css/floor.css' %}?v=f8-1">{% endblock %}
+{% block operation_content %}
+<div class="fl" data-floor>
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p>{% if centres %}<p class="fl-centres" data-floor-centres>{{ words.centres }}: {% for name in centres %}<bdi>{{ name }}</bdi>{% if not forloop.last %}{% if lang == 'en' %}, {% else %}، {% endif %}{% endif %}{% endfor %}</p>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-floor-error>{{ error }}</div>{% endif %}
+{% if not cards %}<p class="tc-empty" data-floor-empty>{{ words.empty }}</p>{% endif %}
+<div class="fl-jobs">
+{% for card in cards %}<article class="tc-job fl-job{% if card.state == 'running' %} is-next{% endif %}" data-floor-card="{{ card.pk }}" data-state="{{ card.state }}" data-order-number="{{ card.number }}">
+<div class="tc-job__head"><span class="tc-type" data-floor-stage>{{ card.stage }}</span>{% if card.centre %}<span class="tc-type tc-type--wo" data-floor-centre>{{ card.centre }}</span>{% endif %}
+<span class="op-status {% if card.state == 'running' %}op-status-posted{% elif card.state == 'ready' %}op-status-draft{% endif %}">{% if card.state == 'running' %}{{ words.running }}{% elif card.state == 'ready' %}{{ words.ready }}{% else %}{{ words.waiting }}{% endif %}</span></div>
+<div class="tc-job__body">
+<h2 class="tc-cust">{{ card.product }}</h2>
+<p class="tc-what">{{ words.quantity }} <bdi dir="ltr" data-floor-units>{{ card.units|qty }}</bdi></p>
+<p class="tc-ref"><bdi dir="ltr">{{ card.number }}</bdi> · {{ card.stage_of }}</p>
+{% if card.due %}<p class="tc-ref">{{ words.due }} <bdi>{{ card.due|date:"Y-m-d" }}</bdi>{% if card.late %} · <span class="tc-late" data-floor-late>{{ words.late }}</span>{% endif %}</p>{% endif %}
+</div>
+{% if card.error %}<div class="op-message op-message-error" role="alert" data-floor-card-error>{{ card.error }}</div>{% endif %}
+{% if card.state == 'ready' %}
+<form method="post" data-floor-start>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="order" value="{{ card.pk }}"><input type="hidden" name="stage" value="{{ card.stage_index }}"><input type="hidden" name="action" value="start">
+<button class="op-primary fl-btn" type="submit">{{ words.start }}</button></form>
+{% elif card.state == 'running' %}
+<p class="fl-started" data-floor-started>{{ words.started_at }} <bdi dir="ltr">{{ card.started_at|date:"H:i" }}</bdi></p>
+<form method="post" class="fl-done" id="fl-done-{{ card.pk }}" data-floor-done novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="order" value="{{ card.pk }}"><input type="hidden" name="stage" value="{{ card.stage_index }}"><input type="hidden" name="action" value="done">
+<div class="fl-counts">
+<div class="op-field"><label for="fl-good-{{ card.pk }}">{{ words.good }}</label><input id="fl-good-{{ card.pk }}" name="good" inputmode="decimal" dir="ltr" autocomplete="off" placeholder="{{ card.units|qty }}" value="{{ card.posted.good|default:'' }}"></div>
+<div class="op-field"><label for="fl-defect-{{ card.pk }}">{{ words.defect }}</label><input id="fl-defect-{{ card.pk }}" name="defect" inputmode="decimal" dir="ltr" autocomplete="off" placeholder="0" value="{{ card.posted.defect|default:'' }}"></div>
+</div>
+<p class="tc-hint">{{ words.good_hint }}</p>
+<div class="op-field"><label for="fl-note-{{ card.pk }}">{{ words.note }}</label><input id="fl-note-{{ card.pk }}" name="note" maxlength="255" value="{{ card.posted.note|default:'' }}"></div>
+{% if card.first %}<p class="tc-hint" data-floor-issue-hint>{{ words.first_hint }}</p>{% endif %}{% if card.last %}<p class="tc-hint" data-floor-over-hint>{{ words.last_hint }}</p>{% endif %}
+</form>
+<section class="fl-photos" id="fl-photos-{{ card.pk }}" data-attachments data-refresh="inline" data-msg-failed="{{ att.failed }}" data-msg-network="{{ att.network }}" data-msg-uploading="{{ att.uploading }}" data-msg-uploaded="{{ att.uploaded }}" data-msg-deleting="{{ att.deleting }}" data-msg-confirm="{{ att.confirm }}">
+{% csrf_token %}
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+<form class="att-upload" method="post" enctype="multipart/form-data" action="{{ card.photo_url }}" data-att-upload><input type="hidden" name="stage" value="photo"><input type="hidden" name="lang" value="{{ lang }}">
+<label class="op-secondary fl-btn fl-photo"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>{{ words.photo }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" capture="environment" data-att-file></label></form>
+{% if card.photos %}<ul class="fl-thumbs" data-floor-photos>{% for photo in card.photos %}<li data-floor-photo="{{ photo.row.pk }}"><a href="{{ photo.url }}" target="_blank" rel="noopener" aria-label="{{ words.photo_open }}"><img src="{{ photo.url }}" alt="{{ words.photo_alt }}" loading="lazy" decoding="async"></a></li>{% endfor %}</ul>{% endif %}
+</section>
+<button class="op-primary fl-btn" type="submit" form="fl-done-{{ card.pk }}" data-floor-done-button>{{ words.done }}</button>
+{% else %}
+<p class="fl-wait" data-floor-wait="{{ card.state }}">{{ card.wait }}</p>
+{% endif %}
+</article>{% endfor %}
+</div>
+</div>
+<script src="{% static 'hesba/js/attachments.js' %}?v=c2-1" defer></script>
+{% endblock %}
