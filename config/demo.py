@@ -18,7 +18,7 @@ def demo_context(request):
 DEMO_ACTIVITIES = (
     ("commercial", "retail"), ("commercial", "pharmacy"), ("commercial", "grocery"), ("commercial", "fashion"), ("commercial", "electronics"),
     ("restaurants", "restaurant"), ("medical", "clinic"),
-    ("education", "training"), ("services", "maintenance"), ("services", "beauty"), ("manufacturing", "food"), ("contracting", "general"),
+    ("education", "training"), ("services", "maintenance"), ("services", "beauty"), ("manufacturing", "food"), ("manufacturing", "furniture"), ("contracting", "general"),
 )
 #: What a visitor who is not sure opens: a general retail shop.
 DEMO_DEFAULT = ("commercial", "retail")
@@ -47,6 +47,7 @@ DEMO_HINTS = {
     ("services", "maintenance"): ("أوامر شغل وفنيين", "Work orders and technicians"),
     ("services", "beauty"): ("مواعيد وباقات جلسات", "Appointments and session packages"),
     ("manufacturing", "food"): ("وصفات وتشغيلات وصلاحية", "Recipes, batches and expiry"),
+    ("manufacturing", "furniture"): ("عروض أسعار بمواصفات وأوامر إنتاج خاصة", "Quotations with specifications and custom production orders"),
     ("contracting", "general"): ("مقايسات ومستخلصات", "Bills of quantities and progress bills"),
 }
 
@@ -56,7 +57,7 @@ DEMO_NOUNS_EN = {
     ("commercial", "retail"): "retail shop", ("commercial", "pharmacy"): "pharmacy", ("commercial", "grocery"): "supermarket",
     ("commercial", "fashion"): "clothing store", ("commercial", "electronics"): "mobile and electronics shop",
     ("restaurants", "restaurant"): "restaurant", ("medical", "clinic"): "clinic", ("education", "training"): "training centre",
-    ("services", "maintenance"): "repair workshop", ("services", "beauty"): "beauty salon", ("manufacturing", "food"): "food factory",
+    ("services", "maintenance"): "repair workshop", ("services", "beauty"): "beauty salon", ("manufacturing", "food"): "food factory", ("manufacturing", "furniture"): "furniture factory",
     ("contracting", "general"): "contracting firm",
 }
 
@@ -130,10 +131,20 @@ DEMO_TOURS = {
         ("باقات الجلسات", "Session packages", "باقة مدفوعة وجلساتها اللي اتخصمت", "A paid package and the sessions used", "agreements:packages"),
         ("سجّل عملية بيع من الكاشير", "Ring up a sale at the till", "منتجات وخدمات، كاش أو فيزا", "Products and services, cash or card", "sales:pos"),
     ),
+    # Manufacturing F14: ten steps in the order a factory owner walks, one for each merged feature; the ones that belong to one record of the demo
+    # (a sales order, a finished order, a run, a lot, a machine) open the demo's own (STEPS_OF_A_RECORD) and are dropped where the demo has none. The words
+    # fit any factory: the furniture workshop has its own list below.
     "manufacturing": (
-        ("أوامر الإنتاج", "Production orders", "تشغيلة شغالة وتشغيلة خلصت", "A run in progress and a finished one", "manufacturing:orders"),
-        ("الوصفات والتكلفة", "Recipes and cost", "كل منتج بخاماته وتكلفة القطعة", "Each product with its materials and unit cost", "manufacturing:home"),
-        ("المخزن بعد الإنتاج", "Stock after production", "الخامات اللي اتصرفت والمنتج اللي دخل", "Materials used and product received", "inventory:stock"),
+        ("اعمل أمر إنتاج من طلب بيع", "Make a production order from a sales order", "الطلب مؤكد: بند اتفتح له أمر إنتاج وبند لسه مستني", "A confirmed order: one line has its production order, the other is still waiting", "manufacturing:tour_sales_order"),
+        ("احتياج الخامات وأمر الشراء", "Material needs and the purchase order", "الناقص من الخامات، وأمر شراء مسودة له بضغطة", "What is short, and a draft purchase order for it in one tap", "manufacturing:mrp"),
+        ("ابدأ مرحلة وسجّلها من «شغلي»", "Start a stage and record it on My work", "مرحلة شغالة ومرحلة مستنية: اضغط ابدأ، وسجّل السليم والمعيب لما تخلص", "A stage running and one waiting: press start, then record the good and the defective", "manufacturing:floor"),
+        ("صرف إضافي وعمالة فعلية", "Extra issue and actual labour", "كارت التكلفة بيقارن الفعلي بالمعياري: خامة زيادة، خامة رجعت، وأجر العمل", "The cost card sets actual against standard: an extra material, one returned, and the labour", "manufacturing:order"),
+        ("التشغيلة وصلاحيتها وملصقاتها", "The lot, its expiry and labels", "تشغيلة طالعة من أمر الإنتاج بصلاحيتها، ومنتج ثانوي خرج معاها", "A lot that came out of a production order with its expiry, and a by-product made with it", "manufacturing:run"),
+        ("الإفراج من الجودة", "Quality release", "تشغيلة مستنية الفحص وتشغيلة اتفرج عنها بعد رفض جزء منها", "One lot waiting for its check, one released after part of it was rejected", "manufacturing:quality"),
+        ("تتبّع التشغيلة", "Trace the lot", "من التشغيلة لخاماتها وفاتورة شرائها، ومنها للعملاء اللي اشتروا المنتج", "From the lot back to its materials and their purchase invoice, and forward to its customers", "manufacturing:trace"),
+        ("جدول الإنتاج وماكينة واقفة", "The schedule and a machine that is down", "الأوامر على أيام الأسبوع، والمتأخر منها، وأي ماكينة واقفة دلوقتي", "Orders across the week, the late ones, and any machine that is down now", "manufacturing:schedule"),
+        ("الصيانة وتكلفة الماكينة", "Maintenance and the machine's cost", "خطة صيانة مستحقة، وعطل اتصلّح بقطعة غيار وفاتورة فني", "A plan that is due, and a breakdown fixed with a spare part and a technician's bill", "manufacturing:maintenance_centre"),
+        ("تقرير التكلفة والانحراف", "The cost and variance report", "الفرق بين الفعلي والمعياري لكل خامة، وأجر العمل المحمّل مقابل المدفوع", "Actual against standard for every material, and labour absorbed against labour paid", "manufacturing:costs"),
     ),
     # Contracting C13: twelve steps, one for each merged feature; the ones that belong to a project open the demo's own (STEPS_OF_A_RECORD).
     "contracting": (
@@ -163,12 +174,16 @@ STEP_IS_THERE = {"medical:queue": "medical.queue.has_queue"}
 #: function that does (``STEP_PATHS``, by the name's namespace): it takes the url name and returns the path, or None when the demo has no
 #: such record (an emptied demo), and ``demo_first_run.tour_card`` then drops the step. The path may carry its own query (the call
 #: centre's caller, the check's coupon); the card adds its language to it.
-STEP_PATHS = {"projects": "projects.demo.tour_path", "restaurant": "restaurant.demo.tour_path"}
+STEP_PATHS = {"projects": "projects.demo.tour_path", "restaurant": "restaurant.demo.tour_path", "manufacturing": "manufacturing.demo.tour_path"}
 STEPS_OF_A_RECORD = frozenset({
     "projects:boq", "projects:certificate", "projects:variation", "projects:payments", "projects:diary_day", "projects:schedule", "projects:detail",
     "projects:subcontract", "projects:purchase_requests",
     "restaurant:order_combo", "restaurant:order_split", "restaurant:check", "restaurant:table_menu", "restaurant:reservations", "restaurant:preorders",
     "restaurant:call", "restaurant:platforms", "restaurant:brands", "restaurant:dish",
+    # Manufacturing F14: the sales order that made a production order, the finished order with its actuals (or the custom job), the run that made a
+    # by-product, the released lot, a machine's maintenance page, a quotation line's specifications and its converted job.
+    "manufacturing:tour_sales_order", "manufacturing:order", "manufacturing:run", "manufacturing:trace", "manufacturing:maintenance_centre",
+    "manufacturing:quote_sheet", "manufacturing:tour_job_sheet",
 })
 
 # M8 (HG-088): the clinic's demo has the beds on, so its tour has a fourth step; the tour card drops it wherever beds are off.
@@ -180,6 +195,20 @@ DEMO_TOURS[("medical", "dental")] = DEMO_TOURS["medical"][:2] + (
 
 DEMO_TOURS[("medical", "clinic")] = DEMO_TOURS["medical"] + (
     ("الأسرّة والإقامة", "Beds and stays", "مين على أنهي سرير، وفاتورة الإقامة مسودة عند الخروج", "Who is in which bed, and the stay's draft bill at discharge", "medical:beds"),
+)
+
+
+# Manufacturing F14: the furniture workshop makes to measure: a quotation with its specifications and cost sheet, the job it becomes, the saw's breakdown and sawdust.
+DEMO_TOURS[("manufacturing", "furniture")] = (
+    ("عرض سعر بمواصفات وبيان تكلفة", "A quotation with specifications and a cost sheet", "المقاسات والخشب والتشطيب تحت البند، وسعره من الخامات والعمالة والهامش", "Size, wood and finish under the line, priced from materials, labour and margin", "manufacturing:quote_sheet"),
+    ("حوّله لأمر إنتاج خاص", "Make it a custom production order", "العميل وافق: للشغل ده صنف ووصفة وأمر إنتاج بتكلفته هو", "The customer accepted: the job gets its own item, recipe and production order", "manufacturing:tour_job_sheet"),
+    ("تكلفة الأمر الخاص", "The custom order's cost", "الخامات والعمالة المخططة مقابل اللي اتصرف فعلًا لحد ما الأمر يخلص", "Planned materials and labour against what was really spent until the order finished", "manufacturing:order"),
+    ("احتياج الخامات وأمر الشراء", "Material needs and the purchase order", "الناقص من الخامات، وأمر شراء مسودة له بضغطة", "What is short, and a draft purchase order for it in one tap", "manufacturing:mrp"),
+    ("ابدأ مرحلة وسجّلها من «شغلي»", "Start a stage and record it on My work", "اضغط ابدأ على المرحلة، وسجّل السليم والمعيب لما تخلص", "Press start on the stage, then record the good and the defective when it is done", "manufacturing:floor"),
+    ("جدول الإنتاج والمنشار الواقف", "The schedule and the saw that is down", "الأوامر على أيام الأسبوع، والمتأخر منها، والمنشار واقف دلوقتي", "Orders across the week, the late ones, and the saw is down now", "manufacturing:schedule"),
+    ("صيانة المنشار وتكلفتها", "The saw's maintenance and cost", "خطة شحذ مستحقة، وعطل الشفرة بتكلفة قطعة الغيار", "A sharpening plan that is due, and the blade breakdown with the cost of its part", "manufacturing:maintenance_centre"),
+    ("نشارة الخشب منتج ثانوي", "Sawdust as a by-product", "تشغيلة الكراسي بتطلّع نشارة بقيمتها، وبتدخل المخزن لوحدها", "The chairs' run also makes sawdust, with its value, and puts it in stock on its own", "manufacturing:run"),
+    ("تقرير التكلفة والانحراف", "The cost and variance report", "الفرق بين الفعلي والمعياري لكل خامة، وأجر العمل المحمّل مقابل المدفوع", "Actual against standard for every material, and labour absorbed against labour paid", "manufacturing:costs"),
 )
 
 
@@ -251,9 +280,9 @@ def switch_activity(request):
         # each only where the activity already has the sections it needs (a clinic gets no purchases for the invoice photo).
         modules = activity_fit.default_modules(activity, sub)
         ai = tuple(slug for slug in AI_CAPABILITIES if set(caps.needs(slug)) <= set(modules))
-        from .demo_templates import restaurant_demo_extras, restaurant_demo_modules, services_demo_extras
+        from .demo_templates import manufacturing_demo_extras, restaurant_demo_extras, restaurant_demo_modules, services_demo_extras
 
-        extras = services_demo_extras(activity, sub) + restaurant_demo_extras(activity, sub)
+        extras = services_demo_extras(activity, sub) + restaurant_demo_extras(activity, sub) + manufacturing_demo_extras(activity, sub)
         chosen = tuple(dict.fromkeys(caps.default_selection(activity, sub) + ai + tuple(slug for slug in extras if caps.is_available(slug))))
         complete_setup(profile, activity, sub, ",".join(restaurant_demo_modules(activity, sub, modules)), user=request.user, capabilities_raw=",".join(chosen))
     lang = "en" if request.POST.get("lang") == "en" else "ar"

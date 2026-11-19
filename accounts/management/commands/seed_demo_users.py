@@ -21,6 +21,7 @@ DEMO_USERS = (
     (RoleCode.ACCOUNTANT, "accountant", "المحاسب"),
     (RoleCode.WAITER, "waiter", "الويتر"),  # HG-048
     (RoleCode.SITE_ENGINEER, "engineer", "مهندس الموقع"),  # HG-048
+    (RoleCode.PRODUCTION_WORKER, "worker", "عامل الإنتاج"),  # HG-140 (Manufacturing F8); the factory demos keep it, every other demo drops it
 )
 
 

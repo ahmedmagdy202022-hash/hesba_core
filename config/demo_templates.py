@@ -175,9 +175,11 @@ DEMO_LOGINS = {
     # Education video finding 7: the centre's reception, accounts and teachers' logins are greeted by name as well.
     "education": {"manager": "أ. إيمان عبد الغني", "cashier": "أ. رحاب سمير", "accountant": "أ. وائل عبد الباسط",
                   "stock_keeper": "أ. نادر فؤاد"},
+    # Manufacturing F14: the factory's floor screen is greeted by a person too («صباح الخير، عامل الإنتاج» is a role, not a name).
+    "manufacturing": {"worker": "أ. خالد عبد الغني"},
 }
 #: What ``seed_demo_users`` calls each of them, and so the only words replaced.
-LOGIN_ROLE_NAMES = {"manager": "المدير", "cashier": "الكاشير", "accountant": "المحاسب", "stock_keeper": "أمين المخزن"}
+LOGIN_ROLE_NAMES = {"manager": "المدير", "cashier": "الكاشير", "accountant": "المحاسب", "stock_keeper": "أمين المخزن", "worker": "عامل الإنتاج"}
 
 
 def owner_name(activity, sub_activity):
@@ -248,6 +250,19 @@ def restaurant_demo_modules(activity, sub_activity, modules):
     return tuple(dict.fromkeys(tuple(modules) + RESTAURANT_DEMO_MODULES))
 
 
+#: Manufacturing F14: what a visitor to the factory showcases is walked through, switched on for the demo only: quotations and sales
+#: orders (F1 makes a production order from a confirmed sales order line; F7 puts specifications and a cost sheet on a quotation line).
+#: A food factory and a furniture workshop only: the other factories keep the catalogue and the production orders they had.
+MANUFACTURING_DEMO_CAPABILITIES = ("quotations",)
+MANUFACTURING_DEMO_SUBS = ("food", "furniture")
+
+
+def manufacturing_demo_extras(activity, sub_activity):
+    """The extra capabilities the factory showcases switch on (none for any other business; real installs never call this)."""
+
+    return MANUFACTURING_DEMO_CAPABILITIES if activity == "manufacturing" and sub_activity in MANUFACTURING_DEMO_SUBS else ()
+
+
 def demo_capabilities(activity, sub_activity, features):
     """The features a demo of this business switches on: the interview's suggestions, plus the AI showcase
     wherever its sections exist (HG-078 dev. 7), plus what prepare_demo turns on for the retail shop, plus the clinic's online booking
@@ -263,6 +278,7 @@ def demo_capabilities(activity, sub_activity, features):
         chosen += ["inpatient"]  # M8 (HG-088): the landing page offers the clinic, so its demo shows the beds (settings_core/demo_inpatient.py)
     chosen += services_demo_extras(activity, sub_activity)
     chosen += restaurant_demo_extras(activity, sub_activity)
+    chosen += manufacturing_demo_extras(activity, sub_activity)
     return tuple(dict.fromkeys(slug for slug in chosen if caps.is_available(slug)))
 
 
