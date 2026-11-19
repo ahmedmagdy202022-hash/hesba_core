@@ -6070,3 +6070,127 @@ if op.pk in self.extra_outputs()[0]:
 - `manufacturing/`: `models.py`, `migrations/0012_byproducts.py`, `byproducts.py` (new), `byproducts_views.py` (new), `services.py`, `orders.py`, `guards.py`, `quality.py`, `variance.py`, `views.py`, `order_views.py`, `tests_run_journal.py` (new), `tests_byproducts.py` (new).
 - `templates/manufacturing/`: `_outputs_recipe.html`, `_outputs_inputs.html`, `_outputs.html` (all new), `recipe.html`, `run.html`, `order.html`.
 - Outside `manufacturing/` and `templates/manufacturing/`: `ledger/projector.py` (the change above), `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 19, 82.5% to 87.5%).
+
+## HG-140 — Manufacturing F8: a floor screen for the production worker («شغلي»); one new permission (`manufacturing.record_stage`), one new role («عامل إنتاج», `permissions/0013_hg140_production_worker`) and one new name in the inventory engine's stand-in list, so a worker's first stage issues the order's materials without `inventory.adjust_stock`; `manufacturing/0013_workcentre_workers`; no engine rule, projector, average-cost, sales-posting or purchase-posting change
+
+- **Status:** implemented on `claude/manufacturing-f8-floor` (cut from the F9 branch at `775f166`, so F5's quality, F4's outside processing, F7's quotations and F9's by-products are already there). **Committed only: not pushed, no PR, not merged; it waits for the Maestro's review and Ahmed's approval.** **T3**: a permission code, a seeded role and a stand-in in protected code. Roadmap: `docs/MARKET_PARITY_ROADMAP.md`, «7. تصنيعي», item 18 «تطبيق للعامل على أرضية المصنع»: ناقص → موجود, 87.5% → 92.5% on this branch.
+- **Why:** every stage of a production order was recorded on the order page, which needs `inventory.adjust_stock`. That permission also allows any stock adjustment, a plain production run, a cancel and an extra issue. A worker on the floor must not hold it, so until now a supervisor typed every stage for them, after the fact and with minutes someone remembered.
+- **Why no existing permission serves:** `inventory.view_stock` only reads. `inventory.adjust_stock` is the general one. The first stage of an order issues its materials through the stock engine, which asks for `inventory.adjust_stock`; HG-048 solved the same shape for the waiter (`restaurant.prepare_at_payment`) and the site engineer (`projects.issue_to_site`) with a named stand-in, and this does the same.
+
+### Where today's code disagreed with the plan or the brief (the code wins)
+
+1. **The role column has no choices any more.** The plan says the migration is «a choices change on the role column plus a seed, as HG-048 did». `permissions/0011_role_code_custom` removed the choices (custom roles), so `0013` is a **seed only** and `RoleCode.PRODUCTION_WORKER` is a Python constant, as `DOCTOR` is (HG-084).
+2. **The issue does not go through `services.issue` directly.** Since F3 (HG-131) `orders.advance` calls `lots.issue`, which calls `services.issue`. So the `stand_in` keyword is on all three (`orders.advance`, `lots.issue`, `services.issue`), each handing it on unchanged; `floor.done` is the only caller that passes one.
+3. **The materials leave when the first stage is closed, not when it is started.** HG-036's `advance` both starts the order and closes its first stage. So «ابدأ» writes the start time only, and the issue happens at «خلصت» of the first stage, in the same transaction as the stage log, exactly as on the order page. To keep a worker from doing the work and then being refused, «ابدأ» on an order that has not begun is refused while a material is short at the order's place (a read; the issue checks again under its own locks).
+4. **No link existed between an employee and a work centre.** «My work centre» needed one: `WorkCentre.workers` (many to many to `staff.Employee`, `manufacturing/0013_workcentre_workers`), ticked on the work centre form.
+5. **HG-048 gave its new permissions to the owner and the manager too; this does not.** The brief says no existing role gains a code, and the pinned matrix proves none did. One consequence follows from FB-ROLES («nobody hands out a permission they do not hold»): see owner question 1.
+6. **«Biggest first by due date»** in the plan is read as the brief words it: earliest promised date first.
+7. **The plan's `/inventory/adjust/`** is `/inventory/operations/adjustment/` today; the test uses the route's name.
+
+### Schema and seed
+
+- `permissions/0013_hg140_production_worker` (depends on `0012_seed_giftcard_permissions`; `RunPython` with a reverse):
+  - `Permission(code="manufacturing.record_stage", name_ar="تسجيل مراحل أوامر الإنتاج من شاشة العامل", name_en="Record production order stages from the floor screen", module="inventory", is_sensitive_finance=False, is_report_permission=False)`. Under the existing inventory section; no `PermissionModule` change.
+  - `Role(code="production_worker", name_ar="عامل إنتاج", name_en="Production worker", is_system_role=True)`, granted **exactly** `manufacturing.record_stage` and `inventory.view_stock`. Not `inventory.view_group_stock` (see owner question 6).
+  - **No existing role is touched.** The reverse removes the grant, the permission and the role. Applied, reversed and applied again on a scratch PostgreSQL database: 154 → 152 → 154 grants.
+- `manufacturing/0013_workcentre_workers` (depends on `0012_byproducts`, `staff/0001`; generated, no data step): `WorkCentre.workers`, many to many to `staff.Employee`, `related_name="work_centres"`. A link only: no rate, cost, stock or schedule reads it.
+- `makemigrations --check --dry-run`: clean.
+- **Registry files, as HG-048 and HG-084 did:** `permissions/models.py` (`RoleCode.PRODUCTION_WORKER`); `settings_core/operational_views.py` (`ROLE_ABOUT`, and `ROLE_NEEDS`: the role is offered where the manufacturing module is used, or while someone wears it); `settings_core/setup_views.py` (`ROLE_HOMES`: the worker lands on the floor); `reports/navigation.py` (the menu entry, below).
+
+### The protected change, exactly
+
+`inventory/services.py`, one name added to one set and one comment line above it, and nothing else in the file:
+
+```python
+#: HG-140 (Manufacturing F8): the floor screen's first stage, which issues an order's materials.
+ADJUSTMENT_STAND_INS = frozenset({"restaurant.prepare_at_payment", "projects.issue_to_site", "manufacturing.record_stage"})
+```
+
+- `_require_adjust` is unchanged: a stand-in is honoured only when it is in this set **and** the user holds it; otherwise `inventory.adjust_stock` is asked for, as before. `adjust_stock`, `transfer_stock`, `cancel_stock_operation`, the cost rule and the period rule are not edited.
+- **Who passes it:** `manufacturing.floor.done` only, through `orders.advance(stand_in=…)` → `lots.issue(stand_in=…)` → `services.issue(stand_in=…)` → `_consume(stand_in=…)` (which already took one for HG-048's `produce`). A test reads every non-test Python file and finds the name passed in `manufacturing/floor.py` and nowhere else.
+- **What the stand-in lets a worker do:** post the adjustment-out operations of **an order's own material issue**: the items, quantities and location are the recipe's and the order's, and the cost is the engine's average at that moment (`unit_cost` is not passed). The worker types good units, defective units and a note; nothing typed reaches a stock quantity or a cost (tested by posting extra fields).
+- **What it does not:** the general adjustment screen and service, transfers, the stock count, a plain production run, an extra issue, a return, a cancel and the finish all still ask for `inventory.adjust_stock` (and the finish for `inventory.view_cost`), and refuse the worker (tested at the service and at each screen).
+- **Not touched:** `ledger/projector.py`, sales and purchase posting, customer and supplier ledgers, cashboxes, `reports/` calculations, average cost, closing, the chart, `orders.finish`, `orders.cancel`, `actuals.py`, `quality.py`, `outside.py`, `byproducts.py`, `restaurant/`, `projects/`, `prepare_demo.py`. **No other protected change was needed or made.**
+
+### Rules (`manufacturing/floor.py`)
+
+- **Who:** the screen and its two actions need `manufacturing.record_stage` **or** `inventory.adjust_stock` (the supervisor, who can already do all of it from the order page; the stand-in then simply falls back to that permission). `floor.start` and `floor.done` check it themselves, not only the view.
+- **My work:** the current stage of every open order (planned or on the floor, with a stage still to do) of the entity being worked in, earliest promised date first (`schedule.effective_due`: the sales order's delivery date when the order is made for one, else its own due date), orders with no date last. A worker whose employee is ticked on one or more active work centres sees those centres' stages **and the stages that have no work centre** (an order whose recipe has no routing; they belong to nobody else). A worker on no centre sees every stage. A stage's centre is its schedule step's (F6b; a move on the schedule changes it), else the one its routing gave it.
+- **«ابدأ»** writes `OrderStep.started_at` (the field F6b left for this) and an audit row (`start_production_stage`). No stock moves; the order's status does not change. Refused: a stage already started; a page that is behind the order (the form carries the stage's index, so nobody starts or closes a stage they were not looking at); short materials on an order that has not begun, naming the material, what the order needs and what is there.
+- **«خلصت»** closes the stage through the same `orders.advance`: good, defective, a note, and `minutes` = the clock's minutes from `started_at` to now, to two decimals, at least 0.01 and at most what a stage log holds (99,999.99). A typed figure for the minutes is ignored. A stage must be started here before it is closed here. One worker may start and another finish; the log names who finished and the audit row who started.
+- **Not from the floor (F5, F4):** a quality stage whose recipe has criteria is recorded by the supervisor on the order page with its criteria (calling `orders.advance` straight from here would have skipped the criteria and the `QualityCheck`); a stage that is at an outside supplier is closed by its return. Both show on the screen as «مستني» with one sentence saying who handles them («…والمشرف هو اللي بيسجّل نتيجتها من صفحة الأمر», «…عند المورّد «…»، والمشرف هو اللي بيسجّل رجوعها»), and both actions refuse them with the same sentence. A quality stage on a recipe without criteria is an ordinary stage.
+- **Not on the floor at all:** finishing, cancelling, extra issues, returns, costs, labour lines, sending a stage outside, opening an order. An order whose stages are all done leaves the floor and waits for the supervisor's finish.
+- **Photos of defects:** a new attachments owner, `manufacturing.productionorder` (`attachments/services.py`, the registry F5 used for the quality certificate; no attachments migration). Seen by whoever sees the order (stock view, or the floor's own right, inside the entity of the order's location); added by whoever may record a stage; images only, kept under the existing `photo` stage; removed by the supervisor (`inventory.adjust_stock`) while the order is open; once the order is finished or cancelled nothing is added and nothing is removed. Twelve photos or 12 MB an order, under the global share. A photo books nothing.
+- **Entities:** every read and both actions go through `entity_scope.scope(ProductionOrder, "location__entity")`; another entity's order is a 404 on the screen, on its actions and on the photo upload.
+
+### Screens (Arabic and English; `--hs-*` tokens only; one small new stylesheet)
+
+- **`/manufacturing/floor/` («شغلي», `templates/manufacturing/floor.html`):** one card per order: the stage and its work centre as chips, the state («لسه مبدأتش», «شغال», «مستني»), the product, the units entering the stage, the order number, «المرحلة 2 من 5 مراحل», the promised date and «متأخر». Then one of: the button «ابدأ»; or «بدأت الساعة …», two number fields (السليم, المعيب), a note, «صوّر العيب (اختياري)» and the button «خلصت»; or the waiting sentence. A refusal shows on its own card and keeps what was typed. No table, no cost, no link into the supervisor's screens.
+- **The card is the technician's job card** (`technician.css`, the «شغلي النهارده» screen of S9); `static/hesba/css/floor.css` (24 lines, tokens only, no colour literal) adds the grid, the 56px buttons and fields and the waiting box, because the existing button there is 52px.
+- **The photo** uses the existing `attachments.js` unchanged (it shrinks a phone photo before sending and re-reads only the photo strip, so what was typed in the card stays) against `manufacturing:floor_photo`, which is `attachments.views._capped_upload` behind the floor's own check, as F5's certificate upload is.
+- **Menu:** `reports/navigation.py`: the entry «شغلي» (`floor`), only for holders of `manufacturing.record_stage`; first after the dashboard in a manufacturing business, and on the phone tab bar. Its icon is one new symbol in `templates/partials/shell_icons.html`. Nobody else's menu changes (tested for owner, manager and stock keeper). The supervisor reaches the screen from «شاشة العامل» on the orders board.
+- **Landing:** `ROLE_HOMES` sends a holder of the permission who does not see sales to the floor, as the waiter goes to the tables.
+- **The order page** shows «صور العيوب» (`_floor_photos.html`) only when the order has photos, with a remove button for the supervisor while the order is open. **The work centre form** has «عمال المركز» (tick boxes of the active employees).
+- **Seen in headless Chromium** as the worker, Arabic and English, at 390 px, 360 px and 1280 px: no horizontal overflow (page width equals the viewport at all three), every button and count field 56px high, two columns of cards at 1280 px. Also driven end to end at 390 px: a photo added (the typed defect count and note stayed), a refusal on its card, «خلصت», then «ابدأ» on the next card; the supervisor's order page with the photo; the work centre form. No page error in the console. **Not yet seen by Ahmed.**
+- Words: no refused word («ورشة», «الأسطى», «بتاع», «دوس», «لينك», «شغلانة») in the new files, words or pages, and no Arabic line starts or ends with a Latin word or a placeholder (tested on the words and on the rendered pages, as `tests_outside` does).
+
+### The money, in plain words
+
+- None beyond the existing first-stage issue. The garments order of the tests takes 120 m of fabric at 65.00 (7,800.00) and 20 spools of thread at 15.00 (300.00): closed by the worker on the floor or by the owner on the order page, the two orders have the same two operations field by field, the same movements, the same journal (work in progress debit 7,800.00 and 300.00, raw materials credit the same), the same standard for the variance report and the same stock left. Only the names differ: the operations, the engine's audit rows, the stage log and the order's audit row name the worker.
+- **The minutes price nothing by themselves.** F6a's suggested labour line reads them (minutes × the work centre's rate), and nothing is booked until the supervisor confirms a line.
+
+### Owner questions (the default built in bold)
+
+1. **Should the owner and the manager also hold `manufacturing.record_stage`?** **No: no existing role was given it** (the brief's rule, pinned by the role matrix test). Consequence, tested: because nobody hands out a permission they do not hold (FB-ROLES), an owner cannot today tick this permission in a **custom** role (for example «عامل ومخزن»): the save answers «مينفعش تدّي صلاحية إنت نفسك معندكش». Giving a user the ready role «عامل إنتاج» works. HG-048 and HG-084 avoided this by granting their new codes to the owner and the manager. If that is wanted here it is two names in the seed of a new `permissions` migration and two lines in `permissions/tests_role_matrix.py`; it adds nothing those roles cannot already do through `inventory.adjust_stock`.
+2. **Question 17 — one phone per worker, or one shared screen?** **Each worker signs in on their own phone**; there is no shared kiosk with a PIN.
+3. **Who sees a stage that has no work centre?** **Everyone on the floor.** A worker ticked on a centre also sees them.
+4. **Are the minutes the clock's or working minutes?** **The clock's, from «ابدأ» to «خلصت».** A stage left open over a break or a night records all of it; the supervisor sees the figure on the order page and decides what to confirm as labour. There is no pause.
+5. **May a worker undo a start or remove a photo?** **No.** The supervisor removes a photo while the order is open; a start is not undone (it only starts the clock).
+6. **Should the worker see the group's stock in other entities (`inventory.view_group_stock`, HG-031's rule)?** **No: the role holds exactly the two codes the brief names.**
+7. **May the supervisor use the floor screen?** **Yes, through `inventory.adjust_stock`, from the orders board;** it is not in their menu.
+8. **Should a start be refused while materials are short?** **Yes, on an order that has not begun.**
+
+### Not built (and why)
+
+- **A native app, offline work and notifications.** It is a phone-first web screen; the roadmap's item says «تطبيق».
+- **A shared kiosk, a PIN per worker, a barcode scan of the order.**
+- **A pause, an undo of a start, and typing the minutes on the floor.**
+- **The list of materials to collect on the card**, and a link from the card to the order page (the worker can open it from «التصنيع», read only and without costs).
+- **A choice of work centre on the screen** for a worker who is on none, and a search.
+- **A demo login for the worker and floor data in the demo:** `seed_demo_users` and `prepare_demo.py` are not touched; the owner makes the user from the users screen.
+- **A dashboard card for the worker.** The worker lands on the floor; the dashboard is as it was.
+- **Linking a photo to one stage.** It is kept on the order with its time and who took it.
+- **Service-level permission checks on `orders.cancel`, `orders.finish` and `orders.advance` themselves.** As before, the screens gate them (`inventory.adjust_stock`); the worker gets 403 on each (tested). `floor.start` and `floor.done` do check in the service.
+
+### Risks
+
+1. **A custom role cannot carry the new permission until the owner role holds it** (owner question 1).
+2. **The stand-in is honoured for any holder of `manufacturing.record_stage`, whatever passes it.** As with HG-048's two, the guard is that the engine's list is short and that code review keeps `floor.done` the only caller; a test fails when another file passes it.
+3. **Clock minutes overstate work** when a stage is left open; F6a's suggestion is priced from them (nothing is booked without the supervisor).
+4. **The short-materials check at the start is a read, not a reservation:** stock can leave between «ابدأ» and «خلصت»; the issue then refuses and nothing is recorded (tested).
+5. **Photos live in the database** (HG-072): twelve an order, 12 MB, under the global share.
+6. **A work centre form sent without its tick boxes clears the centre's workers** (it is the form's own field; the rule changes them only when the form sends them).
+7. **An employee is not tied to an entity.** By the rule as written (not tested), a worker ticked only on centres of another entity than the one worked in is on no centre there, and sees every stage of that entity.
+8. **Migration numbering:** another branch adding a `permissions` or `manufacturing` migration and merging first makes `0013` renumber on rebase.
+9. The screens have not been seen by Ahmed.
+
+### Tests (`manufacturing/tests_floor.py`, 43; `permissions/tests_role_matrix.py`, 5)
+
+- **The role matrix** was pinned code by code in its own commit (`7f29af6`, nine seeded roles and 57 codes) **before** the seed was touched; the permission commit added one row and changed no other. Tests: the production worker holds exactly `inventory.view_stock` and `manufacturing.record_stage`; no other role holds the new code; the permission is in the inventory section and is neither a finance nor a report one; no grant is a refusal.
+- **The first stage:** a worker starts and finishes it on the floor beside an owner's on the order page: the same operations, movements, costs, journal (per account), standard and stock, the books balanced; the stage log, the order's audit row, the start's audit row, the engine's two audit rows and the operations' `created_by` name the worker. Extra posted fields change nothing. Short materials stop the start. An issue the engine refuses records nothing.
+- **Start, done, minutes:** minutes = finish − start to the hundredth (the clock fixed in the test: 95.50), never typed; the bounds of the elapsed minutes; a start writes the start time and nothing else; once only; not finished before started; a page behind the order closes nothing; one starts and another finishes; a worker walks all five stages with defects and the supervisor finishes (97 good, 3 scrap, books balanced); the over-yield refusal and what was typed kept.
+- **What the worker cannot do or see:** the grants; 403 on stock adjustment, transfer and stock count; the general adjustment service refuses the worker, and an unknown stand-in is refused for anyone; the stand-in gives nothing to a cashier, an accountant, a waiter or a site engineer (at the engine, at `floor`, on the screen and on the photo upload), and without it the worker's own issue is refused; only `manufacturing/floor.py` passes it; 403 on finish, cancel, advance, extra issue, return, cost line, a new order and sending a stage out, with nothing changed; **no cost on any manufacturing page the worker opens**, in both languages (the fourteen that open are listed in the test; the other four answer 403), with the same figures first shown to be on the owner's pages; the floor shows no cost to the owner either; the supervisor uses the floor through stock adjustment.
+- **Menu, landing, roles screen:** the worker lands on the floor and has it first; nobody else has it in the menu; the role is offered where manufacturing is used and not in a shop; the owner gives the ready role and cannot yet tick its permission in a custom role.
+- **My work:** own centres and stages with none; the schedule's centre counts; a centre switched off; the work centre form keeps its workers (inactive and unknown left out, audit, a save without them leaves them); the order of the cards and «متأخر»; finished, cancelled and ready orders are not on the floor.
+- **Entities:** a branch's worker neither sees nor touches the main entity's orders (404 on start, done, photo and the order page), does the branch's own work from the branch's shelf, and the other way round.
+- **F5 and F4:** a quality stage with criteria (lots on; the worker's first stage issued the base with its lot uses) and a stage at a supplier are shown as waiting and refused on the screen and in the rules with nothing changed; the supervisor's record or the return brings the next stage back to the floor; a quality stage without criteria is ordinary.
+- **Photos:** kept on the order and shown on both pages; only a real image and only as a defect photo; the worker adds and only the supervisor removes; a viewer reads; a cashier does not; a closed order keeps its photos.
+- **Words:** the refused words and the Latin-edge rule on the new files, on every new word (screen, rules, upload messages, attachments messages, the seed, the roles screen) and on the rendered pages.
+- **On PostgreSQL** (`--parallel 2 --noinput`), at the tests commit (`3f1cb65`; only these two documents changed after it): `manufacturing permissions inventory ledger restaurant.tests_kitchen config.tests_demo_restart sales.tests_pos attachments accounts settings_core reports projects.tests_roles agreements staff` together: **2,142 tests, all pass**. On SQLite: `manufacturing.tests_floor permissions.tests_role_matrix`: 48 tests, all pass. `manage.py check` and `makemigrations --check --dry-run`: clean. **The whole repository's suite was not run** (among the apps not run: `restaurant` beyond its kitchen tests, `projects` beyond its role tests, `sales` beyond the till, `purchases`, `orders`, `batches`, `entities`, `medical`, `education`).
+- **Existing tests edited: none.** None skipped or weakened.
+
+### Files
+
+- `manufacturing/`: `floor.py` (new), `floor_views.py` (new), `tests_floor.py` (new), `models.py`, `migrations/0013_workcentre_workers.py`, `services.py`, `lots.py`, `orders.py` (the `stand_in` keyword), `workcentres.py`, `workcentre_views.py`, `order_views.py`, `urls.py`.
+- `templates/manufacturing/`: `floor.html`, `_floor_photos.html` (new), `order.html`, `orders.html`, `work_centre_form.html`.
+- Outside them: `inventory/services.py` (the protected line above); `permissions/models.py`, `permissions/migrations/0013_hg140_production_worker.py`, `permissions/tests_role_matrix.py` (new); `attachments/services.py` (the new owner and its five messages); `settings_core/operational_views.py`, `settings_core/setup_views.py`; `reports/navigation.py`; `templates/partials/shell_icons.html`; `static/hesba/css/floor.css` (new); `docs/AGENT_HARD_GATES.md` (this entry), `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 18, 87.5% to 92.5% on this branch).
