@@ -81,6 +81,9 @@ class Catalog:
     #: Restaurants R4: indexes of the items the bar makes (the drinks). They sit in their own menu category, so a kitchen station
     #: can hold them and the kitchen takes the rest. Empty: one place makes everything (no stations in that demo).
     bar: tuple = ()
+    #: Manufacturing F14: item index -> days the product's lot lasts after its run (a recipe's ``shelf_life_days``). Only a recipe with a
+    #: shelf life gives its lots an expiry; every other recipe's lot has none.
+    shelf_life: dict = field(default_factory=dict)
 
 
 def _p(name, unit, sale, purchase="0", stock=True):
@@ -792,11 +795,11 @@ MAINTENANCE_CONTRACTS = _contracting(
 
 # --- manufacturing: goods are made from raw materials, not bought ----------
 
-def _factory(key, category, goods, raw, recipes, staff, suppliers, customers):
+def _factory(key, category, goods, raw, recipes, staff, suppliers, customers, shelf_life=None):
     return Catalog(
         key=key, category=category, items=tuple(_p(*g) for g in goods), customers=customers, suppliers=suppliers,
         raw=tuple(_raw(f"DEMO-RAW-{n:02d}", *r) for n, r in enumerate(raw, start=1)), recipes=recipes, staff=staff,
-        extras=frozenset({"orders"}),
+        extras=frozenset({"orders"}), shelf_life=shelf_life or {},
     )
 
 
@@ -812,6 +815,7 @@ FOOD = _factory(
      2: (D("1"), ((0, D("3")), (1, D("1")), (2, D("0.4")))), 3: (D("1"), ((0, D("2")), (1, D("1.5")), (2, D("0.5")), (3, D("0.3")))),
      4: (D("1"), ((0, D("4")), (1, D("2"))))},
     ("حسن السيد", "مشرف إنتاج"), ("مطاحن الدلتا", "شركة السكر والتكرير"), DISTRIBUTORS,
+    shelf_life={0: 120, 1: 45, 2: 90, 3: 60, 4: 150},  # Manufacturing F14: days a lot lasts; the cake is the one a visitor sees running out first
 )
 
 GARMENTS = _factory(
@@ -829,7 +833,7 @@ FURNITURE = _factory(
     "manufacturing.furniture", ("أثاث", "Furniture"),
     (("كرسي خشب", "قطعة", "900.00", "520.00"), ("ترابيزة سفرة", "قطعة", "3500.00", "2100.00"), ("كومودينو", "قطعة", "1200.00", "700.00"),
      ("دولاب 3 ضلف", "قطعة", "7500.00", "4600.00"), ("رف حائط", "قطعة", "350.00", "190.00")),
-    (("خشب زان (لوح)", "لوح", "850.00", "40"), ("MDF (لوح)", "لوح", "650.00", "30"), ("مسامير ومفصلات", "علبة", "60.00", "60"), ("ورنيش (لتر)", "لتر", "140.00", "40")),
+    (("خشب زان (لوح)", "لوح", "850.00", "40"), ("خشب مضغوط (لوح)", "لوح", "650.00", "30"), ("مسامير ومفصلات", "علبة", "60.00", "60"), ("ورنيش (لتر)", "لتر", "140.00", "40")),
     {0: (D("1"), ((0, D("0.4")), (2, D("0.3")), (3, D("0.3")))), 1: (D("1"), ((0, D("1.8")), (2, D("1")), (3, D("1.2")))),
      2: (D("1"), ((1, D("0.8")), (2, D("0.5")), (3, D("0.4")))), 3: (D("1"), ((1, D("5")), (2, D("2")), (3, D("2")))),
      4: (D("1"), ((1, D("0.2")), (2, D("0.2")), (3, D("0.2"))))},

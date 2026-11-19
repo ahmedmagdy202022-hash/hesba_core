@@ -239,6 +239,11 @@ class Command(BaseCommand):
             self._packages(master, owner)
         if "hours" in extras:
             self._hours(master, owner)
+        from manufacturing import demo as manufacturing_demo
+
+        factory = "orders" in extras and manufacturing_demo.seeds(catalog)
+        if factory:
+            manufacturing_demo.seed_routing(master, catalog, owner)  # Manufacturing F14: work centres and routings before any order is opened, so the orders are routed
         if "orders" in extras:
             self._orders(master, owner)
         if "batches" in extras:
@@ -264,6 +269,8 @@ class Command(BaseCommand):
             self._shop_staff(owner)  # DEMO-NEW: a shop's cashier and storekeeper, on the payroll too
             self._attendance(owner)  # T11: three weeks of attendance, a leave taken and one waiting
             self._payroll(master, owner)  # DEMO-NEW: last month's payroll, net pay paid
+        if factory:
+            manufacturing_demo.seed_features(master, catalog, owner, staff)  # Manufacturing F14: after the payroll, so the production worker is not on it
         self._services_showcase(master, staff, owner, catalog, extras)  # DEMO-SVC: after payroll, so the new technicians are not paid by it
         self._clinic_booking(master, staff, owner, catalog, extras)  # M4: after payroll too, for the same reason (the second doctor)
         self._online_consult(master, staff, owner, catalog, extras)  # M10 (HG-096): two online bookings today, after the second doctor exists
@@ -471,7 +478,7 @@ class Command(BaseCommand):
         self._spread_sale_times()
 
     #: A demo login whose role only makes sense with one module (HG-048): a clothes shop has no waiter.
-    ROLE_MODULES = {"waiter": "tables_orders", "engineer": "projects"}
+    ROLE_MODULES = {"waiter": "tables_orders", "engineer": "projects", "worker": "manufacturing"}
 
     def _fit_users(self, modules):
         """UI-TRACK F26: the users screen of a shop lists only the people a shop has."""
@@ -1702,6 +1709,7 @@ class Command(BaseCommand):
                     break
 
     def _batches(self, master, owner):
+        from batches.models import Batch
         from batches.services import register_batch, stock_on_hand
 
         today = timezone.localdate()
@@ -1709,6 +1717,8 @@ class Command(BaseCommand):
         # Two run out soon, so the expiry alerts have something true to say.
         for item, days in zip(master["items"], (25, 45, 300, 200, 400)):
             quantity = on_hand.get(item.pk) or Decimal("0")
+            if Batch.objects.filter(item=item, production_run__isnull=False).exists():
+                continue  # Manufacturing F14: a product made in the factory has the lots of its runs (F3), never one registered by hand
             if quantity > 0:
                 register_batch(item=item, location=master["location"], batch_no=f"LOT-{item.item_code[-2:]}{today:%y%m}",
                                expiry_date=today + timedelta(days=days), quantity=quantity, received_on=today - timedelta(days=20), user=owner)
