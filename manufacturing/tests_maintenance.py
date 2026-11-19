@@ -828,7 +828,8 @@ class ScreenTests(OvenPlant):
 
     def test_the_home_the_work_centres_page_and_the_schedule_carry_the_marks(self):
         home = self.client.get(reverse("manufacturing:home"))
-        self.assertContains(home, "data-maintenance-nav")
+        self.assertContains(home, "data-maintenance-tile")
+        self.assertContains(home, f'href="{reverse("manufacturing:maintenance")}?lang=ar" data-maintenance-down')
         self.assertContains(home, "data-maintenance-down>0<")
         maintenance.save_plan(self.oven, {"title": "تنظيف الشعلات", "every_days": "30", "last_done": (TODAY - timedelta(days=40)).isoformat()}, self.owner)
         centres = self.client.get(reverse("manufacturing:work_centres"))

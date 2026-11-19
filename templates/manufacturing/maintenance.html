@@ -6,12 +6,12 @@
 
 <h2>{{ mw.down_title }}</h2>
 {% if down %}<div class="op-table-wrap"><table class="op-table" data-list-rows data-down-list><thead><tr><th>{{ mw.centre }}</th><th>{{ mw.cause }}</th><th>{{ mw.stopped_at }}</th><th>{{ mw.down_for }}</th></tr></thead><tbody>
-{% for row in down %}<tr data-down-centre="{{ row.centre.code }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.centre.pk %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="sub">{{ row.job.cause }}</td><td data-row="meta"><span class="hs-phone-only">{{ mw.since }}</span><bdi dir="ltr">{{ row.job.opened_at|date:"Y-m-d H:i" }}</bdi></td><td data-row="meta"><bdi dir="ltr">{{ row.minutes }}</bdi> {{ mw.minutes }}</td></tr>{% endfor %}
+{% for row in down %}<tr data-down-centre="{{ row.centre.code }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.centre.pk %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="sub">{{ row.job.cause }}</td><td data-row="meta"><span class="hs-phone-only">{{ mw.since }}</span><bdi dir="ltr">{{ row.job.opened_at|date:"Y-m-d H:i" }}</bdi></td><td data-row="meta"><span><bdi dir="ltr">{{ row.minutes }}</bdi> {{ mw.minutes }}</span></td></tr>{% endfor %}
 </tbody></table></div>{% else %}<p class="op-notice op-message-success" data-down-empty>{{ mw.empty_down }}</p>{% endif %}
 
 <h2>{{ mw.due_title }}</h2>
 {% if due %}<div class="op-table-wrap"><table class="op-table" data-list-rows data-due-list><thead><tr><th>{{ mw.centre }}</th><th>{{ mw.plan }}</th><th>{{ mw.why }}</th></tr></thead><tbody>
-{% for row in due %}<tr data-due-plan="{{ row.plan.pk }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.plan.work_centre_id %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="sub">{{ row.plan.title }}</td><td data-row="meta" class="op-cell-text">{% for reason in row.reasons %}{{ reason }}{% if not forloop.last %} · {% endif %}{% endfor %}</td></tr>{% endfor %}
+{% for row in due %}<tr data-due-plan="{{ row.plan.pk }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.plan.work_centre_id %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="sub">{{ row.plan.title }}</td><td data-row="meta" class="op-cell-text"><span>{% for reason in row.reasons %}{{ reason }}{% if not forloop.last %} · {% endif %}{% endfor %}</span></td></tr>{% endfor %}
 </tbody></table></div>{% else %}<p class="op-muted" data-due-empty>{{ mw.empty_due }}</p>{% endif %}
 
 <h2>{{ mw.all_title }}</h2>
