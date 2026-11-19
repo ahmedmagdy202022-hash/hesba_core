@@ -64,6 +64,7 @@ class _Accounts:
         services.ensure_chart()
         self.by_control = {a.control: a for a in Account.objects.exclude(control="")}
         self.products = None
+        self._maintenance = None
 
     def __getitem__(self, control):
         account = self.by_control.get(control)
@@ -86,6 +87,18 @@ class _Accounts:
 
             self.products |= set(RecipeOutput.objects.values_list("item_id", flat=True)) | set(RunOutput.objects.values_list("item_id", flat=True))
         return self["finished_goods" if item_id in self.products else "raw_materials"]
+
+    def maintenance(self):
+        """Manufacturing F10 (HG-141): where maintenance expense goes: the account of the expense category «صيانة وإصلاحات»
+        (``maintenance``; 5206 on every default chart, which has no control key of its own), as an expense of that
+        category books; general expenses where the category has no account. Read once per rebuild."""
+
+        if self._maintenance is None:
+            from .models import ExpenseAccount
+
+            link = ExpenseAccount.objects.filter(category__code="maintenance").select_related("account").first()
+            self._maintenance = link.account if link else self["general_expense"]
+        return self._maintenance
 
 
 class _Group:
@@ -574,6 +587,10 @@ class Projector:
             account = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
         elif hasattr(op, "project_issue"):
             account = self.acc["project_cost"] if self.acc.has("project_cost") else self.acc["cogs"]
+        elif hasattr(op, "maintenance_part"):
+            # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is maintenance expense, not a
+            # stock-count loss. The part taken back (the reversal, on its own date) mirrors it by the sign.
+            account = self.acc.maintenance()
         else:
             account = self.acc["stock_loss"] if remainder > 0 else self.acc["stock_gain"]
         g.add(account, remainder, g.entity_id)

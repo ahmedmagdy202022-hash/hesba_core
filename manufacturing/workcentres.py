@@ -14,7 +14,8 @@ Rules, stated once:
   ``hours_per_day`` x 60. The day is the stage's planned day once F6b has planned it (``schedule``), else the order's due
   date; an overdue order is counted today;
   an order due after the window or with no date is counted apart and never against a day. A holiday
-  (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity.
+  (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity. A breakdown (F10, HG-141)
+  takes the minutes it was open out of its day's capacity, and an open one the whole of today (``maintenance.downtime``).
 * **Cost**: the minutes typed on a finished stage, times the stage's work centre's rate per hour, are a *suggested*
   labour line (never a booking). Confirming one adds an ordinary F12 cost line through ``actuals.add_cost_line`` with the
   amount ``minutes x rate / 60`` rounded once (never hours rounded first: 70 minutes is 70.00 at 60.00 an hour, not
@@ -394,6 +395,9 @@ def load(today, days=DAYS):
                 later[centre_id] += minutes
             else:
                 per_day[(centre_id, max(order.due_date, today))] += minutes
+    from . import maintenance
+
+    down = maintenance.downtime([centre.pk for centre in centres], today, last)  # F10 (HG-141): what breakdowns take out of each day
     result = []
     for centre in centres:
         capacity = (centre.hours_per_day * 60).quantize(Decimal("0.01"))
@@ -401,8 +405,8 @@ def load(today, days=DAYS):
         for offset in range(days):
             day = today + timedelta(days=offset)
             minutes, holiday = per_day[(centre.pk, day)], day in holidays
-            cap = ZERO if holiday else capacity
-            rows.append({"date": day, "minutes": minutes, "capacity": cap, "holiday": holiday, "over": minutes > cap})
+            cap = ZERO if holiday else maintenance.capacity_left(capacity, down[(centre.pk, day)])
+            rows.append({"date": day, "minutes": minutes, "capacity": cap, "holiday": holiday, "over": minutes > cap, "down": not holiday and cap < capacity})
         result.append({"centre": centre, "days": rows, "unscheduled": unscheduled[centre.pk], "later": later[centre.pk],
                        "over": any(row["over"] for row in rows)})
     return result

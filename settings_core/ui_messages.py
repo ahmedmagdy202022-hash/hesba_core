@@ -193,6 +193,10 @@ PATTERNS = (
     (r"^This operation is a material issue of production order (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
      r"Cancel the order from its own page: all of its materials come back together\.$",
      "الحركة دي صرف خامات لأمر الإنتاج {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ الأمر من صفحته، وكل خاماته بترجع المخزن مع بعض."),
+    # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is returned from the job's own page.
+    (r"^This operation is a spare part of maintenance job (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
+     r"Return the part from the job's own page\.$",
+     "الحركة دي قطعة غيار لأمر الصيانة {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. رجّع القطعة من صفحة أمر الصيانة."),
     # HG-107: a kitchen preparation's operation is cancelled from the dish's page.
     (r"^This operation belongs to the kitchen preparation (?P<number>\S+) of “(?P<dish>.+?)” and cannot be reversed from the transfers and adjustments screen\. "
      r"Cancel the preparation from the dish's page: its plates leave stock and all of their ingredients come back, together\.$",

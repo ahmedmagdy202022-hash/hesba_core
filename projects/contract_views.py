@@ -494,7 +494,7 @@ def subcontracts(request, pk):
     others = [{"link": link, "heading_label": choice_label(link, "heading", lang), "net": costs.net_purchase(link.invoice),
                "status_label": choice_label(link.invoice, "status", lang)}
               for link in costs._here(project.purchases.select_related("invoice", "invoice__supplier").filter(invoice__subcontract_bill__isnull=True))]
-    free = entity_scope.scope(PurchaseInvoice.objects, entity_scope.PURCHASE_INVOICE).exclude(status="cancelled").filter(project_purchase__isnull=True).exclude(lines__item__is_stock_tracked=True).distinct().order_by("-invoice_date")[:50]
+    free = entity_scope.scope(PurchaseInvoice.objects, entity_scope.PURCHASE_INVOICE).exclude(status="cancelled").filter(project_purchase__isnull=True, **{f"{name}__isnull": True for name in costs.FACTORY_BILLS}).exclude(lines__item__is_stock_tracked=True).distinct().order_by("-invoice_date")[:50]
     return render(request, "projects/subcontracts.html", _context(
         request, project, "subcontracts", subs=subs, others=others, free_purchases=free, error=error, today=timezone.localdate().isoformat(),
         suppliers=Supplier.objects.filter(active=True).order_by("name"), headings=localized_choices(ProjectPurchase, "heading", lang),

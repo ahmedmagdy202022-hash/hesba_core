@@ -26,6 +26,9 @@ Rules, stated once:
   at its stage's original work centre by F6a's suggestions: the move changes where and when, never the cost path.
 * **Late**: an order is late when it is past its due date and not done, or when its last planned end is after the due date.
 * **Load**: ``workcentres.load`` reads a step's planned days and centre where it has them, else the due date as before.
+* **Breakdowns** (F10, HG-141): a day's capacity on a work centre is its hours less the minutes a breakdown was open on that
+  day, and nothing today while one is still open (``maintenance.downtime``). The grid and the over-capacity warnings read it;
+  «رتّب» and a move do not plan around it: the day shows over capacity and a person moves the order.
 
 Nothing here touches stock, cost, the inventory engine, average cost, the projector or F12's finish.
 """
@@ -386,12 +389,15 @@ def warnings_for(pairs):
 
     if not pairs:
         return []
+    from . import maintenance
+
     closed, totals = holidays(), planned_totals()
     centres = {c.pk: c for c in WorkCentre.objects.filter(pk__in={p[0] for p in pairs})}
+    down = maintenance.downtime(list(centres), min(p[1] for p in pairs), max(p[1] for p in pairs))  # F10 (HG-141)
     result = []
     for centre_id, day in sorted(pairs, key=lambda p: (p[1], p[0])):
         centre = centres[centre_id]
-        capacity = ZERO if day in closed else (centre.hours_per_day * 60).quantize(Decimal("0.01"))
+        capacity = ZERO if day in closed else maintenance.capacity_left((centre.hours_per_day * 60).quantize(Decimal("0.01")), down[(centre_id, day)])
         if totals[(centre_id, day)] > capacity:
             result.append({"centre": centre, "day": day, "minutes": totals[(centre_id, day)], "capacity": capacity})
     return result
@@ -438,6 +444,11 @@ def grid(start, days=DAYS, centre=None, lang="ar"):
                 stages = step.order.stages
                 label = (stages[step.index][2 if lang == "en" else 1]) if step.index < len(stages) else step.stage_key
                 cells[(step.work_centre_id, day)].append({"step": step, "order": step.order, "minutes": minutes, "late": step.order_id in late, "label": label})
+    from . import maintenance
+
+    # F10 (HG-141): a breakdown takes the minutes it was open out of its day's capacity; an open one, the whole of today.
+    down = maintenance.downtime([c.pk for c in centres], window[0], window[-1]) if window else {}
+    broken = maintenance.open_breakdowns([c.pk for c in centres])
     lanes = []
     for lane_centre in centres:
         capacity = (lane_centre.hours_per_day * 60).quantize(Decimal("0.01"))
@@ -445,11 +456,12 @@ def grid(start, days=DAYS, centre=None, lang="ar"):
         for day in window:
             items = cells[(lane_centre.pk, day)]
             minutes = sum((item["minutes"] for item in items), ZERO)
-            cap = ZERO if day in closed else capacity
+            cap = ZERO if day in closed else maintenance.capacity_left(capacity, down[(lane_centre.pk, day)])
             for item in items:
                 item["share"] = min(int(item["minutes"] * 100 / capacity), 100) if capacity else 0
-            rows.append({"date": day, "items": items, "minutes": minutes, "capacity": cap, "holiday": day in closed, "over": minutes > cap})
-        lanes.append({"centre": lane_centre, "days": rows, "over": any(r["over"] for r in rows)})
+            rows.append({"date": day, "items": items, "minutes": minutes, "capacity": cap, "holiday": day in closed, "over": minutes > cap,
+                         "down": day not in closed and cap < capacity})
+        lanes.append({"centre": lane_centre, "days": rows, "over": any(r["over"] for r in rows), "broken": broken.get(lane_centre.pk)})
     if centre is None:
         loose = [{"date": day, "items": cells[(None, day)], "minutes": ZERO, "capacity": None, "holiday": day in closed, "over": False} for day in window]
         for row in loose:

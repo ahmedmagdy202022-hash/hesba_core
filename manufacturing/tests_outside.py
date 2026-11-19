@@ -277,6 +277,20 @@ class GarmentsExampleTests(GarmentsPlant):
         self.assertEqual(PurchaseInvoice.objects.get(pk=first.pk).status, "cancelled")  # it stays in purchases as a cancelled document
         self.balanced()
 
+    def test_the_processing_bill_is_not_linked_to_a_project_as_well(self):
+        """One bill counts in one place: the fee joins the product's cost at the finish, so a project does not take the
+        same invoice (found on the maintenance bills, F10, and true of this bill since F4)."""
+
+        from hesba_testing.factories import make_customer
+        from projects import costs as project_costs, services as project_services
+
+        invoice = self.billed().purchase_invoice
+        self.assertEqual(invoice.status, "posted")
+        project = project_services.save_project({"name": "توسعة المصنع", "customer": make_customer(customer_code="CUS-PRJ", name="مصنع النور")}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "مربوطة بأمر صيانة أو بأمر إنتاج"):
+            project_costs.link_purchase(project, invoice, self.owner)
+        self.assertFalse(project.purchases.exists())
+
     def test_a_draft_bill_is_withdrawn_and_a_posted_one_is_not(self):
         job = self.billed(post=False)
         draft = job.purchase_invoice

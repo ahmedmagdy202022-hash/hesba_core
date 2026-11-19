@@ -1,6 +1,7 @@
 from django.urls import path
 
-from . import costs_views, floor_views, mrp_views, order_views, outside_views, quality_views, quote_views, schedule_views, trace_views, views, workcentre_views
+from . import (costs_views, floor_views, maintenance_views, mrp_views, order_views, outside_views, quality_views, quote_views, schedule_views, trace_views, views,
+               workcentre_views)
 
 
 app_name = "manufacturing"
@@ -34,4 +35,8 @@ urlpatterns = [
     path("floor/<int:pk>/photo/", floor_views.photo_upload, name="floor_photo"),
     # Manufacturing F7 (HG-138): a quotation line's specifications and cost sheet, made into a custom production order
     path("quotes/lines/<int:line_pk>/", quote_views.quote_sheet, name="quote_sheet"),
+    # Manufacturing F10 (HG-141): machine maintenance: what is down and due, one work centre's page, one job's page
+    path("maintenance/", maintenance_views.maintenance_screen, name="maintenance"),
+    path("work-centres/<int:pk>/maintenance/", maintenance_views.centre_page, name="maintenance_centre"),
+    path("maintenance/jobs/<int:pk>/", maintenance_views.job_page, name="maintenance_job"),
 ]

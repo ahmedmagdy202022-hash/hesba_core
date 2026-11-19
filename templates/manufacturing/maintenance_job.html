@@ -1,0 +1,7 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}{# Manufacturing F10 (HG-141): one maintenance job on its own page (a closed job still takes a late bill, and a part can still go back). #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:maintenance_centre' centre.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ mw.back_to_centre }}</a><h1>{{ mw.job }} · {{ centre_name }}</h1></div></section>
+{% include "manufacturing/_maintenance_job.html" %}
+{% if not can_produce and not can_bill %}<p class="op-muted" data-view-only>{{ mw.view_only }}</p>{% endif %}
+{% endblock %}

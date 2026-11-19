@@ -10,7 +10,7 @@
 {% if not cards %}<p class="tc-empty" data-floor-empty>{{ words.empty }}</p>{% endif %}
 <div class="fl-jobs">
 {% for card in cards %}<article class="tc-job fl-job{% if card.state == 'running' %} is-next{% endif %}" data-floor-card="{{ card.pk }}" data-state="{{ card.state }}" data-order-number="{{ card.number }}">
-<div class="tc-job__head"><span class="tc-type" data-floor-stage>{{ card.stage }}</span>{% if card.centre %}<span class="tc-type tc-type--wo" data-floor-centre>{{ card.centre }}</span>{% endif %}
+<div class="tc-job__head"><span class="tc-type" data-floor-stage>{{ card.stage }}</span>{% if card.centre %}<span class="tc-type tc-type--wo" data-floor-centre>{{ card.centre }}</span>{% endif %}{% if card.down %}<span class="op-status op-status-cancelled" data-floor-down>{{ words.centre_down }}</span>{% endif %}
 <span class="op-status {% if card.state == 'running' %}op-status-posted{% elif card.state == 'ready' %}op-status-draft{% endif %}">{% if card.state == 'running' %}{{ words.running }}{% elif card.state == 'ready' %}{{ words.ready }}{% else %}{{ words.waiting }}{% endif %}</span></div>
 <div class="tc-job__body">
 <h2 class="tc-cust">{{ card.product }}</h2>
