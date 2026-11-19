@@ -445,6 +445,9 @@ def save_recipe_quality(recipe, user, *, needs_release, rows, lang="ar"):
     """The recipe page's quality section: whether its orders finish on hold, and its criteria (the whole list is replaced)."""
 
     _may_edit_criteria(user, lang)
+    from . import byproducts
+
+    byproducts.check_release(recipe, needs_release, lang)  # F9 (HG-139): a check covers the product only, so not with a co-product
     clean = _replace_criteria("recipe", recipe, rows, lang)
     recipe.needs_release = bool(needs_release)
     recipe.save(update_fields=["needs_release"])

@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}{# Manufacturing F10 (HG-141): «صيانة المكن». What is down now, which planned maintenance is due, and every work centre with its state. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:home' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ mw.back }}</a><h1>{{ mw.title }}</h1><p>{{ mw.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'manufacturing:work_centres' %}?lang={{ lang }}">{{ mw.centres_link }}</a></div></section>
+<section class="op-summary-grid op-summary-grid--compact" data-maintenance-tiles><article><small>{{ mw.tile_down }}</small><strong data-tile-down{% if tiles.down %} style="color:var(--hs-danger)"{% endif %}>{{ tiles.down }}</strong></article><article><small>{{ mw.tile_due }}</small><strong data-tile-due>{{ tiles.due }}</strong></article><article><small>{{ mw.tile_open }}</small><strong data-tile-open>{{ tiles.open }}</strong></article></section>
+
+<h2>{{ mw.down_title }}</h2>
+{% if down %}<div class="op-table-wrap"><table class="op-table" data-list-rows data-down-list><thead><tr><th>{{ mw.centre }}</th><th>{{ mw.cause }}</th><th>{{ mw.stopped_at }}</th><th>{{ mw.down_for }}</th></tr></thead><tbody>
+{% for row in down %}<tr data-down-centre="{{ row.centre.code }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.centre.pk %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="sub">{{ row.job.cause }}</td><td data-row="meta"><span class="hs-phone-only">{{ mw.since }}</span><bdi dir="ltr">{{ row.job.opened_at|date:"Y-m-d H:i" }}</bdi></td><td data-row="meta"><span><bdi dir="ltr">{{ row.minutes }}</bdi> {{ mw.minutes }}</span></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="op-notice op-message-success" data-down-empty>{{ mw.empty_down }}</p>{% endif %}
+
+<h2>{{ mw.due_title }}</h2>
+{% if due %}<div class="op-table-wrap"><table class="op-table" data-list-rows data-due-list><thead><tr><th>{{ mw.centre }}</th><th>{{ mw.plan }}</th><th>{{ mw.why }}</th></tr></thead><tbody>
+{% for row in due %}<tr data-due-plan="{{ row.plan.pk }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.plan.work_centre_id %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="sub">{{ row.plan.title }}</td><td data-row="meta" class="op-cell-text"><span>{% for reason in row.reasons %}{{ reason }}{% if not forloop.last %} · {% endif %}{% endfor %}</span></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="op-muted" data-due-empty>{{ mw.empty_due }}</p>{% endif %}
+
+<h2>{{ mw.all_title }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-maintenance-centres><thead><tr><th>{{ mw.centre }}</th><th>{{ mw.state }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-maintenance-centre="{{ row.centre.code }}"><td data-row="title"><a href="{% url 'manufacturing:maintenance_centre' row.centre.pk %}?lang={{ lang }}">{{ row.name }}</a></td><td data-row="meta" class="op-cell-text">{% if row.down %}<span class="op-status op-status-cancelled" data-mark-down>{{ mw.state_down }}</span>{% elif row.open %}<span class="op-status op-status-draft" data-mark-open>{{ mw.state_open }}</span>{% endif %}{% if row.due %} <span class="op-status op-status-draft" data-mark-due>{{ mw.state_due }}</span>{% endif %}{% if not row.down and not row.open and not row.due %}<span class="op-status op-status-posted" data-mark-ok>{{ mw.state_ok }}</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="2" class="op-empty" data-row="empty" data-centres-empty>{{ mw.empty_centres }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

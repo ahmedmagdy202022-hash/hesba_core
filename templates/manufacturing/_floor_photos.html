@@ -1,0 +1,14 @@
+{% load static hesba_format %}{# Manufacturing F8 (HG-140): the photos of defects taken on the floor screen, on the order page. Removed by the supervisor while the order is open. #}
+{% if floor_photos %}<section class="att-card" id="order-floor-photos" data-attachments data-floor-photos-card aria-labelledby="order-floor-photos-title" data-msg-failed="{{ floor_att.failed }}" data-msg-network="{{ floor_att.network }}" data-msg-uploading="{{ floor_att.uploading }}" data-msg-uploaded="{{ floor_att.uploaded }}" data-msg-deleting="{{ floor_att.deleting }}" data-msg-confirm="{{ floor_att.confirm }}">
+{% csrf_token %}
+<h2 id="order-floor-photos-title">{{ fw.photos }}</h2>
+<p class="att-help">{{ fw.photos_hint }}</p>
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+<ul class="att-list" data-att-list>{% for item in floor_photos %}<li class="att-item" data-attachment="{{ item.row.pk }}">
+<a class="att-item-thumb" href="{{ item.url }}" target="_blank" rel="noopener" aria-label="{{ fw.photo_open }}"><img src="{{ item.url }}" alt="{{ fw.photo_alt }}" loading="lazy" decoding="async"></a>
+<div class="att-item-body"><small class="att-item-meta"><bdi dir="ltr">{{ item.row.created_at|date:"Y-m-d H:i" }}</bdi> · {{ fw.added_by }} <bdi>{{ item.row.uploaded_by|person }}</bdi></small></div>
+{% if floor_photos_delete %}<button class="att-x att-item-x" type="button" data-att-delete data-url="{{ item.delete_url }}" aria-label="{{ fw.delete }}"><span><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>{% endif %}
+</li>{% endfor %}</ul>
+</section>
+<script src="{% static 'hesba/js/attachments.js' %}?v=c2-1" defer></script>{% endif %}

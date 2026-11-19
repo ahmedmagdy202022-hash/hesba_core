@@ -30,6 +30,9 @@ WORDS = {
         "routing_save": "حفظ المراحل", "routing_saved": "اتحفظت المراحل.", "routing_none": "الوصفة دي من غير مراحل: أوامرها بتاخد مراحل المصنع المعتادة.", "routing_other": "مراحل الوصفة دي متسجّلة على مراكز عمل كيان تاني، وتتعدّل من الكيان ده. الأوامر هنا بتاخد مراحل المصنع المعتادة.",
         "row": "صف", "centres_link": "مراكز العمل", "no_centres": "ضيف مركز عمل الأول من صفحة مراكز العمل.", "routing_cost": "تكلفة الدفعة بسعر المراكز",
         "routing_view_only": "تعديل المراحل لصاحب الصلاحية بس.",
+        "workers": "عمال المركز", "workers_hint": "العامل اللي له مركز عمل بيشوف على شاشة العامل مراحل مركزه بس، واللي مالوش مركز بيشوف مراحل كل المراكز.",
+        "workers_none": "لسه مفيش موظفين؛ ضيفهم من شاشة الموظفين الأول.",
+        "maintenance": "الصيانة", "m_down": "متوقف", "m_open": "في الصيانة", "m_due": "صيانة عليها الدور", "down_day": "عطل",
     },
     "en": {
         "title": "Work centres", "intro": "Machines, lines and manual tables: each has hours it works in a day and an hourly rate, and takes the stages of a recipe.",
@@ -45,6 +48,9 @@ WORDS = {
         "routing_save": "Save the stages", "routing_saved": "The stages were saved.", "routing_none": "This recipe has no stages: its orders take the factory's usual stages.", "routing_other": "This recipe's stages are on another entity's work centres and are edited from that entity. Orders here take the factory's usual stages.",
         "row": "Row", "centres_link": "Work centres", "no_centres": "Add a work centre first from the work centres page.", "routing_cost": "Cost of one batch at the centres' rates",
         "routing_view_only": "Only users with the permission can change the stages.",
+        "workers": "Workers at this centre", "workers_hint": "A worker who has a work centre sees only its stages on the floor screen; a worker with none sees every centre's stages.",
+        "workers_none": "No employees yet; add them from the employees screen first.",
+        "maintenance": "Maintenance", "m_down": "Down", "m_open": "In maintenance", "m_due": "Maintenance due", "down_day": "Breakdown",
     },
 }
 
@@ -59,6 +65,9 @@ def _ctx(request, **extra):
 def centres(request):
     lang = _lang(request)
     rows = [{"centre": c, "kind_label": choice_label(c, "kind", lang)} for c in workcentres.scoped().select_related("fixed_asset")]
+    from . import maintenance_views
+
+    maintenance_views.mark_centres(rows)  # F10 (HG-141): down now, in maintenance, or with planned maintenance due
     return render(request, "manufacturing/work_centres.html", _ctx(request, rows=rows, load=workcentres.load(timezone.localdate())))
 
 
@@ -71,6 +80,7 @@ def centre_form(request, pk=None):
     centre = get_object_or_404(workcentres.scoped(), pk=pk) if pk else None
     can_cost = user_has_permission(request.user, COST)
     error = ""
+    workers = {str(pk) for pk in centre.workers.values_list("pk", flat=True)} if centre else set()  # F8 (HG-140)
     form = ({"code": centre.code, "name_ar": centre.name_ar, "name_en": centre.name_en, "kind": centre.kind, "fixed_asset": str(centre.fixed_asset_id or ""),
              "hours_per_day": f"{centre.hours_per_day.normalize():f}", "rate_per_hour": f"{centre.rate_per_hour:.2f}", "active": centre.active}
             if centre else {"kind": WorkCentreKind.MACHINE, "hours_per_day": "8", "rate_per_hour": "0", "active": True})
@@ -79,6 +89,8 @@ def centre_form(request, pk=None):
                 "kind": request.POST.get("kind", ""), "fixed_asset": request.POST.get("fixed_asset", ""), "hours_per_day": request.POST.get("hours_per_day", ""),
                 "active": request.POST.get("active") == "on"}
         data = dict(form)
+        workers = set(request.POST.getlist("workers"))
+        data["workers"] = workers
         if can_cost:  # no cost permission, no rate field: the stored rate stays
             form["rate_per_hour"] = data["rate_per_hour"] = request.POST.get("rate_per_hour", "")
         try:
@@ -89,10 +101,12 @@ def centre_form(request, pk=None):
             messages.success(request, words["saved"])
             return redirect(f"{reverse('manufacturing:work_centres')}?lang={lang}")
     from fixed_assets.models import FixedAsset
+    from staff.models import Employee
 
+    employees = [{"employee": employee, "on": str(employee.pk) in workers} for employee in Employee.objects.filter(active=True).order_by("name")[:300]]
     return render(request, "manufacturing/work_centre_form.html", _ctx(
         request, centre=centre, form=form, error=error, can_cost=can_cost, kinds=[(value, choice_label(WorkCentre(kind=value), "kind", lang)) for value in WorkCentreKind.values],
-        assets=FixedAsset.objects.filter(status="active").order_by("code")))
+        assets=FixedAsset.objects.filter(status="active").order_by("code"), employees=employees))
 
 
 def routing_context(request, recipe, posted=None):

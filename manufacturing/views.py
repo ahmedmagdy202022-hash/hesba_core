@@ -149,7 +149,8 @@ def _overview(request, lang):
     from . import schedule
 
     late = schedule.late_orders(open_orders, today)  # F6b (HG-134): past its due date, or its last planned end is after it
-    recipes = list(Recipe.objects.select_related("product").prefetch_related("lines__component").order_by("-active", "code"))
+    # F9 (HG-139): the recipes' extra outputs come along in one read, for the product's own materials per unit below.
+    recipes = list(Recipe.objects.select_related("product").prefetch_related("lines__component", "outputs__item").order_by("-active", "code"))
     item_ids = {line.component_id for recipe in recipes for line in recipe.lines.all()}
     item_ids |= {line.component_id for order in open_orders for line in order.recipe.lines.all()}
     item_ids |= {recipe.product_id for recipe in recipes}
@@ -200,6 +201,13 @@ def _overview(request, lang):
 
             batch = sum((line.quantity * costs.get(line.component_id, Decimal("0")) for line in recipe.lines.all()), Decimal("0"))
             row["unit_cost"] = cost_round(batch / recipe.output_quantity) if recipe.output_quantity else Decimal("0")
+            outputs = list(recipe.outputs.all())
+            if outputs and recipe.output_quantity:
+                # F9 (HG-139): less the by-products' value, and the product's own share beside its co-products.
+                from . import byproducts
+
+                own = byproducts.main_materials_per_unit(recipe, batch, outputs)
+                row["unit_cost"] = own if own is not None else row["unit_cost"]
             row["margin"] = round(float((row["price"] - row["unit_cost"]) / row["price"] * 100)) if row["price"] else None
         products.append(row)
     runs = entity_scope.scope(ProductionRun.objects.select_related("recipe", "recipe__product", "location"), "location__entity")[:10]
@@ -222,7 +230,10 @@ def home(request):
             return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
         error, form, rows = failed
         return render(request, "manufacturing/recipe_new.html", _base(request, items=_stock_items(), form=form, rows=rows, error=error))
-    return render(request, "manufacturing/home.html", _base(request, **_overview(request, lang)))
+    from . import maintenance_views
+
+    down, due = maintenance_views.home_tile()  # F10 (HG-141): work centres down now, and planned maintenance that is due
+    return render(request, "manufacturing/home.html", _base(request, maintenance_down=down, maintenance_due=due, **_overview(request, lang)))
 
 
 @require_permission(VIEW)
@@ -246,6 +257,7 @@ def recipe_detail(request, pk):
     words = WORDS[lang]
     recipe = get_object_or_404(Recipe.objects.select_related("product"), pk=pk)
     error, routing_error, routing_rows, quality_error, quality_rows = "", "", None, "", None
+    from . import byproducts_views
     locations = quality.production_places(entity_scope.locations(Location.objects).filter(active=True))  # F5 (HG-136): never the quality hold place
     location = _pick(Location, request.GET.get("location") or request.POST.get("location"), active=True) or locations.filter(is_default=True).first() or locations.first()
     batches = services._decimal(request.GET.get("batches") or request.POST.get("batches") or "1") or Decimal("1")
@@ -268,8 +280,10 @@ def recipe_detail(request, pk):
                 except ValueError:
                     raise ValidationError(words["lot_date"])
                 # Manufacturing F3 (HG-131): the same run, plus the ingredient lots it used and the product's own lot.
+                # Manufacturing F9 (HG-139): what really came out of each by-product and co-product, when the form showed them.
                 run = lots.produce(recipe, request.user, batches=request.POST.get("batches"), location=location, run_date=run_date,
-                                   notes=request.POST.get("notes", ""), lang=lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry)
+                                   notes=request.POST.get("notes", ""), lang=lang, lot_no=request.POST.get("lot_no", ""), lot_expiry=lot_expiry,
+                                   extra_outputs=byproducts_views.typed_quantities(request, recipe))
                 messages.success(request, words["produced"].format(number=run.number, output=fmt_qty(run.output_quantity), product=recipe.product.item_name))
                 return redirect(f"{reverse('manufacturing:run', args=[run.pk])}?lang={lang}")
             if action == "routing":  # F6a (HG-133): the recipe's stages and their work centres
@@ -298,6 +312,16 @@ def recipe_detail(request, pk):
                     messages.success(request, quality_views.WORDS[lang]["quality_saved"])
                     return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
                 return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows, quality_error, quality_rows)
+            if action == "outputs":  # F9 (HG-139): the recipe's by-products and co-products
+                try:
+                    byproducts_views.recipe_outputs_post(request, recipe, lang)
+                except ValidationError as exc:
+                    from settings_core.ui_messages import translate
+
+                    return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows,
+                                        outputs_error=translate(" ".join(exc.messages), lang), outputs_rows=byproducts_views.posted_outputs(request))
+                messages.success(request, byproducts_views.WORDS[lang]["saved"])
+                return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
             if not user_has_permission(request.user, RECIPES):
                 raise PermissionDenied("Recipes need master_data.manage_items.")
             data, lines = _recipe_post(request)
@@ -311,18 +335,21 @@ def recipe_detail(request, pk):
     return _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error, routing_rows)
 
 
-def _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error="", routing_rows=None, quality_error="", quality_rows=None):
-    from . import quality_views, workcentre_views
+def _recipe_page(request, recipe, lang, location, locations, batches, error, routing_error="", routing_rows=None, quality_error="", quality_rows=None,
+                 outputs_error="", outputs_rows=None):
+    from . import byproducts_views, quality_views, workcentre_views
 
     lines = list(recipe.lines.select_related("component"))
+    plan = services.plan(recipe, batches, location)
     form = {"product": str(recipe.product_id), "name": recipe.name, "output_quantity": _plain(recipe.output_quantity), "active": recipe.active, "notes": recipe.notes,
             "shelf_life_days": recipe.shelf_life_days or ""}
     return render(request, "manufacturing/recipe.html", _base(
-        request, recipe=recipe, lines=lines, plan=services.plan(recipe, batches, location), batches=_plain(batches), location=location,
+        request, recipe=recipe, lines=lines, plan=plan, batches=_plain(batches), location=location,
         locations=locations, items=_stock_items(), form=form, rows=_rows([(str(line.component_id), _plain(line.quantity)) for line in lines]), error=error,
         runs=[{"run": run, "status_label": choice_label(run, "status", lang)} for run in recipe.runs.select_related("location")[:20]],
         routing_error=routing_error, **workcentre_views.routing_context(request, recipe, routing_rows),
         quality_error=quality_error, **quality_views.recipe_quality_context(request, recipe, quality_rows),
+        outputs_error=outputs_error, **byproducts_views.recipe_outputs_context(request, recipe, batches, plan, outputs_rows),
     ))
 
 
@@ -368,7 +395,7 @@ def run_detail(request, pk):
         lot=lot, lot_uses=lot_uses, early_warning=words["early_warning"].format(names=early_names) if early else "",
         labels_url=labels_url, labels_note=labels_note,
         can_trace=user_has_permission(request.user, VIEW),
-        **_run_hold(run, lang),
+        **_run_hold(run, lang), **_run_outputs(request, run),
     ))
 
 
@@ -383,3 +410,11 @@ def _run_hold(run, lang):
     order = ProductionOrder.objects.filter(run=run).first()
     return {"qw": quality_views.WORDS[lang], "run_held": True,
             "run_check_url": reverse("manufacturing:quality_order", args=[order.pk]) if order is not None and run.status == "posted" else ""}
+
+
+def _run_outputs(request, run):
+    """F9 (HG-139): every output of the run with its quantity and, for someone who may see cost, its cost."""
+
+    from . import byproducts_views
+
+    return byproducts_views.run_outputs_context(request, run)

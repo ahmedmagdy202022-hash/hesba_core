@@ -71,7 +71,10 @@ def order_variance(order):
     # The sum of the lines (each at its own journal value), so the header's variance is the sum of the lines' variances.
     material = sum((line["value"] for line in materials.values()), ZERO)
     good = order.run.output_quantity if order.run_id else ZERO
-    standard_unit = cost_round((std_material + order.labor_cost + order.overhead_cost) / order.quantity) if order.quantity else ZERO
+    # Manufacturing F9 (HG-139): the product's own cost is what the by-products and co-products left of the order's cost,
+    # so the standard leaves them the same amount (no standard is kept for them); 0 for an order without them.
+    extras = sum((row.cost for row in order.run.outputs.all()), ZERO) if order.run_id else ZERO
+    standard_unit = cost_round((std_material + order.labor_cost + order.overhead_cost - extras) / order.quantity) if order.quantity else ZERO
     unit = order.run.output_operation.unit_cost if order.run_id else ZERO
     return {
         "order": order, "materials": list(materials.values()),

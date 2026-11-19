@@ -26,7 +26,7 @@ ACTIVITY_LEAD = {
     "medical": ("appointments", "medical"),
     "education": ("education", "classes", "appointments"),
     "services": ("my_day", "workorders", "appointments", "packages", "hours", "contracts"),
-    "manufacturing": ("manufacturing",),
+    "manufacturing": ("floor", "manufacturing"),  # F8 (HG-140): a production worker's own screen comes first; nobody else has it in the menu
     "contracting": ("projects", "tenders"),  # C8 (HG-126): the tenders sit right after the projects (the tab bar takes the first only)
 }
 
@@ -40,7 +40,7 @@ def _activity():
 #: ENT-002: sections that belong to one activity. While working in an entity
 #: that has its own activity, the others' sections step aside (the whole-group
 #: view keeps every enabled section).
-ACTIVITY_OWNED = {"manufacturing": "manufacturing", "projects": "contracting", "guarantees": "contracting", "tenders": "contracting", "restaurant": "restaurants"}
+ACTIVITY_OWNED = {"manufacturing": "manufacturing", "floor": "manufacturing", "projects": "contracting", "guarantees": "contracting", "tenders": "contracting", "restaurant": "restaurants"}
 
 
 def _hidden_for_entity(key):
@@ -103,6 +103,10 @@ NAV_ITEMS = (
     # C4 (HG-123): letters of guarantee and their renewal dates, with the projects module (owner question 11's managers).
     {"key": "guarantees", "ar": "خطابات الضمان", "en": "Letters of guarantee", "url_name": "guarantees:list", "module": "projects",
      "permission": ("cashboxes.manage_cashboxes", "sales.create_sales_invoice")},
+    # Manufacturing F8 (HG-140): the production worker's floor screen, in the menu only of someone whose work is the floor
+    # (``allow``: a supervisor, who holds inventory.adjust_stock, reaches it from the orders board and keeps their menu).
+    {"key": "floor", "ar": "شغلي", "en": "My work", "url_name": "manufacturing:floor", "module": "manufacturing", "permission": "manufacturing.record_stage",
+     "allow": "manufacturing.floor.in_menu"},
     {"key": "manufacturing", "ar": "التصنيع", "en": "Manufacturing", "url_name": "manufacturing:home", "module": "manufacturing", "permission": "inventory.view_stock"},
     {"key": "projects", "ar": "المشاريع", "en": "Projects", "url_name": "projects:list", "module": "projects",
      "permission": ("sales.view_sales_invoices", "projects.view_projects")},
@@ -164,7 +168,7 @@ NAV_GROUPS = (
     {"key": "sales", "ar": "البيع", "en": "Sales",
      "keys": ("pos", "operations", "quotes", "restaurant", "workorders", "appointments", "queue", "beds", "projects", "tenders", "contracts", "packages", "hours")},
     {"key": "stock", "ar": "المخزون", "en": "Stock",
-     "keys": ("items", "inventory", "warehouses", "purchases", "suppliers", "drugs", "manufacturing")},
+     "keys": ("items", "inventory", "warehouses", "purchases", "suppliers", "drugs", "floor", "manufacturing")},
     {"key": "people", "ar": "الناس", "en": "People",
      "keys": ("customers", "education", "classes", "medical", "messages", "staff", "attendance", "my_attendance", "my_day")},
     {"key": "money", "ar": "الفلوس", "en": "Money",
@@ -261,7 +265,7 @@ def shortcut_actions(user, lang, modules, sections, keys=DRAWER_SHORTCUTS, dashb
 # The phone tab bar has room for four short labels plus "More"; these are the
 # sections a counter clerk reaches for first, in order. Whatever a user cannot
 # see is skipped and the next one moves up.
-TAB_PRIORITY = ("dashboard", "operations", "inventory", "customers", "purchases", "items", "cashboxes", "reports")
+TAB_PRIORITY = ("dashboard", "floor", "operations", "inventory", "customers", "purchases", "items", "cashboxes", "reports")
 TAB_COUNT = 4
 TAB_LABELS = {
     "dashboard": {"ar": "الرئيسية", "en": "Home"},
@@ -276,6 +280,7 @@ TAB_LABELS = {
     "reports": {"ar": "التقارير", "en": "Reports"},
     "restaurant": {"ar": "الطاولات", "en": "Tables"},
     "manufacturing": {"ar": "التصنيع", "en": "Production"},
+    "floor": {"ar": "شغلي", "en": "My work"},
     "projects": {"ar": "المشاريع", "en": "Projects"},
     "medical": {"ar": "الملفات", "en": "Files"},
     "education": {"ar": "الطلاب", "en": "Students"},

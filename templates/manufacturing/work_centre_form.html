@@ -13,5 +13,8 @@
 {% if can_cost %}<div class="op-field"><label for="wc-rate">{{ words.rate }}</label><input id="wc-rate" name="rate_per_hour" value="{{ form.rate_per_hour|default:'' }}" inputmode="decimal" dir="ltr" data-wc-rate-input></div>{% endif %}
 <label class="op-field"><span><input type="checkbox" name="active"{% if form.active %} checked{% endif %}> {{ words.active }}</span></label></div>
 {% if can_cost %}<p class="op-muted">{{ words.rate_hint }}</p>{% else %}<p class="op-muted">{{ words.no_rate_perm }}</p>{% endif %}
+<fieldset class="op-field" data-wc-workers><legend>{{ words.workers }}</legend><p class="op-muted">{{ words.workers_hint }}</p>
+{% for row in employees %}<label class="op-check"><input type="checkbox" name="workers" value="{{ row.employee.pk }}"{% if row.on %} checked{% endif %}><span>{{ row.employee.name }}{% if row.employee.title %} · {{ row.employee.title }}{% endif %}</span></label>
+{% empty %}<p class="op-muted" data-wc-workers-empty>{{ words.workers_none }}</p>{% endfor %}</fieldset>
 <div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
 {% endblock %}

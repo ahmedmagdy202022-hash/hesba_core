@@ -1,5 +1,5 @@
 """Manufacturing F11b (HG-102): a stock operation that belongs to a production run or to a production order is not
-reversed from the stock operations screen.
+reversed from the stock operations screen. Manufacturing F10 (HG-141): nor is a spare part taken for a maintenance job.
 
 A run is one document made of several stock operations: its product coming in and each material going out. An order
 on the floor holds the materials issued to it. Their own pages cancel them whole, under their own rules
@@ -29,6 +29,9 @@ RUN_MESSAGE = ("This operation belongs to production run {number} and cannot be 
                "Cancel the run from its own page: its product leaves stock and all of its materials come back, together.")
 ORDER_MESSAGE = ("This operation is a material issue of production order {number} and cannot be reversed from the transfers and adjustments screen. "
                  "Cancel the order from its own page: all of its materials come back together.")
+# Manufacturing F10 (HG-141): a spare part taken for a maintenance job goes back from the job's own page.
+MAINTENANCE_MESSAGE = ("This operation is a spare part of maintenance job {number} and cannot be reversed from the transfers and adjustments screen. "
+                       "Return the part from the job's own page.")
 DISH_MESSAGE = ("This operation belongs to the kitchen preparation {number} of “{dish}” and cannot be reversed from the transfers and adjustments screen. "
                 "Cancel the preparation from the dish's page: its plates leave stock and all of their ingredients come back, together.")
 
@@ -37,7 +40,7 @@ DISH_MESSAGE = ("This operation belongs to the kitchen preparation {number} of �
 class Owner:
     """The document a stock operation belongs to, and its own page."""
 
-    kind: str  # "run", "order" or (HG-107) "dish": a kitchen preparation, cancelled from its dish's page
+    kind: str  # "run", "order", (HG-107) "dish": a kitchen preparation, cancelled from its dish's page, or (HG-141) "maintenance"
     number: str
     url: str
     dish: str = ""  # the dish's name, for a kitchen preparation
@@ -46,6 +49,8 @@ class Owner:
     def refusal(self):
         if self.kind == "dish":
             return DISH_MESSAGE.format(number=self.number, dish=self.dish)
+        if self.kind == "maintenance":
+            return MAINTENANCE_MESSAGE.format(number=self.number)
         return (RUN_MESSAGE if self.kind == "run" else ORDER_MESSAGE).format(number=self.number)
 
 
@@ -61,7 +66,7 @@ def owners(operation_ids):
 def _owners(operation_ids):
     """(``owners``, {operation pk: run pk} for those that belong to a run)."""
 
-    from .models import OrderMaterialIssue, ProductionConsumption, ProductionRun
+    from .models import OrderMaterialIssue, ProductionConsumption, ProductionRun, RunOutput
 
     ids = [int(pk) for pk in operation_ids]
     found, runs = {}, {}
@@ -73,6 +78,14 @@ def _owners(operation_ids):
         found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
     for operation, run, number in ProductionRun.objects.filter(output_operation_id__in=ids).values_list("output_operation_id", "pk", "number"):
         found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
+    # Manufacturing F9 (HG-139): a run's extra output (a by-product or a co-product) is the run's too.
+    for operation, run, number in RunOutput.objects.filter(operation_id__in=ids).values_list("operation_id", "run_id", "run__number"):
+        found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
+    # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is returned from the job's own page.
+    from .models import MaintenancePart
+
+    for operation, job, number in MaintenancePart.objects.filter(operation_id__in=ids).values_list("operation_id", "job_id", "job__number"):
+        found[operation] = Owner("maintenance", number, reverse("manufacturing:maintenance_job", args=[job]))
     return found, runs
 
 

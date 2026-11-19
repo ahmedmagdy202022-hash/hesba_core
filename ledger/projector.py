@@ -64,6 +64,7 @@ class _Accounts:
         services.ensure_chart()
         self.by_control = {a.control: a for a in Account.objects.exclude(control="")}
         self.products = None
+        self._maintenance = None
 
     def __getitem__(self, control):
         account = self.by_control.get(control)
@@ -81,7 +82,23 @@ class _Accounts:
             from manufacturing.models import Recipe
 
             self.products = set(Recipe.objects.values_list("product_id", flat=True))
+            # Manufacturing F9 (HG-139): a by-product or a co-product is made, not bought: finished goods too (trap 7).
+            from manufacturing.models import RecipeOutput, RunOutput
+
+            self.products |= set(RecipeOutput.objects.values_list("item_id", flat=True)) | set(RunOutput.objects.values_list("item_id", flat=True))
         return self["finished_goods" if item_id in self.products else "raw_materials"]
+
+    def maintenance(self):
+        """Manufacturing F10 (HG-141): where maintenance expense goes: the account of the expense category «صيانة وإصلاحات»
+        (``maintenance``; 5206 on every default chart, which has no control key of its own), as an expense of that
+        category books; general expenses where the category has no account. Read once per rebuild."""
+
+        if self._maintenance is None:
+            from .models import ExpenseAccount
+
+            link = ExpenseAccount.objects.filter(category__code="maintenance").select_related("account").first()
+            self._maintenance = link.account if link else self["general_expense"]
+        return self._maintenance
 
 
 class _Group:
@@ -117,6 +134,7 @@ class Projector:
 
         self.main_id = main_entity().pk
         self.groups = {}
+        self._extra_outputs = None
 
     #: T3/T4: where each kind of cashbox keeps its money in the chart.
     #: S6 (HG-071): a gift-card box's (negative) balance is the liability to the cards' holders.
@@ -534,12 +552,26 @@ class Projector:
             # four-decimal unit cost) is absorbed production cost. A reversal on another day mirrors it by the sign.
             net = self._run_wip(op.production_output)
             if net is not None:
+                # Manufacturing F9 (HG-139): the run's extra outputs already took their part out of work in progress, each
+                # on its own entry (below); the product's entry gives back the rest. Nothing for a run without them.
+                net -= self.extra_outputs()[1].get(op.production_output.pk, ZERO)
                 wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
                 absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
                 cleared = net if remainder > 0 else -net
                 g.add(wip, cleared, g.entity_id)
                 g.add(absorbed, remainder - cleared, g.entity_id)
                 return
+        if op.pk in self.extra_outputs()[0]:
+            # Manufacturing F9 (HG-139): a by-product or a co-product books like the product: its share of the run's labour
+            # and overhead (none for a by-product) is absorbed production cost, the rest of its value clears work in
+            # progress. A reversal on another day mirrors it by the sign.
+            wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+            absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+            conversion = min(self.extra_outputs()[0][op.pk], abs(remainder))
+            conversion = conversion if remainder > 0 else -conversion
+            g.add(absorbed, conversion, g.entity_id)
+            g.add(wip, remainder - conversion, g.entity_id)
+            return
         if hasattr(op, "production_output") and op.production_output.conversion_cost:
             # HG-036: the product came in at materials + labour + overhead. The
             # materials clear work in progress; labour and overhead are credited
@@ -555,6 +587,10 @@ class Projector:
             account = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
         elif hasattr(op, "project_issue"):
             account = self.acc["project_cost"] if self.acc.has("project_cost") else self.acc["cogs"]
+        elif hasattr(op, "maintenance_part"):
+            # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is maintenance expense, not a
+            # stock-count loss. The part taken back (the reversal, on its own date) mirrors it by the sign.
+            account = self.acc.maintenance()
         else:
             account = self.acc["stock_loss"] if remainder > 0 else self.acc["stock_gain"]
         g.add(account, remainder, g.entity_id)
@@ -572,6 +608,25 @@ class Projector:
         if not rows:
             return None
         return sum(((-1 if movement_type in STOCK_IN else 1) * money_round(quantity * unit_cost) for quantity, unit_cost, movement_type in rows), ZERO)
+
+    def extra_outputs(self):
+        """Manufacturing F9 (HG-139): the extra outputs of every run (``manufacturing.RunOutput``), read once per rebuild:
+        ({stock operation pk: its share of the run's labour and overhead}, {run pk: what its extra outputs took out of
+        work in progress}). An output's value is its original movement at money_round(quantity x unit cost), as the
+        journal values it; its share is never more than that value, and work in progress gave the rest."""
+
+        if self._extra_outputs is None:
+            from inventory.models import StockMovement
+
+            shares, cleared = {}, defaultdict(Decimal)
+            rows = (StockMovement.objects.filter(stock_operation__run_output__isnull=False, reversal_of__isnull=True)
+                    .values_list("stock_operation_id", "stock_operation__run_output__run_id", "stock_operation__run_output__conversion_share", "quantity", "unit_cost"))
+            for operation, run, share, quantity, unit_cost in rows:
+                value = money_round(quantity * unit_cost)
+                shares[operation] = min(share, value)
+                cleared[run] += value - shares[operation]
+            self._extra_outputs = shares, cleared
+        return self._extra_outputs
 
     def _place_stock_movement(self, g):
         remainder = -g.balance()

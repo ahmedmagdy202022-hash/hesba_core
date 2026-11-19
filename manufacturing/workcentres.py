@@ -14,7 +14,8 @@ Rules, stated once:
   ``hours_per_day`` x 60. The day is the stage's planned day once F6b has planned it (``schedule``), else the order's due
   date; an overdue order is counted today;
   an order due after the window or with no date is counted apart and never against a day. A holiday
-  (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity.
+  (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity. A breakdown (F10, HG-141)
+  takes the minutes it was open out of its day's capacity, and an open one the whole of today (``maintenance.downtime``).
 * **Cost**: the minutes typed on a finished stage, times the stage's work centre's rate per hour, are a *suggested*
   labour line (never a booking). Confirming one adds an ordinary F12 cost line through ``actuals.add_cost_line`` with the
   amount ``minutes x rate / 60`` rounded once (never hours rounded first: 70 minutes is 70.00 at 60.00 an hour, not
@@ -128,7 +129,10 @@ def can_see_rates(user):
 @transaction.atomic
 def save_work_centre(data, user, centre=None, lang="ar"):
     """Create or change a work centre. ``rate_per_hour`` is only read when the key is present, and then it needs the cost
-    permission; a form that cannot show the rate leaves it out and the stored rate stays."""
+    permission; a form that cannot show the rate leaves it out and the stored rate stays.
+
+    Manufacturing F8 (HG-140): ``workers`` (employee ids), also only when the key is present, are the employees who work at
+    this centre: the floor screen shows each of them this centre's stages. An unknown or inactive employee is left out."""
 
     from fixed_assets.models import FixedAsset
     from permissions.services import user_has_permission
@@ -174,9 +178,16 @@ def save_work_centre(data, user, centre=None, lang="ar"):
         centre.rate_per_hour = rate
     new = centre.pk is None
     centre.save()
-    _audit("save_work_centre", user, "manufacturing.WorkCentre", centre.pk, before,
-           {"code": centre.code, "hours_per_day": str(centre.hours_per_day), "rate_per_hour": str(centre.rate_per_hour), "active": centre.active},
-           AuditEventType.CREATE if new else AuditEventType.UPDATE)
+    after = {"code": centre.code, "hours_per_day": str(centre.hours_per_day), "rate_per_hour": str(centre.rate_per_hour), "active": centre.active}
+    if "workers" in data:  # F8 (HG-140)
+        from staff.models import Employee
+
+        if not new:
+            before["workers"] = sorted(centre.workers.values_list("code", flat=True))
+        chosen = Employee.objects.filter(active=True, pk__in=[int(pk) for pk in (data.get("workers") or ()) if str(pk).isdigit()])
+        centre.workers.set(chosen)
+        after["workers"] = sorted(employee.code for employee in chosen)
+    _audit("save_work_centre", user, "manufacturing.WorkCentre", centre.pk, before, after, AuditEventType.CREATE if new else AuditEventType.UPDATE)
     return centre
 
 
@@ -384,6 +395,9 @@ def load(today, days=DAYS):
                 later[centre_id] += minutes
             else:
                 per_day[(centre_id, max(order.due_date, today))] += minutes
+    from . import maintenance
+
+    down = maintenance.downtime([centre.pk for centre in centres], today, last)  # F10 (HG-141): what breakdowns take out of each day
     result = []
     for centre in centres:
         capacity = (centre.hours_per_day * 60).quantize(Decimal("0.01"))
@@ -391,8 +405,8 @@ def load(today, days=DAYS):
         for offset in range(days):
             day = today + timedelta(days=offset)
             minutes, holiday = per_day[(centre.pk, day)], day in holidays
-            cap = ZERO if holiday else capacity
-            rows.append({"date": day, "minutes": minutes, "capacity": cap, "holiday": holiday, "over": minutes > cap})
+            cap = ZERO if holiday else maintenance.capacity_left(capacity, down[(centre.pk, day)])
+            rows.append({"date": day, "minutes": minutes, "capacity": cap, "holiday": holiday, "over": minutes > cap, "down": not holiday and cap < capacity})
         result.append({"centre": centre, "days": rows, "unscheduled": unscheduled[centre.pk], "later": later[centre.pk],
                        "over": any(row["over"] for row in rows)})
     return result
