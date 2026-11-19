@@ -271,6 +271,34 @@ class JobTests(OvenPlant):
         other = next(b for b in workcentres.load(TODAY, days=2) if b["centre"].pk == second.pk)
         self.assertEqual([(row["capacity"], row["down"]) for row in other["days"]], [(D("0"), False), (D("480.00"), False)])
 
+    def test_a_number_taken_at_the_same_moment_by_another_centres_job_is_tried_again(self):
+        """Numbers are per day across work centres and the lock is per centre: a job opened on another centre at the same
+        moment can take the number this one picked. That is not «عليه أمر صيانة مفتوح»: the next number is taken."""
+
+        from unittest import mock
+
+        mixer = self.centre("MIX", "الخلاط", "Mixer")
+        first = self.breakdown()
+        real = maintenance._number
+        picked = iter([first.number])                                     # the number another centre's job has just taken
+
+        def number(day):
+            return next(picked, None) or real(day)
+
+        with mock.patch.object(maintenance, "_number", side_effect=number):
+            second = maintenance.open_job(mixer, self.owner, kind="breakdown", cause="السير اتقطع")
+        self.assertNotEqual(second.number, first.number)
+        self.assertEqual((second.work_centre, MaintenanceJob.objects.count()), (mixer, 2))
+        # A centre that really has an open job still says so, whatever the number.
+        with self.assertRaisesMessage(ValidationError, "عليه أمر صيانة مفتوح"):
+            maintenance.open_job(mixer, self.owner, kind="planned")
+        # And when every try collides, the words are about the number, not about the centre.
+        third = self.centre("PACK", "خط التعبئة", "Packing line")
+        with mock.patch.object(maintenance, "_number", return_value=first.number):
+            with self.assertRaisesMessage(ValidationError, "في نفس اللحظة"):
+                maintenance.open_job(third, self.owner, kind="planned")
+        self.assertFalse(third.maintenance_jobs.exists())
+
     def test_the_job_is_checked(self):
         plan = maintenance.save_plan(self.oven, {"title": "تنظيف الشعلات", "every_days": "30"}, self.owner)
         second = self.centre("OVEN2", "الفرن التاني", "Second oven")
@@ -581,6 +609,39 @@ class BillTests(OvenPlant):
         cancel_posted_purchase_invoice(cancelled.pk, self.owner, "اتسجلت غلط")
         with self.assertRaisesMessage(ValidationError, "الفاتورة دي ملغية"):
             maintenance.link_bill(job, self.owner, invoice_number="TECH-02")
+
+    def test_a_bill_that_counts_on_a_machine_is_not_linked_to_a_project_as_well(self):
+        """One bill counts in one place. ``link_bill`` already refuses a project's invoice; the project side refuses a
+        maintenance job's bill (and an outside processing bill, F4) and does not offer either in its picker."""
+
+        from hesba_testing.factories import make_customer
+        from projects import costs as project_costs, services as project_services
+
+        job = self.job_with_parts()
+        bill = maintenance.make_bill(job, self.owner, supplier=self.technician, amount="500")
+        post_purchase_invoice(bill.purchase_invoice_id, self.owner)
+        invoice = PurchaseInvoice.objects.get(pk=bill.purchase_invoice_id)
+        project = project_services.save_project({"name": "توسعة المصنع", "customer": make_customer(customer_code="CUS-PRJ", name="مصنع النور")}, self.owner)
+        with self.assertRaisesMessage(ValidationError, "مربوطة بأمر صيانة أو بأمر إنتاج"):
+            project_costs.link_purchase(project, invoice, self.owner)
+        with self.assertRaisesMessage(ValidationError, "the bill of a maintenance job or a production order"):
+            project_costs.link_purchase(project, invoice, self.owner, lang="en")
+        self.assertFalse(project.purchases.exists())
+        self.assertEqual(self.month()["bills"], D("500.00"))              # still the machine's, once
+        # The picker on the project's page: a plain service invoice is offered, the machine's bill is not.
+        from taxes.services import create_purchase_draft_with_tax
+
+        plain = create_purchase_draft_with_tax(
+            {"invoice_number": "SRV-01", "invoice_date": TODAY, "supplier": self.technician, "receiving_location": self.plant, "cashbox": None,
+             "discount_amount": D("0"), "tax_amount": D("0"), "paid_now": D("0"), "notes": ""},
+            [{"item": maintenance.service_item(), "quantity": D("1"), "unit_purchase_price": D("200"), "line_discount_amount": D("0"), "description": ""}], self.owner)
+        offered = (PurchaseInvoice.objects.exclude(status="cancelled")
+                   .filter(project_purchase__isnull=True, **{f"{name}__isnull": True for name in project_costs.FACTORY_BILLS}))
+        self.assertEqual(list(offered), [plain])
+        # Once the bill is taken off the job it is an ordinary invoice again, and a project may take it.
+        maintenance.unlink_bill(bill, self.owner)
+        project_costs.link_purchase(project, PurchaseInvoice.objects.get(pk=invoice.pk), self.owner)
+        self.assertEqual(project.purchases.get().invoice, invoice)
 
     def test_a_bill_received_at_a_location_that_was_switched_off_since_is_still_linked(self):
         from taxes.services import create_purchase_draft_with_tax

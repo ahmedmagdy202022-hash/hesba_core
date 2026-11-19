@@ -76,6 +76,7 @@ MESSAGES = {
         "cause": "اكتب العطل اللي حصل في كلمتين.",
         "plan": "خطة الصيانة دي مش على مركز العمل ده أو متوقفة.",
         "already": "مركز العمل ده عليه أمر صيانة مفتوح؛ اقفله الأول.",
+        "number_busy": "أكتر من أمر صيانة بيتفتح في نفس اللحظة؛ جرّب تاني.",
         "closed": "أمر الصيانة ده اتقفل قبل كده.",
         "before_open": "وقت الرجوع للشغل مينفعش يكون قبل وقت التوقف.",
         "employee": "اختار موظف شغال.", "supplier": "اختار مورّد شغال.",
@@ -109,6 +110,7 @@ MESSAGES = {
         "cause": "Say in a few words what broke.",
         "plan": "That plan is not on this work centre, or it is switched off.",
         "already": "This work centre already has an open maintenance job; close it first.",
+        "number_busy": "Several maintenance jobs are being opened at the same moment; try again.",
         "closed": "This maintenance job is already closed.",
         "before_open": "The time it came back cannot be before the time it stopped.",
         "employee": "Choose an active employee.", "supplier": "Choose an active supplier.",
@@ -302,6 +304,10 @@ def open_job_of(centre):
     return centre.maintenance_jobs.filter(closed_at__isnull=True).select_related("plan", "employee", "supplier").first()
 
 
+#: how many numbers ``open_job`` tries when another work centre's job takes the one it picked at the same moment
+NUMBER_TRIES = 5
+
+
 def _number(day):
     from .services import _next
 
@@ -341,12 +347,20 @@ def open_job(centre, user, *, kind, plan=None, opened_at=None, cause="", note=""
     centre = _locked_centre(centre)
     if centre.maintenance_jobs.filter(closed_at__isnull=True).exists():
         raise ValidationError(words["already"])
-    try:
-        with transaction.atomic():
-            job = MaintenanceJob.objects.create(number=_number(timezone.localtime(moment).date()), work_centre=centre, plan=plan, kind=kind, opened_at=moment,
-                                                cause=cause[:255], note=(note or "").strip()[:255], created_by=user)
-    except IntegrityError:
-        raise ValidationError(words["already"])
+    job = None
+    for _attempt in range(NUMBER_TRIES):
+        try:
+            with transaction.atomic():
+                job = MaintenanceJob.objects.create(number=_number(timezone.localtime(moment).date()), work_centre=centre, plan=plan, kind=kind, opened_at=moment,
+                                                    cause=cause[:255], note=(note or "").strip()[:255], created_by=user)
+            break
+        except IntegrityError:
+            # This centre's row is locked, so nobody else opened a job on it meanwhile. What collided is the number: a job
+            # opened on another work centre at the same moment took it (numbers are per day, across centres). Take the next.
+            if centre.maintenance_jobs.filter(closed_at__isnull=True).exists():
+                raise ValidationError(words["already"])
+    if job is None:
+        raise ValidationError(words["number_busy"])
     _audit("open_maintenance_job", user, job, {"number": job.number, "work_centre": centre.code, "kind": kind, "plan": plan.title if plan else "",
                                                "opened_at": moment.isoformat(), "cause": job.cause}, event=AuditEventType.CREATE)
     return job

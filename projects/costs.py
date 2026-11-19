@@ -39,6 +39,7 @@ MESSAGES = {
         "supplier": "اختار مقاول الباطن (من الموردين).", "scope": "اكتب الأعمال المسندة.", "value": "اكتب القيمة رقم صفر أو أكبر.", "rate": "النسبة لازم تكون من 0 لـ 100.",
         "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن استلام نشط.",
         "stock_lines": "الفاتورة دي فيها أصناف مخزنية: اصرفها للمشروع من المخزن بدل ما تربطها.", "linked": "الفاتورة دي مربوطة بمشروع بالفعل.",
+        "linked_elsewhere": "الفاتورة دي مربوطة بأمر صيانة أو بأمر إنتاج، وتكلفتها محسوبة هناك؛ مينفعش تتحسب على مشروع كمان.",
         "cancelled": "الفاتورة دي ملغية.", "not_draft": "المستخلص ده اترحّل؛ لو فيه غلط اعمل مرتجع أو إلغاء من شاشة المشتريات.",
         "withdraw_blocked": "الفاتورة دي مربوطة بحاجة تانية ومينفعش تتسحب.", "release_more": "المبلغ أكبر من ضمان الأعمال المحتجز ({held}).",
         "bill_link": "دي فاتورة مستخلص مقاول باطن؛ اسحبها من شاشة مقاولي الباطن.",
@@ -54,6 +55,7 @@ MESSAGES = {
         "supplier": "Choose the subcontractor (a supplier).", "scope": "Describe the work given.", "value": "Type the value as a number, 0 or more.", "rate": "The rate must be between 0 and 100.",
         "amount": "The amount must be above zero.", "description": "Describe the bill.", "setup": "An active receiving location is needed.",
         "stock_lines": "This invoice has stock items: issue them to the project from stock instead of linking it.", "linked": "This invoice is already linked to a project.",
+        "linked_elsewhere": "This invoice is the bill of a maintenance job or a production order and is counted there; it cannot count on a project as well.",
         "cancelled": "This invoice is cancelled.", "not_draft": "This bill is posted; correct it with a return or a cancellation on the purchases screen.",
         "withdraw_blocked": "This invoice is linked to something else and cannot be withdrawn.", "release_more": "The amount is more than the retention held ({held}).",
         "bill_link": "This is a subcontractor bill; withdraw it from the subcontractors screen.",
@@ -414,6 +416,12 @@ def subcontract_figures(subcontract):
 
 # ---- other service purchases ----
 
+#: Manufacturing F10 (HG-141): a purchase invoice that is already the bill of a factory document, by its reverse name: a
+#: maintenance job's bill (``manufacturing.MaintenancePurchase``) or an outside processing bill (F4, ``OutsideJob``). Each
+#: counts in that document's cost, so it is neither offered to a project nor linked to one (one bill, one place).
+FACTORY_BILLS = ("maintenance_purchase", "outside_job")
+
+
 @transaction.atomic
 def link_purchase(project, invoice, user, *, heading=CostHeading.OTHER, lang="ar"):
     words = MESSAGES[lang]
@@ -422,6 +430,8 @@ def link_purchase(project, invoice, user, *, heading=CostHeading.OTHER, lang="ar
         raise ValidationError(words["cancelled"])
     if ProjectPurchase.objects.filter(invoice=invoice).exists():
         raise ValidationError(words["linked"])
+    if any(hasattr(invoice, name) for name in FACTORY_BILLS):
+        raise ValidationError(words["linked_elsewhere"])
     if invoice.lines.filter(item__is_stock_tracked=True).exists():
         raise ValidationError(words["stock_lines"])
     _visible(invoice, words)
