@@ -583,6 +583,19 @@ class BillTests(OvenPlant):
         with self.assertRaisesMessage(ValidationError, "الفاتورة دي ملغية"):
             maintenance.link_bill(job, self.owner, invoice_number="TECH-02")
 
+    def test_a_bill_received_at_a_location_that_was_switched_off_since_is_still_linked(self):
+        from taxes.services import create_purchase_draft_with_tax
+
+        old_store = make_location(location_code="OLD", name_ar="المخزن القديم", name_en="Old store")
+        invoice = create_purchase_draft_with_tax(
+            {"invoice_number": "TECH-OLD", "invoice_date": TODAY, "supplier": self.technician, "receiving_location": old_store, "cashbox": None,
+             "discount_amount": D("0"), "tax_amount": D("0"), "paid_now": D("0"), "notes": ""},
+            [{"item": maintenance.service_item(), "quantity": D("1"), "unit_purchase_price": D("300.00"), "line_discount_amount": D("0"), "description": ""}], self.owner)
+        old_store.active = False
+        old_store.save(update_fields=["active"])
+        self.assertNotIn(old_store, list(maintenance.places(self.oven)))               # no part leaves it any more
+        self.assertEqual(maintenance.link_bill(self.breakdown(), self.owner, invoice_number="TECH-OLD").purchase_invoice, invoice)
+
     def test_a_bill_is_checked(self):
         job = self.breakdown()
         self.technician.active = False

@@ -155,18 +155,24 @@ def scoped_jobs():
     return entity_scope.scope(MaintenanceJob.objects, "work_centre__entity")
 
 
-def places(centre):
-    """The active locations spare parts may leave from: those of the work centre's entity, never a quality hold place."""
+def _own_locations(centre):
+    """Every location of the work centre's entity (the main entity also owns the locations made before entities existed)."""
 
     from master_data.models import Location
 
-    from . import quality
-
     key = workcentres._entity_key(centre.entity_id)
     own = Q(entity_id=key)
-    if key == workcentres._entity_key(None):  # the main entity also owns the locations made before entities existed
+    if key == workcentres._entity_key(None):
         own |= Q(entity__isnull=True)
-    return quality.production_places(Location.objects.filter(own, active=True)).order_by("-is_default", "pk")
+    return Location.objects.filter(own)
+
+
+def places(centre):
+    """The active locations spare parts may leave from: those of the work centre's entity, never a quality hold place."""
+
+    from . import quality
+
+    return quality.production_places(_own_locations(centre).filter(active=True)).order_by("-is_default", "pk")
 
 
 # ---- typed values ----
@@ -601,7 +607,7 @@ def link_bill(job, user, *, invoice_number, lang="ar"):
         raise PermissionDenied(words["bill_permission"])
     job = _locked_job(job)
     number = (invoice_number or "").strip()
-    own = places(job.work_centre).values("pk")
+    own = _own_locations(job.work_centre).values("pk")
     invoice = PurchaseInvoice.objects.select_for_update(of=("self",)).filter(invoice_number__iexact=number, receiving_location__in=own).first() if number else None
     if invoice is None:
         raise ValidationError(words["invoice"])
