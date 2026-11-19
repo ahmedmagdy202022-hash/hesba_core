@@ -168,6 +168,16 @@ def seed_routing(master, catalog, owner):
     byproducts.save_outputs(_recipe(master, index), owner, [{"item": byproduct, "quantity": quantity, "kind": "by_product", "value_per_unit": value}])
 
 
+def _offers_on():
+    """Quotations and sales orders are switched on by the factory showcases (``config.demo_templates``), not by the setup of
+    a factory. A sample business built without them (the screens crawl builds one) gets every other record; nothing here
+    switches a capability on."""
+
+    from settings_core.capabilities import capability_enabled
+
+    return capability_enabled("quotations")
+
+
 # ---- the late hook ---------------------------------------------------------------------------------------------------------
 
 def seed_features(master, catalog, owner, staff):
@@ -266,7 +276,8 @@ def _food(master, owner, staff, today):
     # F4: one stage out at an outside centre, one back with its posted bill
     _outside_pair(master, owner, today)
     # F1: a confirmed sales order makes a production order; the worker has started its stage
-    _sales_order(master, owner, today, customers[1])
+    if _offers_on():
+        _sales_order(master, owner, today, customers[1])
     # the late order (the mixer stopped); the sample's own three were opened before and are due later
     _open(master, owner, SECOND, "12", today + timedelta(days=-3), note=LATE_NOTE, customer=customers[3], labour="300", overhead="120")
     _food_maintenance(master, owner, today)
@@ -386,8 +397,9 @@ def _furniture(master, owner, today):
     # F9 + F3: the chairs' run makes sawdust besides the chairs
     _finished(master, owner, FIRST, "10", today + timedelta(days=-2), note="كراسي المعرض", minutes=(60, 170, 95))
     # F7: a quotation with its specifications and cost sheet, still offered; and one accepted and made into a job
-    _offered_quote(master, owner, today, customers[0])
-    _custom_job(master, owner, today, customers[3])
+    if _offers_on():
+        _offered_quote(master, owner, today, customers[0])
+        _custom_job(master, owner, today, customers[3])
     # the order of the day, and a late one
     chairs = _open(master, owner, FIRST, "6", today, note="كراسي للتسليم النهارده", customer=customers[0])
     orders.advance(chairs, owner, minutes=45)
