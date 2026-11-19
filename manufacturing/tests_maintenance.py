@@ -11,7 +11,6 @@ The bakery's oven (the plan's examples, to the piastre):
   general expenses, 70.00 of input VAT), and the oven's month shows 700.00 + 500.00 = 1,200.00.
 """
 
-import re
 from datetime import datetime, time, timedelta
 from decimal import Decimal as D
 
