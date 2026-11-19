@@ -455,9 +455,10 @@ def _reversals_held(user):
 
 
 @transaction.atomic
-def take_part(job, user, *, item, location, quantity, lang="ar"):
-    """«اصرف قطعة غيار»: ``quantity`` of ``item`` leaves ``location`` for the job, at today's average, through the
-    engine's own adjustment out. Only while the job is open, and only from a location of the job's entity."""
+def take_part(job, user, *, item, location, quantity, taken_on=None, lang="ar"):
+    """«اصرف قطعة غيار»: ``quantity`` of ``item`` leaves ``location`` for the job, at the average of this moment, through
+    the engine's own adjustment out. Only while the job is open, and only from a location of the job's entity.
+    ``taken_on`` dates the operation (blank: today; never after today; the engine refuses a closed period)."""
 
     from inventory.models import StockAdjustmentDirection, StockOperation
     from inventory.services import adjust_stock, get_item_location_stock_quantity, lock_items_for_stock_check
@@ -479,13 +480,14 @@ def take_part(job, user, *, item, location, quantity, lang="ar"):
     amount = _decimal(quantity)
     if amount is None or amount <= 0:
         raise ValidationError(words["quantity"])
+    day = _day(taken_on, words)
     lock_items_for_stock_check([item.pk])
     have = get_item_location_stock_quantity(item, location)
     if have < amount:
         raise ValidationError(words["short"].format(item=item.item_name, need=fmt_qty(amount), have=fmt_qty(have)))
     centre = job.work_centre
     reason = f"قطعة غيار لصيانة {centre.name_ar} {job.number} / Spare part for maintenance {job.number}"[:255]
-    operation = adjust_stock(_next(StockOperation, "reference_number", f"{job.number}-P", 2), timezone.localdate(), item, location,
+    operation = adjust_stock(_next(StockOperation, "reference_number", f"{job.number}-P", 2), day, item, location,
                              StockAdjustmentDirection.OUT, amount, reason, user)
     part = MaintenancePart.objects.create(job=job, operation=operation, created_by=user)
     _audit("take_maintenance_part", user, job, {"number": job.number, "item": item.item_code, "quantity": str(amount), "location": location.location_code,

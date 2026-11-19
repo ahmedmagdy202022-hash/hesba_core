@@ -32,6 +32,7 @@ WORDS = {
         "routing_view_only": "تعديل المراحل لصاحب الصلاحية بس.",
         "workers": "عمال المركز", "workers_hint": "العامل اللي له مركز عمل بيشوف على شاشة العامل مراحل مركزه بس، واللي مالوش مركز بيشوف مراحل كل المراكز.",
         "workers_none": "لسه مفيش موظفين؛ ضيفهم من شاشة الموظفين الأول.",
+        "maintenance": "الصيانة", "m_down": "متوقف", "m_open": "في الصيانة", "m_due": "صيانة عليها الدور", "down_day": "عطل",
     },
     "en": {
         "title": "Work centres", "intro": "Machines, lines and manual tables: each has hours it works in a day and an hourly rate, and takes the stages of a recipe.",
@@ -49,6 +50,7 @@ WORDS = {
         "routing_view_only": "Only users with the permission can change the stages.",
         "workers": "Workers at this centre", "workers_hint": "A worker who has a work centre sees only its stages on the floor screen; a worker with none sees every centre's stages.",
         "workers_none": "No employees yet; add them from the employees screen first.",
+        "maintenance": "Maintenance", "m_down": "Down", "m_open": "In maintenance", "m_due": "Maintenance due", "down_day": "Breakdown",
     },
 }
 
@@ -63,6 +65,9 @@ def _ctx(request, **extra):
 def centres(request):
     lang = _lang(request)
     rows = [{"centre": c, "kind_label": choice_label(c, "kind", lang)} for c in workcentres.scoped().select_related("fixed_asset")]
+    from . import maintenance_views
+
+    maintenance_views.mark_centres(rows)  # F10 (HG-141): down now, in maintenance, or with planned maintenance due
     return render(request, "manufacturing/work_centres.html", _ctx(request, rows=rows, load=workcentres.load(timezone.localdate())))
 
 

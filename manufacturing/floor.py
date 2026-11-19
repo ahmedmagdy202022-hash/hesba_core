@@ -170,7 +170,7 @@ def cards(user, lang="ar", today=None):
         found.append({
             "order": order, "pk": order.pk, "number": order.number, "product": order.recipe.product.item_name, "quantity": order.quantity,
             "units": orders.good_units(order), "stage": stage_label(stage, lang), "stage_index": order.stage_index, "stage_number": order.stage_index + 1,
-            "stage_count": len(order.stages), "centre": centre.name(lang) if centre is not None else "", "due": due, "late": due is not None and due < today,
+            "stage_count": len(order.stages), "centre": centre.name(lang) if centre is not None else "", "centre_id": centre_id, "due": due, "late": due is not None and due < today,
             "state": state, "wait": wait, "started_at": started, "first": order.status == OrderStatus.PLANNED,
             "last": order.stage_index == len(order.stages) - 1,
         })

@@ -81,11 +81,11 @@ def _owners(operation_ids):
     # Manufacturing F9 (HG-139): a run's extra output (a by-product or a co-product) is the run's too.
     for operation, run, number in RunOutput.objects.filter(operation_id__in=ids).values_list("operation_id", "run_id", "run__number"):
         found[operation], runs[operation] = Owner("run", number, reverse("manufacturing:run", args=[run])), run
-    # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is returned from the work centre's maintenance page.
+    # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is returned from the job's own page.
     from .models import MaintenancePart
 
-    for operation, centre, number in MaintenancePart.objects.filter(operation_id__in=ids).values_list("operation_id", "job__work_centre_id", "job__number"):
-        found[operation] = Owner("maintenance", number, reverse("manufacturing:maintenance_centre", args=[centre]))
+    for operation, job, number in MaintenancePart.objects.filter(operation_id__in=ids).values_list("operation_id", "job_id", "job__number"):
+        found[operation] = Owner("maintenance", number, reverse("manufacturing:maintenance_job", args=[job]))
     return found, runs
 
 

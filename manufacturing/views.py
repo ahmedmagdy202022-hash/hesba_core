@@ -230,7 +230,10 @@ def home(request):
             return redirect(f"{reverse('manufacturing:recipe', args=[recipe.pk])}?lang={lang}")
         error, form, rows = failed
         return render(request, "manufacturing/recipe_new.html", _base(request, items=_stock_items(), form=form, rows=rows, error=error))
-    return render(request, "manufacturing/home.html", _base(request, **_overview(request, lang)))
+    from . import maintenance_views
+
+    down, due = maintenance_views.home_tile()  # F10 (HG-141): work centres down now, and planned maintenance that is due
+    return render(request, "manufacturing/home.html", _base(request, maintenance_down=down, maintenance_due=due, **_overview(request, lang)))
 
 
 @require_permission(VIEW)

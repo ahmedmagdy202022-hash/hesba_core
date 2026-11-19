@@ -19,7 +19,7 @@ WORDS = {
     "ar": {
         "title": "شغلي", "intro": "المراحل اللي عليك دلوقتي، والأقرب في ميعاده الأول.",
         "empty": "مفيش مراحل عليك دلوقتي.", "centres": "مراكز العمل اللي عليك",
-        "quantity": "الكمية", "stage_of": "المرحلة {n} من {count} مراحل", "due": "مطلوب يوم", "late": "متأخر", "centre": "مركز العمل",
+        "quantity": "الكمية", "stage_of": "المرحلة {n} من {count} مراحل", "due": "مطلوب يوم", "late": "متأخر", "centre": "مركز العمل", "centre_down": "المركز متوقف للصيانة",
         "ready": "لسه مبدأتش", "running": "شغال", "waiting": "مستني",
         "start": "ابدأ", "done": "خلصت", "started_at": "بدأت الساعة",
         "good": "السليم", "defect": "المعيب", "note": "ملاحظة (اختياري)",
@@ -33,7 +33,7 @@ WORDS = {
     "en": {
         "title": "My work", "intro": "The stages on you now, the soonest due first.",
         "empty": "No stages are on you right now.", "centres": "Your work centres",
-        "quantity": "Quantity", "stage_of": "Stage {n} of {count}", "due": "Due on", "late": "Late", "centre": "Work centre",
+        "quantity": "Quantity", "stage_of": "Stage {n} of {count}", "due": "Due on", "late": "Late", "centre": "Work centre", "centre_down": "The work centre is down",
         "ready": "Not started", "running": "In progress", "waiting": "Waiting",
         "start": "Start", "done": "Done", "started_at": "Started at",
         "good": "Good", "defect": "Defective", "note": "Note (optional)",
@@ -88,7 +88,11 @@ def floor_screen(request):
     cards = floor.cards(request.user, lang, timezone.localdate())
     running = [card["pk"] for card in cards if card["state"] == floor.RUNNING]
     photos = floor.photos(running, request.user) if running else {}
+    from . import maintenance
+
+    broken = maintenance.open_breakdowns({card["centre_id"] for card in cards if card["centre_id"]})  # F10 (HG-141): read only
     for card in cards:
+        card["down"] = card["centre_id"] in broken
         card["stage_of"] = words["stage_of"].format(n=card["stage_number"], count=card["stage_count"])
         card["photos"] = _photo_rows(photos.get(card["pk"], []), lang)
         card["photo_url"] = f"{reverse('manufacturing:floor_photo', args=[card['pk']])}?lang={lang}"
