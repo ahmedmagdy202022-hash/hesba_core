@@ -234,6 +234,53 @@ class FoodDemo(FactoryDemo, TestCase):
         self.assertEqual((waiting[0]["subject"].order.notes, waiting[0]["position"]["waiting"], waiting[0]["subject"].place.location_code), ("دفعة بانتظار الفحص", D("15.000"), "QC-1"))
         self.assertTrue(quality.is_hold_place(waiting[0]["subject"].place))
 
+    def test_no_plain_run_of_the_checked_product_was_made_after_its_release_was_switched_on(self):
+        from audit.models import AuditLog
+
+        recipe = Recipe.objects.get(needs_release=True)
+        switched = AuditLog.objects.get(action="save_recipe_quality", object_id=str(recipe.pk))
+        plain = ProductionRun.objects.filter(recipe=recipe, order__isnull=True)
+        self.assertTrue(plain.exists())  # the sample month's own runs
+        self.assertFalse(plain.filter(created_at__gt=switched.created_at).exists())
+
+    def test_the_next_days_top_up_makes_the_checked_product_by_an_order_and_releases_it_with_a_check(self):
+        """The daily top-up used to make every product with a plain run, which put the checked product on the shelf without its
+        check (the recipe page refuses exactly that). It is now an order, finished on hold and released in full."""
+
+        from unittest import mock
+
+        from config.demo_templates import top_up_current_db
+        from inventory.services import get_item_location_stock_quantity
+
+        recipe = Recipe.objects.get(needs_release=True)
+        shelf = ProductionOrder.objects.filter(recipe=recipe).first().location
+        hold = quality.hold_place(shelf.entity_id)
+        plain = ProductionRun.objects.filter(recipe=recipe, order__isnull=True).count()
+        before = (get_item_location_stock_quantity(recipe.product, shelf), get_item_location_stock_quantity(recipe.product, hold))
+        self.assertEqual(before[1], D("15.000"))
+        tomorrow = self.today + timedelta(days=1)  # resolved before patching, or the replacement calls itself
+        with mock.patch("django.utils.timezone.localdate", lambda *a, **k: tomorrow):
+            top_up_current_db()
+            count = ProductionOrder.objects.count()
+            top_up_current_db()  # the same day again adds nothing
+            self.assertEqual(ProductionOrder.objects.count(), count)
+        self.assertEqual(ProductionRun.objects.filter(recipe=recipe, order__isnull=True).count(), plain)  # no plain run of it
+        order = ProductionOrder.objects.get(notes=demo.DAILY_NOTE)
+        self.assertEqual((order.recipe, order.status, order.due_date, order.labor_cost, order.overhead_cost), (recipe, OrderStatus.DONE, tomorrow, D("0"), D("0")))
+        self.assertGreater(order.quantity, 0)
+        self.assertEqual(order.stage_logs.count(), len(order.stages))
+        self.assertEqual(order.run.output_operation.destination_location, hold)  # finished on hold, not on the shelf
+        self.assertEqual((order.run.output_quantity, order.run.conversion_cost, order.run.scrap_quantity), (order.quantity, D("0.00"), D("0.000")))
+        check = QualityCheck.objects.get(order=order)
+        self.assertEqual((check.result, check.quantity, check.passed_quantity, check.rejected_quantity), ("passed", order.quantity, order.quantity, D("0.000")))
+        self.assertEqual(check.results.count(), 2)
+        self.assertTrue(check.release_operation_id)
+        self.assertIsNone(check.reject_operation_id)
+        # the hold place holds only the planted lot again, and the day bought back and made what it sold
+        self.assertEqual([row["subject"].order.notes for row in quality.waiting_rows()], ["دفعة بانتظار الفحص"])
+        self.assertEqual((get_item_location_stock_quantity(recipe.product, shelf), get_item_location_stock_quantity(recipe.product, hold)), before)
+        books_balance(self)
+
     # ---- F4: a stage out at an outside centre, one back with its bill --------------------------------------------------------------
 
     def test_one_stage_is_out_and_one_is_back_with_a_posted_bill(self):

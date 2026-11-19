@@ -434,6 +434,12 @@ class Command(BaseCommand):
             if index in master["catalog"].shelf_life:  # Manufacturing F14: the product's lot gets its expiry from its run
                 data["shelf_life_days"] = master["catalog"].shelf_life[index]
             recipe = save_recipe(data, [(master["raw"][r], q) for r, q in parts], actor)
+        if recipe.needs_release:
+            # Manufacturing F14: a recipe that needs a quality release (F5) is made by an order, checked and released; a plain
+            # run would put the product on the shelf unchecked, which the recipe page itself refuses.
+            from manufacturing.demo import checked_batch
+
+            return checked_batch(master, recipe, quantity, actor)
         # Manufacturing F14: a run is a lot (F3) while the factory keeps lots; the plain run as it was when it does not.
         return produce(recipe, actor, batches=(quantity / recipe.output_quantity).quantize(D("0.001")), location=master["location"],
                        run_date=run_date, notes="")

@@ -4,9 +4,13 @@ The food factory and the furniture workshop are built through the services their
 service exists. Two hooks run inside ``prepare_demo``'s extras:
 
 * ``seed_routing`` runs **before** the sample production orders are opened, so those orders copy a routed stage list (a work centre
-  on every stage) and the by-product and the quality release are on the recipe before any order starts (a recipe with an order on the
-  floor refuses a change to its outputs);
-* ``seed_features`` runs **after** the payroll, so the new employees (the production worker) are not paid by it.
+  on every stage) and the by-product is on the recipe before any order starts (a recipe with an order on the floor refuses a change
+  to its outputs);
+* ``seed_features`` runs **after** the payroll, so the new employees (the production worker) are not paid by it. It is also where the
+  food's quality release is switched on: after every plain run of the sample month, so no run of that recipe skips its check.
+
+From then on the sample makes that product the way its recipe page demands: ``checked_batch`` (called by the sample's daily top-up)
+opens an order, closes its stages, finishes it on hold and releases all of it with a check.
 
 Every date is counted from the day the demo is built: an order that is late, one due today and some later. Nothing here changes a
 rule. Where a service refuses, the build stops loudly: a demo that cannot be built says so.
@@ -64,6 +68,7 @@ FOOD_BUFFER = {0: D("60"), 1: D("20"), 2: D("6"), 3: D("40")}
 FOOD_STARTED = ((FIRST, "20"), (FIRST, "15"), (SECOND, "10"), (THIRD, "12"), (THIRD, "18"), (SECOND, "8"), (FIRST, "30"))
 EXTRA_FLOUR = D("3")
 LATE_NOTE = "تأخر لأن الخلاط وقف"
+DAILY_NOTE = "دفعة اليوم"
 
 # ---- the furniture workshop ----------------------------------------------------------------------------------------------
 
@@ -146,10 +151,10 @@ def _moment(day, hour, minute=0):
 # ---- the early hook: centres, routing, quality release, a by-product -----------------------------------------------------
 
 def seed_routing(master, catalog, owner):
-    """Work centres with their routed stages (F6a), the food's quality release (F5) and the by-product of one recipe (F9).
-    Before the sample orders are opened. Safe to run twice."""
+    """Work centres with their routed stages (F6a) and the by-product of one recipe (F9). Before the sample orders are opened.
+    Safe to run twice."""
 
-    from . import byproducts, quality, workcentres
+    from . import byproducts, workcentres
     from .models import WorkCentre
 
     config = FACTORIES.get(catalog.key)
@@ -161,8 +166,6 @@ def seed_routing(master, catalog, owner):
             for ar, en, code, minutes, setup in config["routing"]]
     for index in (FIRST, SECOND, THIRD):
         workcentres.save_routing(_recipe(master, index), rows, owner)
-    if _is_food(catalog):
-        quality.save_recipe_quality(_recipe(master, FIRST), owner, needs_release=True, rows=list(RELEASE_CRITERIA))
     index, (code, name_ar, unit, value, sale), quantity = config["byproduct"]
     byproduct = _item(master, code, name_ar, unit, value, sale=sale)
     byproducts.save_outputs(_recipe(master, index), owner, [{"item": byproduct, "quantity": quantity, "kind": "by_product", "value_per_unit": value}])
@@ -262,8 +265,34 @@ def _finished(master, owner, index, quantity, due, *, note, minutes):
     return orders.finish(order, owner)
 
 
+def _answers(recipe):
+    from .models import QualityCriterion
+
+    return {criterion.pk: ("pass" if criterion.kind == "pass_fail" else "5.0") for criterion in QualityCriterion.objects.filter(recipe=recipe)}
+
+
+def checked_batch(master, recipe, quantity, actor):
+    """A batch of a recipe that needs a quality release (F5), made the way its recipe page demands: an order, its stages, the
+    finish on hold, then a check that releases all of it to the shelf. For the sample's daily top-up, whose plain run would put
+    the product on the shelf unchecked. No labour or overhead is added, so the unit cost is the materials', as a plain run's."""
+
+    from . import orders, quality
+
+    order = orders.create_order({"recipe": recipe, "location": master["location"], "quantity": quantity, "due_date": timezone.localdate(),
+                                 "labor_cost": "0", "overhead_cost": "0", "notes": DAILY_NOTE}, actor)
+    for _stage in order.stages:
+        order = orders.advance(order, actor)
+    order = orders.finish(order, actor)
+    quality.check_order(order, actor, passed=str(order.run.output_quantity), rejected="0", results=_answers(recipe))
+    return order.run
+
+
 def _food(master, owner, staff, today):
+    from . import quality
+
     customers = master["customers"]
+    # F5: switched on here, after the sample month's plain runs; from now on the product is made by orders and released by a check
+    quality.save_recipe_quality(_recipe(master, FIRST), owner, needs_release=True, rows=list(RELEASE_CRITERIA))
     _restock(master, owner, today + timedelta(days=-8), FOOD_STARTED, FOOD_BUFFER, extra=((0, EXTRA_FLOUR),))
     # F5: two lots of the first product wait on hold; one is checked and released with a small reject
     released = _finished(master, owner, FIRST, "20", today + timedelta(days=-4), note="دفعة الصباح", minutes=(40, 70, 35))
@@ -287,10 +316,8 @@ def _release(order, owner):
     """F5: a check on the lot waiting on hold: eighteen released, two rejected (a torn wrapping), every criterion answered."""
 
     from . import quality
-    from .models import QualityCriterion
 
-    answers = {criterion.pk: ("pass" if criterion.kind == "pass_fail" else "5.0") for criterion in QualityCriterion.objects.filter(recipe=order.recipe)}
-    return quality.check_order(order, owner, passed="18", rejected="2", note="كرتونتين غلافهم اتقطع", results=answers)
+    return quality.check_order(order, owner, passed="18", rejected="2", note="كرتونتين غلافهم اتقطع", results=_answers(order.recipe))
 
 
 def _finished_with_actuals(master, owner, staff, today):
