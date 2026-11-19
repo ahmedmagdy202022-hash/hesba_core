@@ -396,6 +396,25 @@ class RuleTests(PrintingPlant):
         self.assertEqual(make_to_order.uncovered(line), D("0.000"))
 
 
+    def test_specifications_written_on_a_line_partly_invoiced_from_stock_leave_its_remaining_units_makeable(self):
+        services.save_recipe({"product": self.catalogue, "output_quantity": "1"}, [(self.paper, "1")], self.owner)
+        stock_in(self.catalogue, self.plant, 9, "1500.00", movement_date=TODAY)
+        order = self.confirm(self.quote())
+        line = self.line(order)
+        invoice = create_sales_draft_with_tax(
+            {"invoice_number": "SI-PART", "invoice_date": TODAY, "customer": order.customer, "selling_location": self.plant, "paid_now": D("0")},
+            [{"item": line.item, "quantity": D("9"), "unit_sale_price": D("2000"), "line_discount_amount": D("0")}], self.owner)
+        sales.link_invoice(order, invoice, self.owner)
+        post_sales_invoice(invoice.pk, self.owner)                           # 9 of 10 sold from stock, before any production order
+        quotes.save_spec(line, self.owner, "printing", SPEC)
+        quotes.add_cost_line(line, self.owner, kind="material", item=self.paper, quantity="1")
+        self.assertEqual((quotes.went_plain([line.pk]), quotes.pending([line.pk])), ({line.pk}, set()))
+        with self.assertRaisesMessage(ValidationError, "عليه فاتورة"):
+            quotes.convert(line, self.owner)
+        again = make_to_order.make(line, self.owner, {})
+        self.assertEqual((again.quantity, again.recipe.product), (D("1.000"), self.catalogue))
+
+
 class VatTests(PrintingPlant):
     def test_the_job_is_invoiced_at_the_vat_rate_the_customer_accepted(self):
         from taxes.models import ItemTaxRate, TaxRate

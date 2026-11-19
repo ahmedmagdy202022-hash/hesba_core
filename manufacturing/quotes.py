@@ -416,18 +416,28 @@ def _live_production(line):
             .exclude(status=OrderStatus.DONE, run__status=RunStatus.CANCELLED))
 
 
+def went_plain(line_pks):
+    """The pks among ``line_pks`` whose line already went the plain way: it has a production order that still counts, or
+    an invoice that is not cancelled. ``convert`` refuses such a line (it would repoint goods already made or sold at a
+    new item), so it can no longer become a custom job."""
+
+    from orders.models import OrderInvoiceLine
+
+    made = (ProductionOrder.objects.filter(sales_order_line_id__in=line_pks, status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS, OrderStatus.DONE))
+            .exclude(status=OrderStatus.DONE, run__status=RunStatus.CANCELLED).values_list("sales_order_line_id", flat=True))
+    invoiced = (OrderInvoiceLine.objects.filter(order_line_id__in=line_pks).exclude(sales_line__invoice__status="cancelled")
+                .values_list("order_line_id", flat=True))
+    return set(made) | set(invoiced)
+
+
 def pending(line_pks):
     """The pks among ``line_pks`` whose line has a sheet not converted yet (F1's plain «اعمل أمر إنتاج» is not offered there).
 
-    A line that already went the plain way (it has a production order that still counts) is not one of them: it can no
-    longer become a custom job (``convert`` refuses it), so specifications written on it afterwards must not close the
-    plain action that makes its remaining units."""
+    A line that already went the plain way (``went_plain``) is not one of them: it can no longer become a custom job, so
+    specifications written on it afterwards must not close the plain action that makes its remaining units."""
 
     waiting = set(CostSheet.objects.filter(sales_order_line_id__in=line_pks, job_item__isnull=True).values_list("sales_order_line_id", flat=True))
-    if waiting:
-        waiting -= set(ProductionOrder.objects.filter(sales_order_line_id__in=waiting, status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS, OrderStatus.DONE))
-                       .exclude(status=OrderStatus.DONE, run__status=RunStatus.CANCELLED).values_list("sales_order_line_id", flat=True))
-    return waiting
+    return waiting - went_plain(waiting) if waiting else waiting
 
 
 @transaction.atomic
