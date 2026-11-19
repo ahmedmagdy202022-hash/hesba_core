@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import costs_views, mrp_views, order_views, quality_views, schedule_views, trace_views, views, workcentre_views
+from . import costs_views, mrp_views, order_views, outside_views, quality_views, schedule_views, trace_views, views, workcentre_views
 
 
 app_name = "manufacturing"
@@ -26,4 +26,7 @@ urlpatterns = [
     path("quality/purchase-lines/<int:pk>/", quality_views.purchase_check, name="quality_purchase_line"),
     path("quality/checks/<int:pk>/", quality_views.check_detail, name="quality_check"),
     path("quality/checks/<int:pk>/certificate/", quality_views.certificate_upload, name="quality_certificate"),
+    # Manufacturing F4 (HG-137): a stage done at an outside supplier, and the supplier's bill
+    path("outside/", outside_views.outside_screen, name="outside"),
+    path("orders/<int:pk>/outside/", outside_views.order_action, name="outside_action"),
 ]
