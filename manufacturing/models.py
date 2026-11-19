@@ -600,3 +600,109 @@ class CostSheetLine(models.Model):
             models.CheckConstraint(condition=(models.Q(kind="material") & models.Q(item__isnull=False))
                                    | (~models.Q(kind="material") & models.Q(item__isnull=True)), name="mfg_costsheetline_item_for_material"),
         ]
+
+
+class MaintenancePlan(models.Model):
+    """Manufacturing F10 (HG-141): planned maintenance of a work centre (F6a's machine, line or table).
+
+    It comes due by days since it was last done (``every_days``), by running hours (``every_hours``, counted from the
+    stage minutes recorded on that work centre since it was last done), or by whichever comes first when both are set.
+    ``last_done_at`` is typed when the plan is made and stamped again each time a planned job of this plan is closed.
+    A reminder only: no stock, cost or ledger row is written or read from it."""
+
+    work_centre = models.ForeignKey(WorkCentre, on_delete=models.PROTECT, related_name="maintenance_plans")
+    title = models.CharField(max_length=120)
+    every_days = models.PositiveIntegerField(null=True, blank=True)
+    every_hours = models.PositiveIntegerField(null=True, blank=True)
+    last_done_at = models.DateTimeField()
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["work_centre_id", "pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(every_days__isnull=False) | models.Q(every_hours__isnull=False), name="mfg_maintplan_days_or_hours"),
+            models.CheckConstraint(condition=(models.Q(every_days__isnull=True) | models.Q(every_days__gt=0))
+                                   & (models.Q(every_hours__isnull=True) | models.Q(every_hours__gt=0)), name="mfg_maintplan_positive"),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class MaintenanceKind(models.TextChoices):
+    PLANNED = "planned", "Planned maintenance"
+    BREAKDOWN = "breakdown", "Breakdown"
+
+
+class MaintenanceJob(models.Model):
+    """Manufacturing F10 (HG-141): one maintenance job on a work centre: planned, or a breakdown.
+
+    ``opened_at`` and ``closed_at`` are the clock times the machine stopped and came back (typed, or now);
+    ``downtime_minutes`` is written at the close as the whole minutes between them. A breakdown takes its work
+    centre's capacity out of the schedule for that time (``maintenance.downtime``); an open one, until it is closed.
+    ``plan`` is the plan a planned job carries out: closing the job stamps the plan's ``last_done_at``. ``employee``
+    and ``supplier`` say who did the work (one of ours, an outside technician, or both).
+
+    The job itself moves nothing: its spare parts are ``MaintenancePart`` rows (the engine's own adjustment out) and
+    an outside technician's bill is a ``MaintenancePurchase`` row (an ordinary purchase invoice)."""
+
+    number = models.CharField(max_length=30, unique=True)
+    work_centre = models.ForeignKey(WorkCentre, on_delete=models.PROTECT, related_name="maintenance_jobs")
+    plan = models.ForeignKey(MaintenancePlan, on_delete=models.PROTECT, null=True, blank=True, related_name="jobs")
+    kind = models.CharField(max_length=10, choices=MaintenanceKind.choices)
+    opened_at = models.DateTimeField()
+    closed_at = models.DateTimeField(null=True, blank=True)
+    downtime_minutes = models.PositiveIntegerField(null=True, blank=True)
+    cause = models.CharField(max_length=255, blank=True)
+    employee = models.ForeignKey("staff.Employee", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    supplier = models.ForeignKey("master_data.Supplier", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    note = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+
+    class Meta:
+        ordering = ["-opened_at", "-pk"]
+        constraints = [
+            # A machine has one job open at a time.
+            models.UniqueConstraint(fields=["work_centre"], condition=models.Q(closed_at__isnull=True), name="mfg_one_open_maintenance_job"),
+            models.CheckConstraint(condition=models.Q(closed_at__isnull=True) | models.Q(closed_at__gte=models.F("opened_at")), name="mfg_maintjob_closed_after_opened"),
+            models.CheckConstraint(condition=models.Q(plan__isnull=True) | models.Q(kind="planned"), name="mfg_maintjob_plan_only_when_planned"),
+            models.CheckConstraint(condition=(models.Q(closed_at__isnull=True) & models.Q(downtime_minutes__isnull=True))
+                                   | (models.Q(closed_at__isnull=False) & models.Q(downtime_minutes__isnull=False)), name="mfg_maintjob_downtime_with_close"),
+        ]
+
+    def __str__(self):
+        return self.number
+
+
+class MaintenancePart(models.Model):
+    """Manufacturing F10 (HG-141): a spare part taken from stock for a maintenance job: the engine's own adjustment out
+    (``operation``), at the average cost of that moment. The ledger books it to maintenance expense instead of
+    stock-count loss because this row exists (``ledger.projector``). Taking the part back is the engine's own
+    reversal of ``operation``; the item, the quantity, the cost and whether it is still out are read from it."""
+
+    job = models.ForeignKey(MaintenanceJob, on_delete=models.PROTECT, related_name="parts")
+    operation = models.OneToOneField("inventory.StockOperation", on_delete=models.PROTECT, related_name="maintenance_part")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
+
+
+class MaintenancePurchase(models.Model):
+    """Manufacturing F10 (HG-141): an outside technician's bill for a maintenance job: an ordinary purchase invoice,
+    made here as a draft (``made_here``) or linked from the purchases already there. It is posted, cancelled and
+    returned from the purchases screen; the machine's cost history reads what it left in expenses."""
+
+    job = models.ForeignKey(MaintenanceJob, on_delete=models.PROTECT, related_name="purchases")
+    purchase_invoice = models.OneToOneField("purchases.PurchaseInvoice", on_delete=models.PROTECT, related_name="maintenance_purchase")
+    made_here = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["pk"]
