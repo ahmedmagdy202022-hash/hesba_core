@@ -230,6 +230,30 @@ class TwoJobsTests(PrintingPlant):
         self.assertEqual(get_item_location_stock_quantity(self.paper, self.plant), D("15"))
         self.assertEqual(get_item_location_stock_quantity(self.ink, self.plant), D("7"))
 
+    def test_a_few_units_made_again_after_a_defect_in_a_whole_job_recipe_can_start_and_finish(self):
+        order = self.quote("3000")
+        self.sheet(order)
+        order = self.confirm(order)
+        production = quotes.convert(self.line(order), self.owner)
+        recipe = CostSheet.objects.get().job_recipe
+        self.assertEqual(recipe.output_quantity, D("3000.000"))            # 5 reams over 3,000 does not divide: one batch of the whole job
+        orders.advance(production, self.owner, defect="1")
+        for _ in production.stages[1:]:
+            orders.advance(production, self.owner)
+        orders.finish(production, self.owner)
+        line = self.line(order)
+        self.assertEqual(make_to_order.uncovered(line), D("1.000"))
+        again = make_to_order.make(line, self.owner, {})
+        # 1 over 3,000 rounds to no batch at all; the order takes the smallest batch count and so can start.
+        self.assertEqual(again.quantity, D("1.000"))
+        self.assertEqual(orders._batches(again), D("0.001"))
+        paper_before = get_item_location_stock_quantity(self.paper, self.plant)
+        self.walk(again)
+        self.assertEqual(paper_before - get_item_location_stock_quantity(self.paper, self.plant), D("0.005"))
+        self.assertEqual(again.run.output_quantity, D("1.000"))
+        self.assertEqual(make_to_order.uncovered(line), D("0.000"))
+        self.assertEqual(get_item_location_stock_quantity(line.item, self.plant), D("3000"))
+
     def test_the_same_material_on_two_lines_is_one_recipe_line(self):
         order = self.quote()
         self.sheet(order)
