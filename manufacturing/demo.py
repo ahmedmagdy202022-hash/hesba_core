@@ -47,9 +47,9 @@ FOOD_CENTRES = (
 )
 #: (Arabic, English, centre code, minutes per carton, setup minutes): the routing of the first three recipes
 FOOD_ROUTING = (
-    ("تحضير وخلط", "Preparation & mixing", "DEMO-MIX", D("2"), D("20")),
-    ("خَبز", "Baking", "DEMO-OVEN", D("4"), D("15")),
-    ("تعبئة وتغليف", "Packing", "DEMO-PACK", D("1.5"), D("10")),
+    ("تحضير وخلط", "Preparation & mixing", "DEMO-MIX", D("6"), D("20")),
+    ("خَبز", "Baking", "DEMO-OVEN", D("12"), D("15")),
+    ("تعبئة وتغليف", "Packing", "DEMO-PACK", D("5"), D("10")),
 )
 RELEASE_CRITERIA = (
     {"name_ar": "شكل الكرتونة وغلافها", "name_en": "Carton and wrapping", "kind": "pass_fail"},

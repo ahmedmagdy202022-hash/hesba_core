@@ -61,7 +61,7 @@ class PremiumToneTests(SimpleTestCase):
 DEMO_SOURCES = (
     "reports/demo_catalogs.py", "config/demo.py", "config/demo_templates.py", "config/demo_first_run.py", "config/demo_sandbox.py",
     "config/demo_restart.py", "settings_core/demo_services.py", "settings_core/management/commands/prepare_demo.py",
-    "reports/management/commands/seed_demo_business.py", "medical/demo.py", "projects/demo.py", "restaurant/demo.py",
+    "reports/management/commands/seed_demo_business.py", "medical/demo.py", "projects/demo.py", "restaurant/demo.py", "manufacturing/demo.py",
 )
 LETTER = "\u0621-\u064A"
 #: A person named after the trade after the first name («أحمد الفني», «سمير المندوب», «د. كريم البيطري», «م. سامح مهندس الموقع»).
