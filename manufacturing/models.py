@@ -473,3 +473,65 @@ class OutsideJob(models.Model):
 
     def __str__(self):
         return f"{self.order_id}:{self.stage_key}"
+
+
+class CostSheetLineKind(models.TextChoices):
+    MATERIAL = "material", "Material"
+    LABOUR = "labour", "Labour"
+    OVERHEAD = "overhead", "Overhead"
+    OUTSIDE = "outside", "Outside work"
+
+
+class CostSheet(models.Model):
+    """Manufacturing F7 (HG-138): the specifications and the cost sheet of one quotation (sales order) line made to order.
+
+    ``template`` is a key of ``quotes.TEMPLATES`` (printing, furniture, made to measure) and ``spec`` holds the answers
+    to its fields; they print under the line on the quotation. The lines (``CostSheetLine``) are the estimate behind the
+    price: materials at the cost typed (today's average by default), labour, overhead and outside work. The unit price
+    is never stored: it is read as cost x (1 + ``margin_percent`` / 100) / the line's quantity, to the piastre, unless
+    ``price_override`` says otherwise. An estimate only: no stock, cost, cashbox or ledger row is written from it.
+
+    ``job_item`` and ``job_recipe`` are set when the accepted line is made a custom production order (``quotes.convert``):
+    the job's own stock item (``JOB-<order number>-<line>``) and its recipe. After that the sheet no longer changes."""
+
+    sales_order_line = models.OneToOneField("orders.SalesOrderLine", on_delete=models.CASCADE, related_name="cost_sheet")
+    template = models.CharField(max_length=20)
+    spec = models.JSONField(default=dict, blank=True)
+    margin_percent = models.DecimalField(max_digits=7, decimal_places=2, default=0)
+    price_override = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    job_item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    job_recipe = models.ForeignKey(Recipe, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    converted_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(margin_percent__gte=0) & models.Q(margin_percent__lte=1000), name="mfg_costsheet_margin"),
+            models.CheckConstraint(condition=models.Q(price_override__isnull=True) | models.Q(price_override__gte=0), name="mfg_costsheet_override"),
+        ]
+
+    def __str__(self):
+        return f"sheet:{self.sales_order_line_id}"
+
+
+class CostSheetLine(models.Model):
+    """Manufacturing F7 (HG-138): one line of a cost sheet. A material names a stock item; labour, overhead and outside
+    work carry a description instead. ``quantity`` and ``unit_cost`` are for the whole line of the quotation, not per unit."""
+
+    sheet = models.ForeignKey(CostSheet, on_delete=models.CASCADE, related_name="lines")
+    kind = models.CharField(max_length=10, choices=CostSheetLineKind.choices)
+    item = models.ForeignKey("master_data.Item", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    description = models.CharField(max_length=255, blank=True)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3)
+    unit_cost = models.DecimalField(max_digits=14, decimal_places=4)
+
+    class Meta:
+        ordering = ["pk"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0) & models.Q(unit_cost__gte=0), name="mfg_costsheetline_amounts"),
+            models.CheckConstraint(condition=(models.Q(kind="material") & models.Q(item__isnull=False))
+                                   | (~models.Q(kind="material") & models.Q(item__isnull=True)), name="mfg_costsheetline_item_for_material"),
+        ]

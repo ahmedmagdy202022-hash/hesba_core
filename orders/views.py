@@ -228,8 +228,15 @@ def detail(request, pk):
     if production:
         for row in rows:
             row["production"] = production["states"][row["line"].pk]
+    quote = None
+    if make_to_order.manufacturing_on():  # Manufacturing F7 (HG-138): each line's specifications, and its specifications and cost page
+        from manufacturing.quote_views import line_context
+
+        quote = line_context(request, order, rows, lang)
+        for row in rows:
+            row["quote"] = quote["lines"][row["line"].pk]
     return render(request, "orders/detail.html", _base(
-        request, lang, order=order, rows=rows, numbers=numbers, moves=moves, items=items, error=error, today=today, production=production,
+        request, lang, order=order, rows=rows, numbers=numbers, moves=moves, items=items, error=error, today=today, production=production, quote=quote,
         state=state, editable=can_manage and order.status in OFFERED, share=share, can_deliver=can_manage and order.status == Status.CONFIRMED,
         can_invoice=can_manage and order.status == Status.CONFIRMED and any(row["left"] > 0 for row in rows),
         invoices=services.invoices(order), salespeople=_salespeople() if can_manage else [],
@@ -251,8 +258,11 @@ def _doc(order, lang, *, delivery_of=None):
                 "reference": (own["order_number"], order.display_number), "lines": lines, "has_discounts": False, "totals": [],
                 "notes": order.notes}
     numbers = services.totals(order)
+    from manufacturing.quotes import print_specs  # Manufacturing F7 (HG-138): the specifications print under their line
+
+    specs = print_specs(order, lang)
     lines = [{"label": line.description or line.item.search_label, "quantity": line.quantity, "unit_price": line.unit_price,
-              "discount": line.discount, "total": line.amount} for line in numbers["lines"]]
+              "discount": line.discount, "total": line.amount, "specs": specs.get(line.pk, [])} for line in numbers["lines"]]
     totals = [(words["subtotal"], numbers["gross"])]
     if numbers["discount"]:
         totals.append((words["discount"], -numbers["discount"]))

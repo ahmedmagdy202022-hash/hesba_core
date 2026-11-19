@@ -1,0 +1,60 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}{# Manufacturing F7 (HG-138): one quotation line's specifications, its cost sheet (only with the cost permission) and «حوّله لأمر إنتاج خاص». #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'orders:detail' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}<span>{% if order.order_number %}{{ qw.order }}{% else %}{{ qw.quote }}{% endif %} <bdi dir="ltr">{{ order.display_number }}</bdi></span></a>
+<h1>{{ qw.title }}</h1><p>{{ qw.intro }}</p></div></section>
+
+<section class="op-summary-grid op-summary-grid--compact" data-quote-line><article><small>{{ qw.customer }}</small><strong>{{ order.customer.name }}</strong></article>
+<article><small>{{ qw.line }}</small><strong data-line-name>{{ line.description|default:line.item.item_name }}</strong>{% if converted %}<small>{{ qw.job_item }} <bdi dir="ltr" data-job-code>{{ line.item.item_code }}</bdi></small>{% endif %}</article>
+<article><small>{{ qw.qty }}</small><strong><bdi dir="ltr">{{ line.quantity|qty }}</bdi></strong></article>
+<article><small>{{ qw.price }}</small><strong data-line-price><bdi dir="ltr">{{ line.unit_price|money }}</bdi></strong></article></section>
+
+<h2>{{ qw.spec_title }}</h2>
+{% if can_spec %}<form class="op-form" method="post" data-spec-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="spec"><div class="op-form-grid">
+<div class="op-field"><label for="qs-template">{{ qw.template }}</label><select id="qs-template" name="template">{% for slug, label in templates %}<option value="{{ slug }}"{% if slug == template %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+{% for field in fields %}<div class="op-field"><label for="qs-{{ field.key }}">{{ field.label }}</label><input id="qs-{{ field.key }}" name="spec_{{ field.key }}" maxlength="120" value="{{ field.value }}"></div>{% endfor %}
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ qw.spec_save }}</button></div></form>
+{% elif spec_rows %}<section class="op-detail-meta" data-spec-view>{% for label, value in spec_rows %}<p><strong>{{ label }}:</strong> <bdi>{{ value }}</bdi></p>{% endfor %}</section>
+{% else %}<p class="op-muted" data-no-spec>{{ qw.no_spec }}</p>{% endif %}
+
+{% if can_cost %}<h2 data-sheet>{{ qw.sheet_title }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-cost-lines><thead><tr><th>{{ qw.kind }}</th><th>{{ qw.item_desc }}</th><th>{{ qw.line_qty }}</th><th>{{ qw.unit_cost }}</th><th>{{ qw.amount }}</th>{% if can_edit_cost %}<th></th>{% endif %}</tr></thead><tbody>
+{% for entry in cost_rows %}{% with row=entry.row %}<tr data-cost-line="{{ row.pk }}" data-cost-kind="{{ row.kind }}"><td>{% for kind, label in kinds %}{% if kind == row.kind %}{{ label }}{% endif %}{% endfor %}</td>
+<td class="op-cell-text">{% if row.item_id %}{{ row.item.item_name }}{% if row.description %} — {{ row.description }}{% endif %}{% else %}{{ row.description }}{% endif %}</td>
+<td><bdi dir="ltr">{{ row.quantity|qty }}</bdi></td><td><bdi dir="ltr">{{ entry.cost_plain }}</bdi></td><td data-cost-amount><bdi dir="ltr">{{ entry.amount|money }}</bdi></td>
+{% if can_edit_cost %}<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove_line"><input type="hidden" name="row" value="{{ row.pk }}"><button class="op-secondary" type="submit">{{ qw.remove }}</button></form></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="6" class="op-empty">{{ qw.no_lines }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_edit_cost %}<details class="mfg-actuals" data-add-cost{% if not cost_rows %} open{% endif %}><summary class="op-secondary">{{ qw.add_title }}</summary><form class="op-form" method="post" novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="add_line"><div class="op-form-grid">
+<div class="op-field"><label for="qc-kind">{{ qw.kind }}</label><select id="qc-kind" name="kind">{% for kind, label in kinds %}<option value="{{ kind }}">{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="qc-item">{{ qw.material }}</label><select id="qc-item" name="item"><option value="">{{ qw.choose }}</option>{% for item in stock_items %}<option value="{{ item.pk }}">{{ item.item_name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="qc-desc">{{ qw.description }}</label><input id="qc-desc" name="description" maxlength="255"><small class="op-muted">{{ qw.description_hint }}</small></div>
+<div class="op-field"><label for="qc-qty">{{ qw.line_qty }}</label><input id="qc-qty" name="quantity" inputmode="decimal" dir="ltr"><small class="op-muted">{{ qw.qty_hint }}</small></div>
+<div class="op-field"><label for="qc-cost">{{ qw.unit_cost }}</label><input id="qc-cost" name="unit_cost" inputmode="decimal" dir="ltr"><small class="op-muted">{{ qw.cost_hint }}</small></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ qw.add }}</button></div></form></details>{% endif %}
+{% if numbers %}<section class="op-summary-grid op-summary-grid--compact" data-sheet-figures>
+<article><small>{{ qw.materials }}</small><strong data-fig-material><bdi dir="ltr">{{ numbers.material|money }}</bdi></strong></article>
+<article><small>{{ qw.labour }}</small><strong data-fig-labour><bdi dir="ltr">{{ numbers.labour|money }}</bdi></strong></article>
+<article><small>{{ qw.overhead }}</small><strong data-fig-overhead><bdi dir="ltr">{{ numbers.overhead|money }}</bdi></strong></article>
+<article><small>{{ qw.outside }}</small><strong data-fig-outside><bdi dir="ltr">{{ numbers.outside|money }}</bdi></strong></article>
+<article><small>{{ qw.cost }}</small><strong data-fig-cost><bdi dir="ltr">{{ numbers.cost|money }}</bdi></strong><small>{{ qw.unit_cost_total }} <bdi dir="ltr">{{ numbers.unit_cost|money }}</bdi></small></article>
+<article><small>{{ qw.price_total }}</small><strong data-fig-price-total><bdi dir="ltr">{{ numbers.price_total|money }}</bdi></strong><small>{{ qw.margin_amount }} <bdi dir="ltr">{{ numbers.margin|money }}</bdi></small></article>
+<article><small>{{ qw.computed }}</small><strong data-fig-computed><bdi dir="ltr">{{ numbers.computed|money }}</bdi></strong>{% if numbers.overridden %}<small>{{ qw.used }} <bdi dir="ltr">{{ numbers.unit_price|money }}</bdi></small>{% endif %}</article>
+</section>
+{% if can_edit_cost and price_open %}<form class="op-form" method="post" data-price-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="price"><div class="op-form-grid">
+<div class="op-field"><label for="qp-margin">{{ qw.margin }}</label><input id="qp-margin" name="margin" inputmode="decimal" dir="ltr" value="{{ margin_plain }}"></div>
+<div class="op-field"><label for="qp-override">{{ qw.override }}</label><input id="qp-override" name="override" inputmode="decimal" dir="ltr" value="{{ override_plain }}"><small class="op-muted">{{ qw.override_hint }}</small></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ qw.price_save }}</button></div></form>
+{% elif not price_open %}<p class="op-muted" data-price-locked>{{ qw.price_locked }}</p>{% endif %}{% endif %}{% endif %}
+
+{% if converted %}<h2>{{ qw.done_title }}</h2><section class="op-detail-meta" data-converted>
+<p>{{ qw.job_item }}: <bdi dir="ltr">{{ sheet.job_item.item_code }}</bdi> · {{ sheet.job_item.item_name }}</p>
+{% if can_open %}<p>{{ qw.recipe }}: <a class="mfg-link" href="{% url 'manufacturing:recipe' sheet.job_recipe.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ sheet.job_recipe.code }}</bdi></a></p>
+{% for production in productions %}<p data-job-production>{{ qw.production }}: <a class="mfg-link" href="{% url 'manufacturing:order' production.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ production.number }}</bdi></a></p>{% endfor %}{% endif %}
+</section>
+{% elif can_convert %}<h2>{{ qw.convert_title }}</h2><form class="op-form" method="post" data-convert-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="convert">
+<p class="op-muted">{{ qw.convert_hint }}</p>{% if has_outside %}<p class="op-muted" data-outside-hint>{{ qw.outside_hint }}</p>{% endif %}
+{% if convert_ready %}<div class="op-form-grid"><div class="op-field"><label for="qv-location">{{ qw.location }}</label><select id="qv-location" name="location">{% for place in locations %}<option value="{{ place.pk }}">{% if lang == 'en' %}{{ place.name_en|default:place.name_ar }}{% else %}{{ place.name_ar }}{% endif %}</option>{% endfor %}</select></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ qw.convert }}</button></div>{% else %}<p class="op-message" data-need-materials>{{ qw.need_materials }}</p>{% endif %}</form>
+{% elif sheet and not is_order and not converted %}<p class="op-muted" data-wait-confirm>{{ qw.wait_confirm }}</p>{% endif %}
+{% endblock %}

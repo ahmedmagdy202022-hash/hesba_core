@@ -107,7 +107,13 @@ def create_order(data, user, lang="ar"):
 
 
 def _batches(order):
-    return (order.quantity / order.recipe.output_quantity).quantize(Decimal("0.001"))
+    """The order's batches, to three decimals. A small order of a recipe whose batch is large (a custom job's recipe made
+    as one batch of the whole job, F7, and the few units made again after a defect) would round to no batch at all and
+    could never start: it takes the smallest batch count instead, and what is issued beyond its need goes back with
+    «رجّع خامات» (F12)."""
+
+    batches = (order.quantity / order.recipe.output_quantity).quantize(Decimal("0.001"))
+    return batches if batches > 0 or order.quantity <= 0 else Decimal("0.001")
 
 
 def good_units(order):

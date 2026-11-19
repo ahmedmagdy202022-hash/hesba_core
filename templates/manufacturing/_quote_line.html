@@ -1,0 +1,3 @@
+{# Manufacturing F7 (HG-138): under a sales order line, its specifications and the link to its specifications and cost page. #}
+{% if q.specs %}<small class="op-muted mfg-mrp-note" data-line-specs>{% for label, value in q.specs %}{% if not forloop.first %} · {% endif %}{{ label }}: <bdi>{{ value }}</bdi>{% endfor %}</small>{% endif %}
+{% if q.show %}<a class="mfg-link" href="{{ q.url }}?lang={{ lang }}" data-quote-link>{{ q.label }}</a>{% endif %}

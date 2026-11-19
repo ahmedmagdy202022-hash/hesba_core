@@ -578,7 +578,8 @@ def pos(request):
     from deposits.services import FEE_ITEM_CODE
 
     # The internal late-cancellation fee item is billed by the deposits service, never rung up at the till.
-    catalog = [row for row in item_catalog(sale_prices=True) if row["code"] != FEE_ITEM_CODE]
+    # Manufacturing F7 (HG-138): a custom job's own item (JOB-…) is sold from its sales order's invoice, never rung up at the till.
+    catalog = [row for row in item_catalog(sale_prices=True) if row["code"] != FEE_ITEM_CODE and not row["code"].startswith("JOB-")]
     last = request.GET.get("last", "")
     alternatives_url, alternatives_words, alternatives_drugs = _alternatives_sheet(lang)
     return render(
