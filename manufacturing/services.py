@@ -20,6 +20,11 @@ Rules, stated once:
   ``guards``);
 * no stock, cost or accounting rule is changed here (see HG-030).
 
+Manufacturing F9 (HG-139): a recipe may yield extra outputs (by-products at a fixed value, co-products by a share,
+``byproducts``). ``produce`` then gives the product what is left of the joint cost and puts each extra output into
+stock through the same ``adjust_stock``; ``cancel_run`` reverses every output (each only while none of it has left
+its place since) before the materials. A recipe with no extra output runs exactly the lines it ran before.
+
 HG-036 (approved) adds three things on top, still only through the engine:
 
 * work in progress: a production order issues its materials when it starts
@@ -163,6 +168,10 @@ def save_recipe(data, lines, user, recipe=None, lang="ar"):
         clean.append((component, quantity))
     if not clean:
         raise ValidationError(words["lines"])
+    if recipe is not None:
+        from . import byproducts
+
+        byproducts.check_recipe(recipe, product, clean, lang)  # F9 (HG-139): an extra output is never the product or a component
     if data.get("active", True) not in (False, "", "0", None):
         # F2: A uses B and B uses A, at any depth, would send the requirements calculation round in a circle. An inactive
         # recipe is out of every calculation, so only an active one is checked (and again when it is switched on).
@@ -253,7 +262,7 @@ def issue(recipe, user, *, batches, location, reference, issue_date=None, lang="
 
 @transaction.atomic
 def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="ar", conversion_cost=Decimal("0"), scrap=Decimal("0"), issued=None,
-            stand_in=None, output=None, output_location=None):
+            stand_in=None, output=None, output_location=None, extra_outputs=None):
     """Post a run. ``issued`` are the operations an order already issued at
     its start; without them the components are consumed now, as before.
     ``stand_in``: HG-048, the narrower permission the caller's flow allows in place of inventory.adjust_stock.
@@ -261,10 +270,15 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
     units). Without it the run makes the recipe's output times its batches, less the scrap, as before.
     ``output_location`` (F5, HG-136): where the product enters stock when that is not the run's own location (the
     entity's quality hold place, for an order whose recipe needs release). Without it the product enters the run's
-    location, as before; the materials always leave the run's location."""
+    location, as before; the materials always leave the run's location.
+    ``extra_outputs`` (F9, HG-139): {RecipeOutput pk: quantity} for the extra outputs whose real quantity the person
+    typed; the others come out at the recipe's quantity times the batches. It means nothing for a recipe without
+    extra outputs."""
 
     from inventory.models import StockAdjustmentDirection
     from inventory.services import adjust_stock
+
+    from . import byproducts
 
     words = MESSAGES[lang]
     recipe, batches, lines = _checked(recipe, batches, location, words)
@@ -286,19 +300,27 @@ def produce(recipe, user, *, batches, location, run_date=None, notes="", lang="a
     # Manufacturing F12 (HG-132): an order's returns are adjustments in; they come off the materials (issues + extras − returns).
     total = sum(((-1 if operation.adjustment_direction == StockAdjustmentDirection.IN else 1) * operation.quantity * operation.unit_cost
                  for operation in consumed), Decimal("0"))
+    # Manufacturing F9 (HG-139): a recipe with extra outputs gives its product what is left of the joint cost after the
+    # by-products' value and the co-products' shares. None for every other recipe: the product carries the whole cost.
+    shared = byproducts.split(recipe, batches, total, conversion_cost, output, quantities=extra_outputs, lang=lang)
+    product_cost = total + conversion_cost if shared is None else shared.main_cost
     produced = adjust_stock(f"{number}-OUT", run_date, recipe.product, output_location or location, StockAdjustmentDirection.IN, output, reason, user,
-                            unit_cost=cost_round((total + conversion_cost) / output), stand_in=stand_in)
+                            unit_cost=cost_round(product_cost / output), stand_in=stand_in)
     run = ProductionRun.objects.create(number=number, recipe=recipe, batches=batches, location=location, run_date=run_date, output_quantity=output,
                                        total_cost=money_round(total), conversion_cost=conversion_cost, scrap_quantity=scrap,
                                        output_operation=produced, notes=(notes or "").strip()[:255], created_by=user)
     ProductionConsumption.objects.bulk_create([ProductionConsumption(run=run, operation=operation) for operation in consumed])
+    if shared is not None:
+        # Each extra output enters the run's own location (never the quality hold place: a release checks the product only).
+        byproducts.post(run, shared, location, run_date, reason, user, stand_in=stand_in)
     _audit(run, user, "produce", {"recipe": recipe.code, "batches": str(batches), "output": str(output), "cost": str(run.total_cost),
                                   "conversion": str(conversion_cost), "scrap": str(scrap), "from_wip": issued is not None}, AuditEventType.CREATE)
     return run
 
 
-def _left_since(run):
+def _left_since(run, operation=None):
     """F11 (HG-100): whether any of the product left the run's location after the run put it there.
+    ``operation`` (F9, HG-139): one of the run's extra outputs, asked the same question about its own item and place.
 
     The engine reverses the output at the run's own unit cost and refuses only when the place holds fewer units than
     the run made. If some were sold (at an average that included this run) and a later run refilled the place, that
@@ -315,7 +337,7 @@ def _left_since(run):
     from inventory.models import StockMovement, StockOperationStatus
     from inventory.services import OUT_MOVEMENT_TYPES
 
-    made = run.output_operation.movements.filter(reversal_of__isnull=True).order_by("pk").first()
+    made = (operation or run.output_operation).movements.filter(reversal_of__isnull=True).order_by("pk").first()
     if made is None:
         return False
     return (StockMovement.objects.filter(item_id=made.item_id, location_id=made.location_id, movement_type__in=OUT_MOVEMENT_TYPES,
@@ -335,6 +357,9 @@ def check_cancellable(run, reason, lang="ar"):
         raise ValidationError(words["reason"])
     if _left_since(run):
         raise ValidationError(words["moved_out"].format(item=run.output_operation.item.item_name))
+    for extra in run.outputs.select_related("operation__item"):  # F9 (HG-139): each extra output under the same rule
+        if _left_since(run, extra.operation):
+            raise ValidationError(words["moved_out"].format(item=extra.operation.item.item_name))
     return reason
 
 
@@ -347,10 +372,14 @@ def cancel_run(run, user, *, reason, reversal_date=None, lang="ar"):
     # The engine's own reversal locks the operation and then its item. The same order here: a reversal of this very
     # operation from the stock screen, running at the same moment, then waits its turn instead of deadlocking.
     output = StockOperation.objects.select_for_update().get(pk=run.output_operation_id)
-    lock_items_for_stock_check([output.item_id])  # nothing of it leaves between the check and the reversal
+    # F9 (HG-139): the run's extra outputs, locked the same way (operation, then item) and reversed with the product.
+    extras = list(StockOperation.objects.select_for_update(of=("self",)).filter(run_output__run=run).order_by("pk"))
+    lock_items_for_stock_check([output.item_id] + [extra.item_id for extra in extras])  # nothing of them leaves between the check and the reversal
     reason = check_cancellable(run, reason, lang)
     reversal_date = reversal_date or timezone.localdate()
     cancel_stock_operation(run.output_operation_id, reversal_date, reason, user)  # the engine: refuses when the place is short
+    for extra in extras:
+        cancel_stock_operation(extra.pk, reversal_date, reason, user)
     for consumption in run.consumptions.all():
         cancel_stock_operation(consumption.operation_id, reversal_date, reason, user)
     run.status = RunStatus.CANCELLED
