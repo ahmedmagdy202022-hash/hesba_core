@@ -360,7 +360,9 @@ def after_login(request):
 
 #: HG-048: someone whose whole job is one screen starts on it: a waiter on the floor, a site engineer on
 #: the projects. Anyone who also sees the sales side (a cashier, a manager) keeps the dashboard.
-ROLE_HOMES = (("restaurant.take_orders", "restaurant:board", "tables_orders"), ("projects.view_projects", "projects:list", "projects"))
+#: HG-140 (Manufacturing F8): a production worker starts on the floor screen.
+ROLE_HOMES = (("restaurant.take_orders", "restaurant:board", "tables_orders"), ("projects.view_projects", "projects:list", "projects"),
+              ("manufacturing.record_stage", "manufacturing:floor", "manufacturing"))
 
 
 def _role_home(user):
