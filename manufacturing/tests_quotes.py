@@ -375,6 +375,27 @@ class RuleTests(PrintingPlant):
         self.assertEqual(poster.item.item_code, "PR-POSTER")
 
 
+    def test_specifications_written_on_a_line_already_made_the_plain_way_leave_its_remaining_units_makeable(self):
+        services.save_recipe({"product": self.catalogue, "output_quantity": "1"}, [(self.paper, "1")], self.owner)
+        order = self.confirm(self.quote())
+        line = self.line(order)
+        first = make_to_order.make(line, self.owner, {})                     # the plain way, before any sheet
+        orders.advance(first, self.owner, defect="1")
+        for _ in first.stages[1:]:
+            orders.advance(first, self.owner)
+        orders.finish(first, self.owner)
+        quotes.save_spec(line, self.owner, "printing", SPEC)                  # an unconverted sheet on a line that cannot be converted any more
+        self.assertEqual(quotes.pending([line.pk]), set())
+        state = make_to_order.line_states(order, sales.quantities(order), "ar", can_make=True)[line.pk]
+        self.assertEqual((state["can_make"], state["job_pending"], state["free"]), (True, False, D("1.000")))
+        with self.assertRaisesMessage(ValidationError, "ليه أمر إنتاج شغال بالفعل"):
+            quotes.convert(line, self.owner)
+        again = make_to_order.make(line, self.owner, {})
+        self.assertEqual((again.quantity, again.recipe.product), (D("1.000"), self.catalogue))
+        self.walk(again)
+        self.assertEqual(make_to_order.uncovered(line), D("0.000"))
+
+
 class VatTests(PrintingPlant):
     def test_the_job_is_invoiced_at_the_vat_rate_the_customer_accepted(self):
         from taxes.models import ItemTaxRate, TaxRate

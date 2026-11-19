@@ -417,9 +417,17 @@ def _live_production(line):
 
 
 def pending(line_pks):
-    """The pks among ``line_pks`` whose line has a sheet not converted yet (F1's plain «اعمل أمر إنتاج» is not offered there)."""
+    """The pks among ``line_pks`` whose line has a sheet not converted yet (F1's plain «اعمل أمر إنتاج» is not offered there).
 
-    return set(CostSheet.objects.filter(sales_order_line_id__in=line_pks, job_item__isnull=True).values_list("sales_order_line_id", flat=True))
+    A line that already went the plain way (it has a production order that still counts) is not one of them: it can no
+    longer become a custom job (``convert`` refuses it), so specifications written on it afterwards must not close the
+    plain action that makes its remaining units."""
+
+    waiting = set(CostSheet.objects.filter(sales_order_line_id__in=line_pks, job_item__isnull=True).values_list("sales_order_line_id", flat=True))
+    if waiting:
+        waiting -= set(ProductionOrder.objects.filter(sales_order_line_id__in=waiting, status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS, OrderStatus.DONE))
+                       .exclude(status=OrderStatus.DONE, run__status=RunStatus.CANCELLED).values_list("sales_order_line_id", flat=True))
+    return waiting
 
 
 @transaction.atomic
