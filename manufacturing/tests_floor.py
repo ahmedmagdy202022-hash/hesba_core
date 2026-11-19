@@ -319,14 +319,23 @@ class StartDoneTests(FloorPlant):
 
 
 class PermissionTests(FloorPlant):
-    def test_the_role_holds_the_floor_and_the_stock_view_and_nothing_else(self):
-        for code in (RECORD, "inventory.view_stock"):
+    def test_the_role_holds_the_floor_and_the_stock_views_and_nothing_else(self):
+        for code in (RECORD, "inventory.view_stock", "inventory.view_group_stock"):  # HG-031: whoever sees stock sees the group's quantities
             self.assertTrue(user_has_permission(self.worker, code), code)
-        for code in ("inventory.adjust_stock", "inventory.transfer_stock", "inventory.manage_movements", "inventory.view_cost", "inventory.view_group_stock",
+        for code in ("inventory.adjust_stock", "inventory.transfer_stock", "inventory.manage_movements", "inventory.view_cost",
                      "master_data.manage_items", "master_data.view_master_data", "sales.view_sales_invoices", "sales.create_sales_invoice",
                      "purchases.view_purchase_invoices", "cashboxes.view_cashboxes", "cashboxes.move_cash", "reports.view_profit_report",
                      "reports.view_inventory_report", "settings.view_settings", "accounting.view_ledger"):
             self.assertFalse(user_has_permission(self.worker, code), code)
+
+    def test_the_group_stock_page_shows_the_worker_quantities_and_never_a_cost(self):
+        """HG-031: whoever sees stock sees the group's quantities. The page reads a cost only with inventory.view_cost."""
+
+        self.client.force_login(self.worker)
+        page = self.client.get(reverse("entities:where"))
+        self.assertEqual(page.status_code, 200)
+        self.assertFalse(page.context["can_cost"])
+        self.assertTrue(all("value" not in place for row in page.context["rows"] for place in row["places"]))
 
     def test_the_worker_cannot_reach_the_stock_adjustment_screen_or_any_other_stock_operation(self):
         self.client.force_login(self.worker)

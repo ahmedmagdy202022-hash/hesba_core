@@ -1,8 +1,9 @@
 """HG-140 (Manufacturing F8): a production worker, and one narrow permission for the floor screen.
 
 ``manufacturing.record_stage`` lets its holder see the floor screen and record the stages of production orders. The new
-role «عامل إنتاج» holds it and ``inventory.view_stock``, and nothing else: no cost, no sales, no cash, and no general
-stock adjustment.
+role «عامل إنتاج» holds it, ``inventory.view_stock`` and, by HG-031's rule (whoever sees stock sees the group's
+quantities, never a cost without the cost permission), ``inventory.view_group_stock``; nothing else: no cost, no sales,
+no cash, and no general stock adjustment.
 
 The owner and the manager are given the new permission too, as HG-048 and HG-084 did with theirs: nobody hands out a
 permission they do not hold (FB-ROLES), so without it the owner could neither copy the ready role nor tick this
@@ -16,13 +17,13 @@ The role code is not limited to a list of choices since ``0011_role_code_custom`
 from django.db import migrations
 
 ROLE = ("production_worker", "عامل إنتاج", "Production worker",
-        "يشوف شغله على شاشة العامل ويسجّل بداية ونهاية مراحل أوامر الإنتاج والسليم والمعيب؛ من غير تكلفة ولا بيع ولا خزنة ولا تسوية مخزون.")
+        "يشوف شغله على شاشة العامل ويسجّل بداية ونهاية مراحل أوامر الإنتاج والسليم والمعيب، ويشوف كميات المخزون؛ من غير تكلفة ولا بيع ولا خزنة ولا تسوية مخزون.")
 
 #: code, Arabic, English, module
 PERMISSION = ("manufacturing.record_stage", "تسجيل مراحل أوامر الإنتاج من شاشة العامل", "Record production order stages from the floor screen", "inventory")
 
 #: Existing permissions the new role also holds.
-EXISTING = ("inventory.view_stock",)
+EXISTING = ("inventory.view_stock", "inventory.view_group_stock")
 
 #: Existing roles that also hold the new permission, so that they can hand it out (see the note above).
 ALSO_GRANTED = ("owner", "manager")

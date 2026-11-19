@@ -66,7 +66,7 @@ MATRIX = {
     """,
     # HG-140 (Manufacturing F8): the only row this change adds. Above it, the owner and the manager gained the one new code.
     "production_worker": """
-        inventory.view_stock manufacturing.record_stage
+        inventory.view_group_stock inventory.view_stock manufacturing.record_stage
     """,
 }
 
@@ -96,11 +96,12 @@ class ProductionWorkerRoleTests(TestCase):
 
     CODE = "manufacturing.record_stage"
 
-    def test_the_production_worker_holds_exactly_two_codes(self):
+    def test_the_production_worker_holds_exactly_the_floor_code_and_the_two_stock_views(self):
         role = Role.objects.get(code="production_worker")
         self.assertTrue(role.is_system_role and role.active)
         self.assertEqual((role.name_ar, role.name_en), ("عامل إنتاج", "Production worker"))
-        self.assertEqual(seeded_matrix()["production_worker"], ["inventory.view_stock", self.CODE])
+        # HG-031: whoever sees stock sees the group's quantities too (entities.tests pins that rule for every role).
+        self.assertEqual(seeded_matrix()["production_worker"], ["inventory.view_group_stock", "inventory.view_stock", self.CODE])
 
     def test_only_the_owner_and_the_manager_hold_the_floor_permission_beside_the_worker(self):
         holders = sorted(RolePermission.objects.filter(permission__code=self.CODE, allow=True).values_list("role__code", flat=True))
