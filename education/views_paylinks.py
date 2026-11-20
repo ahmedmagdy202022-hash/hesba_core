@@ -33,7 +33,7 @@ def _next(request, fallback):
 
 @require_POST
 def make(request, invoice_pk):
-    """«لينك دفع» on one fee invoice: shows its live link, or makes one."""
+    """«رابط دفع» on one fee invoice: shows its live link, or makes one."""
 
     _guard(request)
     lang = _lang(request)
@@ -50,7 +50,7 @@ def make(request, invoice_pk):
 
 @require_POST
 def bulk(request):
-    """«اعمل لينكات دفع للشهر»: the result is kept in the session and shown on its own page, so a refresh never makes more links."""
+    """«اعمل روابط دفع للشهر»: the result is kept in the session and shown on its own page, so a refresh never makes more links."""
 
     _guard(request)
     lang = _lang(request)

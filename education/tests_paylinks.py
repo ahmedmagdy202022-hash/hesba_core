@@ -556,7 +556,7 @@ class ScreenTests(PayFeesSetup):
         self.assertEqual(self.live(invoice).amount, D("750.00"))
 
     def test_the_bulk_result_screen_does_not_offer_a_stale_link_either(self):
-        """Codex on #381: after a desk payment, refreshing the result screen still offered «انسخ اللينك» for the old amount."""
+        """Codex on #381: after a desk payment, refreshing the result screen still offered «نسخ الرابط» for the old amount."""
 
         invoice = self.fee_invoice("يوسف محمد", "1250")
         self.client.post(reverse("education:paylinks_bulk"), {"lang": "ar", "month": f"{self.month:%Y-%m}"}, follow=True)

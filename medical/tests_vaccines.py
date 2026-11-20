@@ -246,7 +246,7 @@ class RecordTests(Clinic):
                            ({"vaccine": self.rabies, "given_on": date(1950, 1, 1)}, "قديم"),
                            ({"vaccine": self.rabies, "next_due": "soon"}, "ميعاد الجرعة"),
                            ({"vaccine": self.rabies, "next_due": self.today.isoformat()}, "بعد يوم التطعيم"),
-                           ({"vaccine": self.rabies, "visit": other}, "مش بتاع الحيوان ده"),
+                           ({"vaccine": self.rabies, "visit": other}, "مش خاص بالحيوان ده"),
                            ({"vaccine": self.rabies, "given_by": save_employee({"name": "د. سابق"}, self.owner)}, None)):
             with self.subTest(data=data):
                 if text is None:

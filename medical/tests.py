@@ -750,12 +750,12 @@ class VetAnimalTests(TestCase):
 
         other = make_customer(customer_code="P-2", name="علي")
         theirs = self.vet.save_animal(other, {"name": "بوبي", "species": "dog"}, self.owner)
-        with self.assertRaisesMessage(ValidationError, "مش بتاع العميل"):
+        with self.assertRaisesMessage(ValidationError, "مش مسجّل على العميل"):
             medical.save_visit(self.customer, {"animal": theirs, "diagnosis": "x"}, self.owner)
-        with self.assertRaisesMessage(ValidationError, "مش بتاع العميل"):
+        with self.assertRaisesMessage(ValidationError, "مش مسجّل على العميل"):
             self.vet.save_animal(self.customer, {"name": "بوبي", "species": "dog"}, self.owner, theirs)
         response = self.client.post(reverse("medical:visit_new", args=[self.customer.pk]), {"animal": theirs.pk, "diagnosis": "x"})
-        self.assertContains(response, "مش بتاع العميل")
+        self.assertContains(response, "مش مسجّل على العميل")
 
     def test_bad_input_is_refused(self):
         for data, message in (({"species": "dog"}, "اسم الحيوان"), ({"name": "x", "species": "dragon"}, "نوع الحيوان"),

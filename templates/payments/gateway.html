@@ -1,8 +1,8 @@
 {% extends "operations/base.html" %}
 {% load hesba_format %}
 {% block operation_content %}
-<section class="op-title-row"><div><h1>{% if lang == 'en' %}Online payment links{% else %}لينكات الدفع أونلاين{% endif %}</h1>
-<p>{% if lang == 'en' %}Money paid by link sits in the “بوابة الدفع” bank account until the gateway pays it out.{% else %}الفلوس المدفوعة باللينك بتفضل في حساب «بوابة الدفع» لحد ما البوابة تحوّلها.{% endif %}
+<section class="op-title-row"><div><h1>{% if lang == 'en' %}Online payment links{% else %}روابط الدفع أونلاين{% endif %}</h1>
+<p>{% if lang == 'en' %}Money paid by link sits in the “بوابة الدفع” bank account until the gateway pays it out.{% else %}الفلوس المدفوعة بالرابط بتفضل في حساب «بوابة الدفع» لحد ما البوابة تحوّلها.{% endif %}
 {% if not connected %} · <strong data-not-connected>{% if lang == 'en' %}Gateway not connected{% else %}البوابة غير موصّلة{% endif %}</strong>{% endif %}</p></div></section>
 
 <h2>{% if lang == 'en' %}Gateway accounts{% else %}حسابات البوابة{% endif %}</h2>
@@ -23,8 +23,8 @@
 <div class="op-table-wrap"><table class="op-table" data-review><thead><tr><th>{% if lang == 'en' %}Transaction{% else %}العملية{% endif %}</th><th>{% if lang == 'en' %}Invoice{% else %}الفاتورة{% endif %}</th><th>{% if lang == 'en' %}Note{% else %}ملاحظة{% endif %}</th></tr></thead><tbody>
 {% for row in review %}<tr><td><bdi>{{ row.transaction_id }}</bdi></td><td>{% if row.link.invoice_id %}<bdi>{{ row.link.invoice.invoice_number }}</bdi>{% elif row.link.order_id %}<bdi data-review-order>{{ row.link.order.number }}</bdi>{% endif %}</td><td class="op-cell-text" dir="ltr">{{ row.note }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
 
-<h2>{% if lang == 'en' %}Links{% else %}اللينكات{% endif %}</h2>
+<h2>{% if lang == 'en' %}Links{% else %}الروابط{% endif %}</h2>
 <div class="op-table-wrap"><table class="op-table" data-links><thead><tr><th>{% if lang == 'en' %}Invoice{% else %}الفاتورة{% endif %}</th><th>{% if lang == 'en' %}Customer{% else %}العميل{% endif %}</th><th>{% if lang == 'en' %}Amount{% else %}المبلغ{% endif %}</th><th>{% if lang == 'en' %}Status{% else %}الحالة{% endif %}</th><th>{% if lang == 'en' %}Made{% else %}اتعمل{% endif %}</th></tr></thead><tbody>
 {% for link, label in links %}<tr data-link="{{ link.pk }}"><td>{% if link.invoice_id %}<a href="{% url 'sales:detail' link.invoice_id %}?lang={{ lang }}"><bdi>{{ link.invoice.invoice_number }}</bdi></a>{% else %}<a href="{% url 'restaurant:order' link.order_id %}?lang={{ lang }}" data-order-link><bdi>{{ link.order.number }}</bdi></a>{% endif %}</td><td class="op-cell-text">{{ link.customer.name }}</td><td>{{ link.amount|money }}{% if link.paid_amount is not None and link.paid_amount != link.amount %} → {{ link.paid_amount|money }}{% endif %}</td><td>{{ label }}</td><td><bdi>{{ link.created_at|date:"Y-m-d H:i" }}</bdi></td></tr>
-{% empty %}<tr><td colspan="5" class="op-empty">{% if lang == 'en' %}No links yet.{% else %}مفيش لينكات لسه.{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% empty %}<tr><td colspan="5" class="op-empty">{% if lang == 'en' %}No links yet.{% else %}مفيش روابط لسه.{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

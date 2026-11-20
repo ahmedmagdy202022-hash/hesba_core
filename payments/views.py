@@ -231,7 +231,7 @@ def create(request, invoice_pk):
     except ValidationError as error:
         messages.error(request, error.messages[0])
     else:
-        messages.success(request, "اتعمل لينك الدفع؛ ابعته للعميل." if lang == "ar" else "The payment link was made; send it to the customer.")
+        messages.success(request, "اتعمل رابط الدفع؛ ابعته للعميل." if lang == "ar" else "The payment link was made; send it to the customer.")
     return redirect(_next(request, fallback))
 
 

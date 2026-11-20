@@ -153,7 +153,7 @@ class LinkTests(PayLinkSetup):
         with self.assertRaisesMessage(ValidationError, "أكبر من الباقي"):
             services.create_link(invoice, self.owner, "1000.01")
         link = services.create_link(invoice, self.owner, "400")
-        with self.assertRaisesMessage(ValidationError, "لينك دفع لسه شغال"):
+        with self.assertRaisesMessage(ValidationError, "رابط دفع لسه شغال"):
             services.create_link(invoice, self.owner, "100")
         self.callback(link)  # paid 400
         self.assertEqual(services.outstanding(invoice), D("600.00"))
@@ -168,7 +168,7 @@ class LinkTests(PayLinkSetup):
         with self.assertRaisesMessage(ValidationError, "walk-in"):
             services.create_link(self.invoice(customer=walk_in), self.owner, lang="en")
         for bad in ("0", "-5", "abc"):
-            with self.subTest(bad=bad), self.assertRaisesMessage(ValidationError, "مبلغ اللينك مش صحيح"):
+            with self.subTest(bad=bad), self.assertRaisesMessage(ValidationError, "مبلغ الرابط مش صحيح"):
                 services.create_link(invoice, self.owner, bad)
         with override_settings(PUBLIC_BASE_URL=""), self.assertRaisesMessage(ValidationError, "PUBLIC_BASE_URL"):
             services.create_link(invoice, self.owner)

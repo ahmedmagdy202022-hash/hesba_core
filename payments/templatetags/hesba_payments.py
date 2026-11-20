@@ -1,4 +1,4 @@
-"""HG-070 (S4): the «ابعت لينك دفع» box on the invoice and work-order pages, and the customer's pay button."""
+"""HG-070 (S4): the «ابعت رابط دفع» box on the invoice and work-order pages, and the customer's pay button."""
 
 from django import template
 from django.core.exceptions import ValidationError

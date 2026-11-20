@@ -61,7 +61,7 @@ FILE_MESSAGES = {
     "ar": {"file_missing": "اختار ملف CSV الأول.", "file_type": "الملف لازم يكون CSV (امتداده .csv).",
            "file_too_big": "الملف أكبر من 5 ميجا.", "file_unreadable": "مش قادرين نقرا الملف. احفظه تاني كـ CSV (UTF-8) وارفعه.",
            "file_empty": "الملف فاضي أو فيه سطر العناوين بس.", "file_too_many_rows": "الملف فيه أكتر من 5000 سطر؛ قسّمه على أكتر من ملف.",
-           "stale": "المعاينة دي قديمة أو مش بتاعتك. ارفع الملف تاني.", "nothing": "مفيش في الملف سطر صالح يتكتب.",
+           "stale": "المعاينة دي قديمة أو مش خاصة بحسابك. ارفع الملف تاني.", "nothing": "مفيش في الملف سطر صالح يتكتب.",
            "forbidden": "استيراد النتايج لصاحب صلاحية تسجيل النتايج بس."},
     "en": {"file_missing": "Choose a CSV file first.", "file_type": "The file must be a CSV (ending in .csv).",
            "file_too_big": "The file is larger than 5 MB.", "file_unreadable": "The file could not be read. Save it again as CSV (UTF-8) and upload it.",

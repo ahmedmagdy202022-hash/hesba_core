@@ -84,7 +84,7 @@ ABOUT_FOR = {
     },
     catalog.SERVICES: {
         "items_services": ("الخدمات اللي بتقدمها بأسعارها.", "The services you provide, with their prices."),
-        "employees_technicians": ("الفنيين أو فريق العمل، ومين عمل كل شغلانة.", "Technicians or the team, and who did each job."),
+        "employees_technicians": ("الفنيين أو فريق العمل، ومين عمل كل مهمة.", "Technicians or the team, and who did each job."),
     },
     (catalog.SERVICES, "maintenance"): {
         "items_services": ("الخدمات وقطع الغيار بأسعارها.", "Services and spare parts with their prices."),
@@ -199,7 +199,7 @@ def _feature_table():
                  "A file per student and parent, groups with their schedule and teacher, and enrolment.", "education:students", "customers", education),
         _feature("attendance", "الحضور والغياب", "Attendance", "حصص النهارده، وتسجيل الحضور، ونسبة الحضور، وواتساب لولي الأمر.",
                  "Today's classes, taking attendance, attendance rates and a WhatsApp to the parent.", "education:today", "appointments_visits", education),
-        _feature("monthly_fees", "المصروفات الشهرية", "Monthly fees", "فواتير المصروفات لكل الطلاب بدوسة، وأولياء الأمور اللي عليهم فلوس.",
+        _feature("monthly_fees", "المصروفات الشهرية", "Monthly fees", "فواتير المصروفات لكل الطلاب بضغطة، وأولياء الأمور اللي عليهم فلوس.",
                  "Fee bills for every student in one click, and the parents who still owe.", "education:fees", "sales_operations", education),
         _feature("teacher_pay", "أجور المدرسين", "Teacher pay", "أجر كل مدرس بالحصة أو بنسبة من المصروفات أو شهري.",
                  "Each teacher's pay per class, as a share of fees, or monthly.", "education:teachers", "employees_technicians", education),

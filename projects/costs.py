@@ -326,7 +326,7 @@ CONSISTENCY = {
 
 HISTORY = {
     "en": "Retention from this bill was released at some point (even if that release was reversed later). A cancellation is dated back to the bill and would rewrite that history, so it is not allowed: make a purchase return instead.",
-    "ar": "ضمان الأعمال بتاع المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مشتريات بدله.",
+    "ar": "ضمان الأعمال في المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مشتريات بدله.",
 }
 
 

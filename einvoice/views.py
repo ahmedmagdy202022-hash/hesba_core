@@ -41,7 +41,7 @@ WORDS = {
         "not_set": "الربط مع المنظومة لسه متظبطش على السيرفر. ناقص:", "setup_hint": "الخطوات في docs/ETA_INTEGRATION.md: حساب على بوابة المنظومة، Client ID و Secret للنظام، وتوكن التوقيع مع برنامج التوقيع.",
         "status": "الحالة", "uuid": "رقم المستند في المنظومة", "submitted_at": "اتبعتت", "checked_at": "آخر مراجعة", "public": "صفحة الفاتورة على المنظومة",
         "history": "إرسالات سابقة", "connection": "الربط مع المنظومة", "check": "اختبار الاتصال", "connection_ok": "الاتصال شغال: الدخول للمنظومة وجهاز التوقيع تمام.",
-        "connection_bad": "الاتصال فيه مشكلة: {problems}", "connection_ready": "الإعدادات موجودة على السيرفر.", "st_submitted": "اتبعتت — بتتراجع", "st_valid": "مقبولة", "st_invalid": "مرفوضة بعد المراجعة", "st_rejected": "مرفوضة", "st_cancelled": "ملغاة", "st_sending": "بتتبعت دلوقتي", "st_cancel_requested": "طلب إلغاء — مستني رد المستلم والمنظومة؛ دوس تحديث الحالة",
+        "connection_bad": "الاتصال فيه مشكلة: {problems}", "connection_ready": "الإعدادات موجودة على السيرفر.", "st_submitted": "اتبعتت — بتتراجع", "st_valid": "مقبولة", "st_invalid": "مرفوضة بعد المراجعة", "st_rejected": "مرفوضة", "st_cancelled": "ملغاة", "st_sending": "بتتبعت دلوقتي", "st_cancel_requested": "طلب إلغاء — مستني رد المستلم والمنظومة؛ اضغط تحديث الحالة",
     },
     "en": {
         "page_title": "E-invoicing", "title": "E-invoicing",

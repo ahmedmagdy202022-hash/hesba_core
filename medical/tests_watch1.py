@@ -53,7 +53,7 @@ class EmptyMineTemplatesTests(report_tests_access.Clinic):
         ar = self.get("doctor", reverse("medical:visit_templates")).content.decode()
         self.assertTrue(VisitTemplate.objects.filter(owner__isnull=True).exists())  # the starting set was seeded by this visit
         self.assertFalse(VisitTemplate.objects.filter(owner__isnull=False).exists())
-        self.assertIn("<b>مفيش قوالب بتاعتك لسه، بس فيه قوالب جاهزة في «المشتركة».</b>", ar)
+        self.assertIn("<b>مفيش قوالب خاصة بيك لسه، بس فيه قوالب جاهزة في «المشتركة».</b>", ar)
         self.assertIn('<a href="?lang=ar&amp;scope=shared" data-open-shared>افتح المشتركة</a>', ar)
         en = self.get("doctor", reverse("medical:visit_templates"), lang="en").content.decode()
         self.assertIn("<b>You have no templates of your own yet, but ready templates are waiting under «Shared».</b>", en)

@@ -243,8 +243,8 @@ class CustomerLinkTests(WorkshopSetup):
         self.assertEqual(list(self.order_.events.values_list("pk", "user_id", "by_customer", "note"))[:len(staff_before)], staff_before)
         self.client.force_login(self.owner)
         page = self.client.get(reverse("workorders:detail", args=[self.order_.pk]))
-        self.assertContains(page, "العميل من اللينك")
-        self.assertContains(page, "العميل وافق على العرض من اللينك")
+        self.assertContains(page, "العميل من الرابط")
+        self.assertContains(page, "العميل وافق على العرض من الرابط")
         english = self.client.get(reverse("workorders:detail", args=[self.order_.pk]), {"lang": "en"})
         self.assertContains(english, "Customer (via link)")
         self.assertEqual(english.content.decode().count("Customer (via link)"), 1)  # only the customer's event
