@@ -22,7 +22,7 @@ SPECIES_LABELS = {
 }
 MESSAGES = {
     "ar": {"name": "اكتب اسم الحيوان.", "species": "اختار نوع الحيوان.", "sex": "النوع مش صحيح.", "date": "تاريخ الميلاد مش مظبوط.",
-           "future": "تاريخ الميلاد لسه مجاش.", "not_theirs": "الحيوان ده مش بتاع العميل ده.",
+           "future": "تاريخ الميلاد لسه مجاش.", "not_theirs": "الحيوان ده مش مسجّل على العميل ده.",
            "choose_animal": "اختار الحيوان اللي الكشف ده عشانه.", "no_animal": "سجّل الحيوان في ملف صاحبه الأول، وبعدين سجّل الكشف."},
     "en": {"name": "Enter the animal's name.", "species": "Choose the species.", "sex": "The sex is not valid.", "date": "The date of birth is not valid.",
            "future": "The date of birth is still to come.", "not_theirs": "This animal does not belong to this customer.",

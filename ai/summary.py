@@ -41,7 +41,7 @@ WORDS = {
         "note": "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.",
         "sales": "مبيعات امبارح", "my_sales": "مبيعاتي امبارح", "invoices": "فواتير امبارح", "my_invoices": "فواتيري امبارح",
         "receipts": "تحصيل امبارح", "low": "قربت تخلص", "appointments": "مواعيد النهارده",
-        "press_again": "الصوت جاهز. دوس تشغيل تاني.", "failed": "الصوت مااشتغلش. جرّب تاني.",
+        "press_again": "الصوت جاهز. اضغط تشغيل تاني.", "failed": "الصوت مااشتغلش. جرّب تاني.",
         "all_collections": "افتح قايمة التحصيلات كلها",
     },
     "en": {
@@ -95,6 +95,26 @@ def _ar_count(n, singular, plural):
     """«3 أصناف» but «11 صنف»: Arabic takes the plural from three to ten."""
 
     return f"{n} {plural if 3 <= n <= 10 else singular}"
+
+
+#: The two stock sentences' verbs by how many items there are: one, two, three to ten, eleven or more.
+_LOW_VERBS = ("قرّب يخلص", "قربوا يخلصوا", "قربت تخلص", "قربوا يخلصوا")
+_OUT_VERBS = ("خلص", "خلصوا", "خلصت", "خلصوا")
+
+
+def _ar_items(n, verbs):
+    """The items and what they did, agreeing as Arabic does: «صنف واحد قرّب»، «صنفين قربوا»، «3 أصناف قربت»، «11 صنف قربوا».
+
+    One and two have their own noun («صنف واحد»، «صنفين»), three to ten take the plural, eleven and more take the singular
+    after the figure; the verb follows the noun (a single item, two items, a few things, a crowd)."""
+
+    if n == 1:
+        return f"صنف واحد {verbs[0]}"
+    if n == 2:
+        return f"صنفين {verbs[1]}"
+    if 3 <= n <= 10:
+        return f"{n} أصناف {verbs[2]}"
+    return f"{n} صنف {verbs[3]}"
 
 
 def _en_count(n, singular, plural=None):
@@ -236,8 +256,8 @@ def build_summary(user, lang="ar", today=None, shared=None, sections=None):
             sentence += f", and {_en_count(out, 'item')} {'is' if out == 1 else 'are'} out of stock." if out else "."
             value = _en_count(low, "item")
         else:
-            sentence = f"فيه {_ar_count(low, 'صنف', 'أصناف')} قربت تخلص" if low else "مفيش أصناف قربت تخلص"
-            sentence += f"، و{_ar_count(out, 'صنف', 'أصناف')} خلصت من المخزن." if out else "."
+            sentence = f"فيه {_ar_items(low, _LOW_VERBS)}" if low else "مفيش أصناف قربت تخلص"
+            sentence += f"، و{_ar_items(out, _OUT_VERBS)} من المخزن." if out else "."
             value = _ar_count(low, "صنف", "أصناف")
         sentences.append(sentence)
         tiles.append(_tile("low_stock", words["low"], value, _link(user, "reports:inventory", lang), tone="warn" if low else ""))

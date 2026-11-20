@@ -35,7 +35,7 @@ WORDS = {
         "month": "الشهر", "go": "عرض", "count": "اتسلّم", "billed": "الإيراد", "avg_days": "متوسط الأيام", "returns": "رجع في الضمان",
         "net_sales": "صافي الإيراد", "rate": "النسبة", "commission": "العمولة", "commission_note": "العمولة = صافي إيراد الأوامر المتسلّمة (قبل الضريبة وبعد المرتجع) × نسبة الفني، زي المواعيد بالظبط.",
         "late_list": "متأخر عن ميعاده", "nobody": "من غير فني", "terms": "الجهاز بيتسلّم بموجب الإيصال ده. ولا نتحمّل مسؤولية الأجهزة اللي ماتستلمتش خلال 90 يوم من إشعار «جاهز للتسليم».",
-        "signature": "توقيع العميل", "note": "ملاحظة", "via_link": "العميل من اللينك", "view_only": "تقدر تشوف الأمر بس.",
+        "signature": "توقيع العميل", "note": "ملاحظة", "via_link": "العميل من الرابط", "view_only": "تقدر تشوف الأمر بس.",
     },
     "en": {
         "title": "Work orders", "intro": "Every device or request that comes in: when it was received, who has it, where it stands, and who collects it.",

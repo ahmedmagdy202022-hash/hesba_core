@@ -411,7 +411,7 @@ SUB_STEP_COPY = {
         "en": {"title": "Choose the manufacturing type", "subtitle": "Choosing the type helps Hesba prepare recipes, materials and production runs."},
     },
     catalog.OTHER: {
-        "ar": {"title": "شغلك أقرب لإيه؟", "subtitle": "حِسْبَة هتجهّز لك الشاشات والكلمات والتقارير بتاعة أقرب نشاط. وتقدر تغيّر الأقسام بعدين من الإعدادات."},
+        "ar": {"title": "شغلك أقرب لإيه؟", "subtitle": "حِسْبَة هتجهّز لك الشاشات والكلمات والتقارير الخاصة بأقرب نشاط. وتقدر تغيّر الأقسام بعدين من الإعدادات."},
         "en": {"title": "What is your work closer to?", "subtitle": "Hesba sets up the screens, words and reports of the closest activity. You can change the modules later in settings."},
     },
 }
@@ -437,7 +437,7 @@ def sub_activity_step(request, activity):
 
 
 QUESTION_STRINGS = {
-    "ar": {"title": "خلينا نعرف شغلك ماشي إزاي", "lead": "أسئلة بكلام نشاطك، والإجابات متعلّمة باقتراحنا لنشاطك. غيّر اللي مش مظبوط، أو دوس «جهّز حسبة» على طول. وتقدر تغيّر أي حاجة بعدين من الإعدادات.",
+    "ar": {"title": "خلينا نعرف شغلك ماشي إزاي", "lead": "أسئلة بكلام نشاطك، والإجابات متعلّمة باقتراحنا لنشاطك. غيّر اللي مش مظبوط، أو اضغط «جهّز حسبة» على طول. وتقدر تغيّر أي حاجة بعدين من الإعدادات.",
            "yes": "أيوه", "no": "لأ", "gives": "هيظهرلك", "summary": "حسبة هتجهّزلك", "always": "وده موجود دايمًا لنشاطك",
            "finish": "جهّز حسبة", "back": "الرجوع لنوع النشاط", "manual": "عايز تختار الأقسام والخصائص بنفسك؟", "suggested": "اقتراحنا لنشاطك",
            "accept": "خليها على اقتراحنا", "count": "{n} من {total}", "next_q": "السؤال اللي بعده", "page_title": "شغلك ماشي إزاي - حِسْبَة"},

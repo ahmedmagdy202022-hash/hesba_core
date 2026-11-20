@@ -168,6 +168,6 @@ class VatSwitchWarningTests(TestCase):
         self.assertContains(page, "data-capability-note", count=1)  # only the VAT card
         switched = self.client.post(CAPS, {"capability": "vat", "enabled": "1"}, follow=True)
         self.assertTrue(caps.capability_enabled("vat"))
-        self.assertIn("الإقرار بتاع الشهر يبقى مخلوط", [str(m) for m in switched.context["messages"]][-1])
+        self.assertIn("إقرار الشهر يبقى مخلوط", [str(m) for m in switched.context["messages"]][-1])
         english = self.client.get(CAPS, {"lang": "en"})
         self.assertContains(english, "start of a month")

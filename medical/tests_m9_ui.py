@@ -463,7 +463,7 @@ class ImportScreenTests(Screens):
         for bad in ("", "garbage", token[:-4] + "AAAA"):
             with self.subTest(token=bad[-6:]):
                 response = self.post("medical:lab_import", {"action": "apply", "payload": bad})
-                self.assertContains(response, "قديمة أو مش بتاعتك", status_code=400)
+                self.assertContains(response, "قديمة أو مش خاصة بحسابك", status_code=400)
         self.client.force_login(self.manager)
         self.assertContains(self.post("medical:lab_import", {"action": "apply", "payload": token}), "قديمة", status_code=400)
         with patch.object(lab_import, "PAYLOAD_SECONDS", -1):

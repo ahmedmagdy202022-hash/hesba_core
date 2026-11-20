@@ -28,7 +28,7 @@ def fee_pay_head(context):
 
 @register.inclusion_tag("education/_paylink_cell.html", takes_context=True)
 def fee_pay_cell(context, invoice):
-    """The «لينك الدفع» cell of one invoice row on the fees screen (nothing when the actions are not offered)."""
+    """The «رابط الدفع» cell of one invoice row on the fees screen (nothing when the actions are not offered)."""
 
     board = _board(context)
     return {"shown": board.shown, **(_cell(context, board.state(invoice), board) if board.shown else {})}
@@ -67,7 +67,7 @@ def _has_open_posted():
 
 @register.inclusion_tag("education/_paylink_bulk.html", takes_context=True)
 def fee_pay_bulk(context, rows, first):
-    """«اعمل لينكات دفع للشهر» under the month's billed invoices: how many are ready, and the cap."""
+    """«اعمل روابط دفع للشهر» under the month's billed invoices: how many are ready, and the cap."""
 
     board = _board(context)
     ready = sum(1 for row in rows if board.shown and board.state(row["invoice"]).kind == "ready") if board.shown else 0

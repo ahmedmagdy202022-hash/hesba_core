@@ -2,7 +2,7 @@
 
 One starts a few minutes from now, is confirmed and already has a generated call link, so it is inside the join window and
 the doctor's button (agenda, queue, visit) and the patient's confirm page show it. The other starts later today and has no
-link yet, so the screens are not empty and «اعمل لينك مكالمة» has something to do. Both go through the real services
+link yet, so the screens are not empty and «اعمل رابط مكالمة» has something to do. Both go through the real services
 (``appointments.services.book`` / ``set_status`` and ``appointments.online.set_link``); nothing is posted and no money moves.
 The link points at the clinic's meeting server (the public Jitsi by default); the demo never opens it.
 

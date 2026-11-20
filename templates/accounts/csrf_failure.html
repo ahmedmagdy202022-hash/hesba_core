@@ -30,7 +30,7 @@ button,a.btn{font:inherit;border:0;border-radius:10px;padding:10px 18px;cursor:p
 <main>
   {% if logout_retry %}
     <h1>تأكيد تسجيل الخروج</h1>
-    <p>الصفحة اللي دوست منها كانت قديمة. دوس تاني علشان تخرج.</p>
+    <p>الصفحة اللي ضغطت منها كانت قديمة. اضغط تاني علشان تخرج.</p>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
       <div class="actions">
         <button class="primary" type="submit">تسجيل الخروج · Log out</button>

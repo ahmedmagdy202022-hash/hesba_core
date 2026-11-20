@@ -30,7 +30,7 @@ from permissions.decorators import require_permission
 from settings_core.ui_messages import translate
 
 from . import voice_summary
-from .sample import notice
+from .sample import footnote_words, notice
 from .summary import build_summary
 
 
@@ -77,7 +77,8 @@ def ask(request):
     if not ask_feature.is_on():
         raise Http404("Ask Hesba is not switched on.")
     words = ask_feature.WORDS[lang]
-    context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": words["title"], "w": words,
+    context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": words["title"],
+               "w": footnote_words(words, ask_feature.FEATURE, lang),
                "suggestions": ask_feature.suggestions(request.user, lang), "max_chars": QUESTION_MAX_CHARS,
                "can_ask": ask_feature.can_ask(request.user), "sample": notice(ask_feature.FEATURE, lang)}
     if not context["can_ask"]:  # no tool this person may use: no box, and a POST never reaches the model
@@ -122,7 +123,7 @@ def _photo_lang(request):
 def _photo_page(request, lang, status=200, **extra):
     from . import invoice_photo as feature
 
-    w = feature.words(lang)
+    w = footnote_words(feature.words(lang), feature.FEATURE, lang)
     context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "page_title": w["title"], "w": w,
                "upload_hint": w["upload_hint"].format(limit=feature.human_size(feature.max_photo_bytes(), lang)),
                "accept": ",".join(feature.photo_types()), "sample": notice(feature.FEATURE, lang), **extra}

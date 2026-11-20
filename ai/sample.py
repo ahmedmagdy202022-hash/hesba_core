@@ -30,20 +30,38 @@ WORDS = {
     "ar": {
         "title": "رد تجريبي — مفيش اتصال حقيقي",
         "voice_summary": "الصوت عيّنة ساكتة، مفيش كلام بيتسمع. النص والأرقام من تقاريرك فعلاً.",
-        "ask": "التقرير اتختار بالكلمات من غير موديل ذكاء اصطناعي. الرقم من تقاريرك فعلاً.",
-        "invoice_photo": "القراية دي فاتورة نموذج ثابتة، مهما كانت الصورة اللي رفعتها.",
-        "sample_image": "نزّل صورة فاتورة نموذج تجرّب بيها",
+        "ask": "اختيار التقرير هنا عيّنة، بيتم بالكلمات من غير موديل ذكاء اصطناعي. الرقم من تقاريرك فعلاً.",
+        "invoice_photo": "القراية دي فاتورة عيّنة ثابتة، مهما كانت الصورة اللي رفعتها.",
+        "sample_image": "نزّل صورة فاتورة عيّنة تجرّب بيها",
+        # The footnote under each page while the mock answers: what the live footnote says, minus what the label denies.
+        "voice_summary_note": "الأرقام من تقارير حسبة نفسها.",
+        "ask_note": "الأرقام نفسها من تقارير حسبة.",
+        "invoice_photo_note": "الأرقام بتتحسب من السطور في حسبة، والمسودة مش بتتحرك في المخزن ولا الخزنة لحد ما ترحّلها.",
     },
     "en": {
         "title": "Sample reply — no real AI call",
         "voice_summary": "The audio is a silent sample; nothing is spoken. The text and figures really come from your reports.",
-        "ask": "The report was picked by keywords, with no AI model. The figure really comes from your reports.",
+        "ask": "The report choice is a sample: picked by keywords, with no AI model. The figure really comes from your reports.",
         "invoice_photo": "This reading is a fixed sample invoice, whatever photo you upload.",
         "sample_image": "Download a sample invoice photo to try",
+        "voice_summary_note": "The figures come from Hesba's own reports.",
+        "ask_note": "The figures come from Hesba's own reports.",
+        "invoice_photo_note": "The figures are computed from the lines in Hesba, and the draft moves no stock or cash until you post it.",
     },
 }
 
 FEATURES = ("voice_summary", "ask", "invoice_photo")
+
+
+def footnote_words(words, feature, lang="ar"):
+    """``words`` for a page, with its footnote changed to the sample's while the mock answers (the same test as the label, so
+    the label and the footnote never disagree); with a live provider, or with AI off, ``words`` itself."""
+
+    if feature not in FEATURES:
+        raise ValueError(f"Unknown AI feature {feature!r}.")
+    if not providers.is_mock():
+        return words
+    return {**words, "note": WORDS["en" if lang == "en" else "ar"][f"{feature}_note"]}
 
 
 def notice(feature, lang="ar"):

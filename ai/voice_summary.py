@@ -197,9 +197,9 @@ def card_context(user, lang, today=None, shared=None, sections=None, capabilitie
     summary = build_summary(user, lang, today=today, shared=shared, sections=sections)
     if not summary.has_figures:
         return None
-    from .sample import notice
+    from .sample import footnote_words, notice
 
-    return {"summary": summary, "words": WORDS[summary.lang], "audio_url": audio_url(summary) if is_cached(summary) else "",
+    return {"summary": summary, "words": footnote_words(WORDS[summary.lang], FEATURE, summary.lang), "audio_url": audio_url(summary) if is_cached(summary) else "",
             "endpoint": reverse("ai:voice_summary"), "sample": notice(FEATURE, summary.lang)}  # HG-078 dev. 7: the mock is labelled
 
 
