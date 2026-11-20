@@ -68,7 +68,14 @@ def _tile(key, label, value, kind="count", tone="", sub="", url=""):
     return {"key": key, "label": label, "value": value, "kind": kind, "tone": tone, "sub": sub, "url": url}
 
 
-def _kitchen(words, today):
+#: The floor's money tiles (the open orders' value, today's average order) are the whole floor's sales, so they follow the
+#: dashboard's own rule for the whole floor's sales figures: whoever may see every user's sales sees them. A waiter (no
+#: sales report) and a cashier (their own sales only) keep the counts and lose the money (restaurants video finding F1).
+FLOOR_MONEY = "reports.view_all_sales_report"
+
+
+def _kitchen(words, today, user=None):
+    from permissions.services import user_has_permission
     from restaurant.models import DiningTable, Order, OrderLine, OrderStatus
 
     # Restaurants R12 (HG-108): tables and orders carry their branch, so the floor's counts are the entity being worked in.
@@ -83,13 +90,15 @@ def _kitchen(words, today):
     open_orders = open_orders.filter(split_from=None)
     paid_count = paid.annotate(bill=Coalesce("split_from", "id")).values("bill").distinct().count()
     paid_total = paid.aggregate(t=Sum("invoice__total_amount"))["t"] or ZERO
-    return [
+    money = user is None or user_has_permission(user, FLOOR_MONEY)
+    tiles = [
         _tile("open_orders", words["open_orders"], open_orders.count(), tone="lead"),
         _tile("open_value", words["open_value"], money_round(value), "money"),
         _tile("tables_busy", words["tables_busy"], f"{busy} {words['of']} {tables}", "text"),
         _tile("paid_today", words["paid_today"], paid_count),
         _tile("avg_order", words["avg_order"], money_round(paid_total / paid_count) if paid_count else ZERO, "money"),
-    ], []
+    ]
+    return ([tile for tile in tiles if money or tile["kind"] != "money"]), []
 
 
 def _bookings(words, today, lang):
@@ -282,7 +291,7 @@ def build_activity_panel(activity, visible_sections, lang="ar", today=None, user
     words = WORDS[lang]
     today = today or timezone.localdate()
     if kind == "kitchen":
-        tiles, lists = _kitchen(words, today)
+        tiles, lists = _kitchen(words, today, user)
     elif kind == "bookings":
         tiles, lists = _bookings(words, today, lang)
         if activity == "medical":

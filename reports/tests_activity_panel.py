@@ -55,6 +55,60 @@ class RestaurantPanelTests(PanelSetup):
         self.assertEqual(response.context["nav_items"][1]["label"], "الطاولات")
 
 
+class RestaurantPanelMoneyTests(PanelSetup):
+    """Restaurants video finding F1: the waiter's home said «مفيش أرقام تقدر تشوفها بصلاحياتك» under a panel that showed them the
+    floor's money. The money tiles now follow the whole-floor sales permission; the counts stay for everyone who opens the panel."""
+
+    activity, sub, extra = "restaurants", "restaurant", "tables_orders"
+    MONEY = ("open_value", "avg_order")
+    COUNTS = ("open_orders", "tables_busy", "paid_today")
+
+    def setUp(self):
+        super().setUp()
+        from restaurant import services as tables
+
+        table = tables.save_table({"name": "1", "seats": 4}, self.owner)
+        dish = make_item(item_code="DISH-1", item_name="كشري", default_sale_price="45.00", is_stock_tracked=False)
+        tables.add_item(tables.open_order(self.owner, table=table), dish, self.owner, quantity=2)
+
+    def tiles_for(self, role, name):
+        user = self.owner if role is None else person(role, name)
+        self.client.force_login(user)
+        response = self.page()
+        panel = response.context["activity_panel"]
+        return response, ({tile["key"]: tile["value"] for tile in panel["tiles"]} if panel else None)
+
+    def test_the_owner_sees_the_floor_counts_and_its_money(self):
+        _response, tiles = self.tiles_for(None, "")
+        self.assertEqual([tiles[key] for key in self.COUNTS + self.MONEY], [1, "1 من 1", 0, D("90.00"), D("0")])
+
+    def test_a_waiter_sees_the_counts_and_no_money(self):
+        response, tiles = self.tiles_for(RoleCode.WAITER, "ap_waiter")
+        self.assertIsNotNone(tiles, "the waiter opens the tables, so the panel is theirs too")
+        self.assertEqual([tiles[key] for key in self.COUNTS], [1, "1 من 1", 0])
+        self.assertFalse(set(self.MONEY) & set(tiles))
+        for label in ("قيمة الطلبات المفتوحة", "متوسط الطلب النهارده", "90.00"):
+            self.assertNotContains(response, label)
+
+    def test_a_cashier_sees_only_their_own_sales_so_no_floor_money_either(self):
+        response, tiles = self.tiles_for(RoleCode.CASHIER, "ap_cashier")
+        if tiles is not None:
+            self.assertFalse(set(self.MONEY) & set(tiles))
+        self.assertNotContains(response, "قيمة الطلبات المفتوحة")
+
+    def test_a_manager_who_sees_every_sale_sees_the_money(self):
+        _response, tiles = self.tiles_for(RoleCode.MANAGER, "ap_manager")
+        self.assertEqual(tiles["open_value"], D("90.00"))
+
+    def test_the_rule_is_the_existing_whole_floor_sales_permission(self):
+        from permissions.models import Permission
+
+        from .activity_panel import FLOOR_MONEY
+
+        self.assertEqual(FLOOR_MONEY, "reports.view_all_sales_report")
+        self.assertTrue(Permission.objects.filter(code=FLOOR_MONEY).exists())  # no new permission
+
+
 class ClinicPanelTests(PanelSetup):
     activity, sub, extra = "medical", "clinic", "appointments_visits"
 
