@@ -200,7 +200,16 @@ def _production(words, today):
     ], []
 
 
+#: The projects panel follows the project pages' own rule (``projects.views``): contract, billing and what is owed need the
+#: sales invoices (``can_view_sales``), and which projects lose money needs the profit report (``can_profit``). A site engineer
+#: (projects only) keeps the counts: active projects, behind schedule (contracting video finding: their home showed contract
+#: values right above «مفيش أرقام تقدر تشوفها بصلاحياتك»).
+PROJECT_SALES, PROJECT_PROFIT = "sales.view_sales_invoices", "reports.view_profit_report"
+PROJECT_SALES_TILES = ("contract_total", "billed_pct", "project_dues", "overdue_certs")
+
+
 def _projects(words, today, user=None):
+    from permissions.services import user_has_permission
     from projects.models import Project, ProjectStatus
     from projects.services import summary
 
@@ -215,7 +224,7 @@ def _projects(words, today, user=None):
     from projects.schedule import behind as schedule_behind
 
     late = [project.name for project, s in zip(active, sums) if schedule_behind(project, s, time_share(project, today), today)[0]]
-    return [
+    tiles = [
         _tile("active_projects", words["active_projects"], len(active), tone="lead"),
         _tile("contract_total", words["contract_total"], money_round(contract), "money"),
         _tile("billed_pct", words["billed_pct"], f"{round(billed / contract * 100)}%" if contract > 0 else "—", "text"),
@@ -223,7 +232,13 @@ def _projects(words, today, user=None):
         _tile("losing", words["losing"], len(losing), tone="bad" if losing else "good", sub="، ".join(losing[:3])),
         _tile("behind_schedule", words["behind_schedule"], len(late), tone="bad" if late else "good", sub="، ".join(late[:3])),
         _overdue_tile(words, today),
-    ] + _requests_tile(words, user), []
+    ]
+    if user is not None:
+        hidden = set() if user_has_permission(user, PROJECT_SALES) else set(PROJECT_SALES_TILES)
+        if not user_has_permission(user, PROJECT_PROFIT):
+            hidden.add("losing")
+        tiles = [tile for tile in tiles if tile["key"] not in hidden]
+    return tiles + _requests_tile(words, user), []
 
 
 def _requests_tile(words, user):
