@@ -177,6 +177,9 @@ def _overview(request, lang):
         order.progress = int(min(order.stage_index, total) * 100 / total)
         order.stage_label = (order.stages[order.stage_index][2 if lang == "en" else 1] if order.status == OrderStatus.IN_PROGRESS and order.stage_index < len(order.stages)
                              else "")
+        # Every stage done, waiting for «خلص الأمر»: said so, instead of the «مخطط» chip of an order not started yet (manufacturing
+        # video finding F2: an order at 100% read «مخطط»).
+        order.ready_to_finish = order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages)
         order.late = order.pk in late
         batches = (order.quantity / order.recipe.output_quantity) if order.recipe.output_quantity else Decimal("0")
         # Every open order together, per material and warehouse: two orders
