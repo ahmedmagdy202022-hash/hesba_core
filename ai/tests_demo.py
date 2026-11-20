@@ -174,7 +174,7 @@ class AskSampleLabelTests(FootnoteMixin, AskBase):
         self.assertEqual(response.context["answer"].kind, "figure")
         self.assertContains(response, 'data-ai-sample="ask"')
         self.assertContains(response, LABEL_AR)
-        self.assertContains(response, "اختيار التقرير عيّنة")
+        self.assertContains(response, "اختيار التقرير هنا عيّنة")
         self.assertContains(self.ask("Sales today", lang="en"), LABEL_EN)
 
     def test_no_label_in_live_or_off(self):
@@ -212,7 +212,7 @@ class InvoicePhotoSampleLabelTests(FootnoteMixin, PhotoBase):
         review = self.client.get(f"{PHOTO_URL}{token}/")
         self.assertContains(review, "data-iph-review")
         self.assertContains(review, 'data-ai-sample="invoice_photo"')
-        self.assertContains(review, "عيّنة: فاتورة ثابتة")
+        self.assertContains(review, "فاتورة عيّنة ثابتة")
         self.assertNotContains(review, "data-ai-sample-image")  # the download link is on the upload page only
         self.assertContains(self.client.get(f"{PHOTO_URL}{token}/?lang=en"), LABEL_EN)
 

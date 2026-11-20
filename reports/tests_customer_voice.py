@@ -5,7 +5,8 @@ What a customer, a patient or a parent reads never says «المحل» (the busi
 A gendered absence, late or pick-up message is worded so it reads correctly for a boy and for a girl.
 
 The scan is deliberately narrow: only the customer-facing templates and the customer-facing message builders listed here. The
-owner's and staff's screens keep their own wording («لينك», «المحل»…), so nothing here walks the whole repository.
+owner's and staff's screens keep their own wording («المحل»…), so nothing here walks the whole repository. («لينك», «بتاع», «دوس» are
+banned everywhere: ``settings_core/tests_tone.py`` walks the whole repository for those.)
 """
 
 import re

@@ -30,8 +30,8 @@ WORDS = {
     "ar": {
         "title": "رد تجريبي — مفيش اتصال حقيقي",
         "voice_summary": "الصوت عيّنة ساكتة، مفيش كلام بيتسمع. النص والأرقام من تقاريرك فعلاً.",
-        "ask": "اختيار التقرير عيّنة: بالكلمات من غير موديل ذكاء اصطناعي. الرقم من تقاريرك فعلاً.",
-        "invoice_photo": "القراية دي عيّنة: فاتورة ثابتة، مهما كانت الصورة اللي رفعتها.",
+        "ask": "اختيار التقرير هنا عيّنة، بيتم بالكلمات من غير موديل ذكاء اصطناعي. الرقم من تقاريرك فعلاً.",
+        "invoice_photo": "القراية دي فاتورة عيّنة ثابتة، مهما كانت الصورة اللي رفعتها.",
         "sample_image": "نزّل صورة فاتورة عيّنة تجرّب بيها",
         # The footnote under each page while the mock answers: what the live footnote says, minus what the label denies.
         "voice_summary_note": "الأرقام من تقارير حسبة نفسها.",
@@ -42,7 +42,7 @@ WORDS = {
         "title": "Sample reply — no real AI call",
         "voice_summary": "The audio is a silent sample; nothing is spoken. The text and figures really come from your reports.",
         "ask": "The report choice is a sample: picked by keywords, with no AI model. The figure really comes from your reports.",
-        "invoice_photo": "This reading is a sample: a fixed invoice, whatever photo you upload.",
+        "invoice_photo": "This reading is a fixed sample invoice, whatever photo you upload.",
         "sample_image": "Download a sample invoice photo to try",
         "voice_summary_note": "The figures come from Hesba's own reports.",
         "ask_note": "The figures come from Hesba's own reports.",
