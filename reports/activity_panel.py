@@ -187,8 +187,12 @@ def _production(words, today):
     units = totals["units"] or ZERO
     from manufacturing.models import OrderStatus, ProductionOrder
 
+    from manufacturing import schedule
+
     open_orders = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
-    late = open_orders.filter(due_date__lt=today).count()
+    # Manufacturing F6b (HG-134): late as the factory home and the schedule count it, past its promised date (the sales order's
+    # deliver-by when there is one) or planned to end after it; the dashboard used to count only past the order's own date.
+    late = len(schedule.late_orders(open_orders.select_related("sales_order_line__order"), today))
     return [
         _tile("open_orders_mfg", words["open_orders_mfg"], open_orders.count(), tone="bad" if late else "lead",
               sub=f"{late} {words['late_orders']}" if late else words["late_none"]),

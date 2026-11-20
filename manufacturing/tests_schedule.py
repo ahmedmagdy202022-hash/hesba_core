@@ -316,6 +316,22 @@ class LateTests(SchedulePlant):
         done.status = OrderStatus.DONE
         self.assertEqual(schedule.late_orders([done], TODAY), {})
 
+    def test_the_dashboard_counts_late_orders_the_same_way_as_the_factory_home_and_the_schedule(self):
+        """Manufacturing video finding F1: the dashboard said one late order where the factory home and the schedule said two.
+        It counted only the orders past their own due date; an order planned to end after its date was left out."""
+
+        from reports.activity_panel import WORDS, _production
+
+        first, second, third = self.three(due=DAY2)
+        schedule.arrange(DAY1, self.owner)
+        schedule.move_order(third, self.owner, day=DAY3)                               # now planned to end after its due day
+        self.bake(90, TODAY - timedelta(days=1))                                       # past its date, with no plan
+        open_orders = ProductionOrder.objects.filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS))
+        expected = len(schedule.late_orders(open_orders, TODAY))
+        self.assertEqual(expected, 2)
+        tile = {t["key"]: t for t in _production(WORDS["ar"], TODAY)[0]}["open_orders_mfg"]
+        self.assertEqual((tile["value"], tile["sub"], tile["tone"]), (4, f"2 {WORDS['ar']['late_orders']}", "bad"))
+
     def test_an_order_with_a_date_and_no_plan_is_late_only_when_overdue(self):
         order = self.bake(90, DAY1)
         self.assertEqual(schedule.late_orders([order], TODAY), {})
