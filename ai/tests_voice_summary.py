@@ -42,7 +42,7 @@ MODULES = "customers,suppliers,items_services,sales_operations,purchases,invento
 ENDPOINT = "/ai/voice-summary/"
 
 AR_TEXT = ("أهلاً، ده ملخص النهارده. امبارح المبيعات كانت 250.50 جنيه مصري من 2 فاتورة. والتحصيل كان 75.25 جنيه مصري. "
-           "فيه 1 صنف قربت تخلص، و1 صنف خلصت من المخزن.")
+           "فيه صنف واحد قرّب يخلص، وصنف واحد خلص من المخزن.")
 EN_TEXT = ("Hello, here is today's summary. Sales yesterday came to 250.50 Egyptian pounds from 2 invoices. "
            "Collections came to 75.25 Egyptian pounds. 1 item is running low, and 1 item is out of stock.")
 
@@ -160,7 +160,7 @@ class PermissionTests(VoiceSummaryBase):
     def test_a_figure_the_listener_may_not_see_is_left_out_not_zeroed(self):
         keeper = person(RoleCode.STOCK_KEEPER, "voice_keeper")
         summary = build_summary(keeper, "ar")
-        self.assertEqual(summary.text, "أهلاً، ده ملخص النهارده. فيه 1 صنف قربت تخلص، و1 صنف خلصت من المخزن.")
+        self.assertEqual(summary.text, "أهلاً، ده ملخص النهارده. فيه صنف واحد قرّب يخلص، وصنف واحد خلص من المخزن.")
         self.assertEqual([tile["key"] for tile in summary.tiles], ["low_stock"])
         for absent in ("250.50", "75.25", "0.00", "المبيعات", "التحصيل"):
             self.assertNotIn(absent, summary.text)
@@ -419,7 +419,8 @@ class CardTests(VoiceSummaryBase):
         self.assertContains(page, "data-voice-summary")
         self.assertContains(page, "ملخص الصبح")
         self.assertContains(page, f"«{AR_TEXT}»")
-        self.assertContains(page, "الأرقام من تقارير حسبة نفسها. الصوت بس اللي متولّد.")
+        self.assertContains(page, "الأرقام من تقارير حسبة نفسها.")  # the mock's footnote: it does not say the audio is generated
+        self.assertNotContains(page, "الصوت بس اللي متولّد")
         self.assertContains(page, 'aria-label="شغّل الملخص"')
         self.assertContains(page, 'data-voice-figure="sales"')
         self.assertContains(page, 'data-voice-figure="low_stock"')
@@ -432,7 +433,8 @@ class CardTests(VoiceSummaryBase):
         page = self.client.get("/dashboard/?lang=en")
         self.assertContains(page, "Morning summary")
         self.assertContains(page, EN_TEXT.replace("'", "&#x27;"))
-        self.assertContains(page, "The figures come from Hesba&#x27;s own reports. Only the voice is generated.")
+        self.assertContains(page, "The figures come from Hesba&#x27;s own reports.")
+        self.assertNotContains(page, "Only the voice is generated.")
         self.assertContains(page, 'aria-label="Play the summary"')
         self.assertContains(page, 'data-lang="en"')
 
@@ -708,6 +710,41 @@ class BranchTests(VoiceSummaryBase):
             voice_summary.speak(build_summary(self.owner, "ar"), self.owner)
         self.assertEqual(VoiceSummaryAudio.objects.count(), 0)
         self.assertEqual(AuditLog.objects.filter(module="ai", action=services.CALL_ERROR).count(), 1)
+
+    def test_the_stock_sentence_counts_as_arabic_does(self):
+        """«فيه 1 صنف قربت تخلص» read badly aloud: one and two have their own noun, three to ten the plural, eleven the singular,
+        and the verb agrees with whichever it is. The figures are the dashboard's, only their wording changes."""
+
+        from .summary import LOW, OUT
+
+        real = DashboardFigures.value_for
+        cases = (
+            (1, "فيه صنف واحد قرّب يخلص", "وصنف واحد خلص من المخزن"),
+            (2, "فيه صنفين قربوا يخلصوا", "وصنفين خلصوا من المخزن"),
+            (3, "فيه 3 أصناف قربت تخلص", "و3 أصناف خلصت من المخزن"),
+            (10, "فيه 10 أصناف قربت تخلص", "و10 أصناف خلصت من المخزن"),
+            (11, "فيه 11 صنف قربوا يخلصوا", "و11 صنف خلصوا من المخزن"),
+            (250, "فيه 250 صنف قربوا يخلصوا", "و250 صنف خلصوا من المخزن"),
+        )
+        for count, low_clause, out_clause in cases:
+            def value_for(figures, key, scope, count=count):
+                return count if key in (LOW, OUT) else real(figures, key, scope)
+
+            with self.subTest(count=count), mock.patch.object(DashboardFigures, "value_for", value_for):
+                text = build_summary(self.owner, "ar").text
+                self.assertTrue(text.endswith(f"{low_clause}، {out_clause}."), text)
+
+    def test_the_stock_sentence_with_only_one_of_the_two_figures(self):
+        from .summary import LOW, OUT
+
+        real = DashboardFigures.value_for
+        for low, out, expected in ((2, 0, "فيه صنفين قربوا يخلصوا."), (0, 1, "مفيش أصناف قربت تخلص، وصنف واحد خلص من المخزن."),
+                                   (0, 12, "مفيش أصناف قربت تخلص، و12 صنف خلصوا من المخزن.")):
+            def value_for(figures, key, scope, low=low, out=out):
+                return {LOW: low, OUT: out}[key] if key in (LOW, OUT) else real(figures, key, scope)
+
+            with self.subTest(low=low, out=out), mock.patch.object(DashboardFigures, "value_for", value_for):
+                self.assertTrue(build_summary(self.owner, "ar").text.endswith(expected))
 
     def test_counting_words(self):
         from .summary import _ar_count, _en_count
