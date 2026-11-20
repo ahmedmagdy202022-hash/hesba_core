@@ -148,6 +148,62 @@ class ContractingPanelTests(PanelSetup):
         self.assertEqual(self.nav_keys(response)[:2], ["dashboard", "projects"])
 
 
+class ContractingPanelMoneyTests(PanelSetup):
+    """Contracting video finding: the site engineer's home showed the contract value and what is owed right above «مفيش أرقام
+    تقدر تشوفها بصلاحياتك». The panel now follows the project pages' own rule: contract, billing, dues and overdue certificates
+    need the sales invoices; which projects lose money needs the profit report; the counts stay for everyone who opens it."""
+
+    activity, sub, extra = "contracting", "general", "projects"
+    SALES = ("contract_total", "billed_pct", "project_dues", "overdue_certs")
+
+    def setUp(self):
+        super().setUp()
+        from projects.services import save_project
+
+        save_project({"name": "فيلا التجمع", "customer": make_customer(customer_code="O-1"), "contract_value": "100000"}, self.owner)
+
+    def tiles_for(self, role, name):
+        user = self.owner if role is None else person(role, name)
+        self.client.force_login(user)
+        response = self.page()
+        panel = response.context["activity_panel"]
+        return response, ({tile["key"]: tile["value"] for tile in panel["tiles"]} if panel else None)
+
+    def test_the_owner_sees_every_tile(self):
+        _response, tiles = self.tiles_for(None, "")
+        self.assertEqual((tiles["active_projects"], tiles["contract_total"], tiles["billed_pct"], tiles["losing"]), (1, D("100000.00"), "0%", 0))
+        self.assertTrue({"project_dues", "overdue_certs", "behind_schedule"} <= set(tiles))
+
+    def test_a_site_engineer_sees_the_counts_and_no_money(self):
+        response, tiles = self.tiles_for(RoleCode.SITE_ENGINEER, "ap_engineer")
+        self.assertIsNotNone(tiles, "the engineer opens the projects, so the panel is theirs too")
+        self.assertEqual(tiles["active_projects"], 1)
+        self.assertIn("behind_schedule", tiles)
+        self.assertFalse((set(self.SALES) | {"losing"}) & set(tiles))
+        for text in ("قيمة العقود", "100,000.00"):
+            self.assertNotContains(response, text)
+
+    def test_a_manager_sees_the_sales_tiles_but_not_who_is_losing_money(self):
+        from permissions.services import user_has_permission
+
+        from .activity_panel import PROJECT_PROFIT, PROJECT_SALES
+
+        manager = person(RoleCode.MANAGER, "ap_manager")
+        self.client.force_login(manager)
+        tiles = {tile["key"] for tile in self.page().context["activity_panel"]["tiles"]}
+        self.assertEqual(set(self.SALES) <= tiles, user_has_permission(manager, PROJECT_SALES))
+        self.assertEqual("losing" in tiles, user_has_permission(manager, PROJECT_PROFIT))
+
+    def test_the_rule_is_the_project_pages_existing_codes(self):
+        from permissions.models import Permission
+        from projects import views
+
+        from .activity_panel import PROJECT_PROFIT, PROJECT_SALES
+
+        self.assertEqual((PROJECT_SALES, PROJECT_PROFIT), (views.VIEW, views.PROFIT))
+        self.assertEqual(Permission.objects.filter(code__in=(PROJECT_SALES, PROJECT_PROFIT)).count(), 2)  # no new permission
+
+
 class ManufacturingPanelTests(PanelSetup):
     activity, sub, extra = "manufacturing", "food", "manufacturing"
 
