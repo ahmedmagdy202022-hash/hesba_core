@@ -6360,3 +6360,12 @@ else:
 - `manufacturing/`: `models.py`, `migrations/0014_maintenance.py`, `maintenance.py` (new), `maintenance_views.py` (new), `urls.py`, `guards.py`, `workcentres.py`, `schedule.py`, `schedule_views.py`, `workcentre_views.py`, `views.py`, `floor.py`, `floor_views.py`, `tests_adjustment_journal.py` (new), `tests_maintenance.py` (new).
 - `templates/manufacturing/`: `maintenance.html`, `maintenance_centre.html`, `maintenance_job.html`, `_maintenance_job.html` (all new), `home.html`, `work_centres.html`, `schedule.html`, `floor.html`.
 - Outside `manufacturing/` and `templates/manufacturing/`: `ledger/projector.py` (the change above); `templates/inventory/operations.html` and `settings_core/ui_messages.py` (the stock screen's words for a part's operation and its refusal in Arabic); `docs/AGENT_HARD_GATES.md` (this entry); `docs/MARKET_PARITY_ROADMAP.md` (the re-measure; item 20, 92.5% to 97.5%).
+
+## HG-142 — The out-of-stock alert counts a custom job's own item while its order is still on the floor (proposal, not built)
+
+- **Status:** PROPOSAL, recorded 20 Nov 2026 by the Maestro. Nothing is built. `reports/selectors.py::stock_alert_counts` is a report calculation (protected), so it is not changed inside a polish PR.
+- **What was seen:** building the furniture demo (F14, #454). A custom job (F7, HG-138) makes its own stock item, `JOB-<order number>-<line>`, which holds nothing until its production order finishes. While the order is open, the dashboard's «خلص من المخزون» count includes that item, so a workshop with three jobs in progress reads «3 أصناف خلصت» although nothing ran out. The demo's planted alerts are unaffected because the demo's job is finished.
+- **Proposed fix:** skip items whose code starts with `manufacturing.quotes.JOB_PREFIX` when their quantity is zero, exactly as the W16 rule already skips a dish made in the kitchen (`made_to_order_ids()`), and list them nowhere as «ran out». Low-stock is untouched (a job item has no minimum).
+- **Files it would touch:** `reports/selectors.py` (one condition, in `stock_alert_counts` and in the matching list the alert opens), and a test in `reports/` that opens a custom job and asserts the counts before and after it finishes.
+- **Risk:** low; it changes a count shown on the dashboard, not a figure in any statement. The same item would still show in the stock report with 0.
+- **Owner question:** none beyond the approval of this change.
