@@ -81,7 +81,10 @@ def schedule_context(request, order, lang, late_reason=""):
         for row in rows:
             row["choices"] = others.get(row["centre"].kind, []) if row["centre"] and row["open"] else []
     last, due = max((row["end"] for row in rows if row["end"]), default=None), schedule.effective_due(order)
-    return {"plan_rows": rows, "plan_words": words, "can_move": can_move, "plan_planned": any(row["start"] for row in rows),
+    # Manufacturing video finding F3: a finished or cancelled order is never «not planned yet; press Arrange» (arrange only takes
+    # open orders), so the note is for an open order with no planned day only.
+    planned = any(row["start"] for row in rows) or order.status not in schedule.OPEN
+    return {"plan_rows": rows, "plan_words": words, "can_move": can_move, "plan_planned": planned,
             "plan_last": last, "plan_due": due,
             "plan_late_text": (words["order_late_overdue"] if late_reason == "overdue"
                                else words["order_late_planned"].format(end=last.isoformat(), due=due.isoformat()) if late_reason == "planned" and last and due else "")}

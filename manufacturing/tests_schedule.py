@@ -409,6 +409,37 @@ class AdvanceTests(SchedulePlant):
         self.assertContains(self.client.get(reverse("manufacturing:order", args=[order.pk]), {"lang": "en"}), "Move the stage to another centre")
 
 
+class FinishedOrderWordsTests(SchedulePlant):
+    """Manufacturing video findings F2 and F3: an order with every stage done read «مخطط» at 100% on the factory home, and a
+    finished order's page said «الأمر ده لسه مترتبش؛ اضغط «رتّب»…»."""
+
+    def test_an_order_with_every_stage_done_reads_ready_to_finish_not_planned(self):
+        order = self.cake_order("20")
+        for _stage in order.stages:
+            order = orders.advance(order, self.owner)
+        self.client.force_login(self.owner)
+        for lang, word in (("ar", "جاهز للإنهاء"), ("en", "ready to finish")):
+            page = self.client.get(reverse("manufacturing:home"), {"lang": lang})
+            self.assertContains(page, "data-ready-to-finish")
+            self.assertContains(page, word)
+        untouched = self.cake_order("10")                                               # not started: still «مخطط»
+        self.assertEqual(untouched.status, OrderStatus.PLANNED)
+        self.assertContains(self.client.get(reverse("manufacturing:home")), "مخطط")
+
+    def test_a_finished_order_never_asks_to_be_arranged(self):
+        order = self.cake_order("20")
+        self.client.force_login(self.owner)
+        self.assertContains(self.client.get(reverse("manufacturing:order", args=[order.pk])), "data-unplanned")  # open, no plan: asked
+        for _stage in order.stages:
+            order = orders.advance(order, self.owner)
+        order = orders.finish(order, self.owner)
+        self.assertEqual(order.status, OrderStatus.DONE)
+        for lang in ("ar", "en"):
+            page = self.client.get(reverse("manufacturing:order", args=[order.pk]), {"lang": lang})
+            self.assertEqual(page.status_code, 200)
+            self.assertNotContains(page, "data-unplanned")
+
+
 class NothingMovesTests(SchedulePlant):
     def test_arranging_and_moving_change_no_stock_cost_or_journal(self):
         started = self.cake_order("20", due=DAY2)
