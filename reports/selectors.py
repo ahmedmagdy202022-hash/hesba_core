@@ -166,11 +166,12 @@ def made_to_order_ids():
     again once the job is delivered.
     """
 
-    from manufacturing.quotes import JOB_PREFIX
+    from manufacturing.models import CostSheet
     from restaurant.kitchen import kitchen_dish_ids
 
-    jobs = Item.objects.filter(item_code__startswith=JOB_PREFIX, is_stock_tracked=True)
-    return kitchen_dish_ids() | set(jobs.values_list("pk", flat=True))
+    # The sheet's own link, not the JOB- code prefix: an item somebody coded JOB-... by hand still alerts.
+    jobs = CostSheet.objects.filter(job_item__isnull=False).values_list("job_item_id", flat=True)
+    return kitchen_dish_ids() | set(jobs)
 
 
 def stock_alert_counts():

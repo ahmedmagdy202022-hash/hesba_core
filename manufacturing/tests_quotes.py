@@ -215,11 +215,16 @@ class StockAlertTests(PrintingPlant):
         page = self.client.get(reverse("inventory:stock"))
         states = {row["item"].item_code: row["state"] for row in page.context["rows"]}
         self.assertEqual((states[job_item.item_code], states["PR-CATALOGUE"], page.context["counts"]["out"]), ("healthy", "out", 1))
+        detail = self.client.get(reverse("inventory:item_detail", args=[job_item.pk]))  # the item's own page says the same
+        self.assertEqual({row["state"] for row in detail.context["location_rows"]}, {"healthy"})
+
+        make_item(item_code="JOB-LOT-7", item_name="صنف عادي كوده مكتوب باليد", is_stock_tracked=True)
+        self.assertEqual(self.out(), 2)                                      # only a real job item is exempt, never a look-alike code
 
         self.walk(production)                                                # finished: the job item is on hand
-        self.assertEqual(self.out(), 1)
+        self.assertEqual(self.out(), 2)
         self.invoice(order, "SI-JOB-1")                                      # delivered: zero on hand again, still not "run out"
-        self.assertEqual(self.out(), 1)
+        self.assertEqual(self.out(), 2)
 
 
 class TwoJobsTests(PrintingPlant):
