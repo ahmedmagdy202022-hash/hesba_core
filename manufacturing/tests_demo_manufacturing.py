@@ -22,7 +22,7 @@ from config import demo as showcase
 from config import demo_first_run as first_run
 from master_data.models import Item
 
-from . import demo, floor, maintenance, make_to_order, mrp, orders, quality, schedule, variance
+from . import demo, floor, maintenance, make_to_order, mrp, orders, quality, schedule, variance, workcentres
 from .models import (
     CostSheet, MaintenanceJob, MaintenancePart, OrderCostLine, OrderMaterialIssue, OrderStatus, OrderStep, OutsideJob, ProductionOrder, ProductionRun, QualityCheck,
     Recipe, RecipeOutput, RunOutput, WorkCentre,
@@ -121,6 +121,19 @@ class FactoryDemo:
             page = self.client.get(f"/dashboard/?lang={lang}")
             self.assertEqual(page.status_code, 200)
             self.assertEqual(page.content.decode().count("data-demo-tour-step="), self.steps)
+
+    def test_the_load_table_and_the_schedule_agree_on_every_centre_and_day(self):
+        """Video finding F4: the stages of the orders that wait for the down machine (the food demo's mixer, the furniture
+        demo's saw) are on no day in either screen, so the work centres page never shows a centre over capacity that the
+        schedule does not."""
+
+        load = {block["centre"].pk: block for block in workcentres.load(self.today)}
+        for lane in schedule.grid(self.today)["lanes"]:
+            if lane["centre"] is None:
+                continue
+            for row, loaded in zip(lane["days"], load[lane["centre"].pk]["days"]):
+                with self.subTest(centre=lane["centre"].code, day=row["date"]):
+                    self.assertEqual((loaded["date"], loaded["minutes"], loaded["over"]), (row["date"], row["minutes"], row["over"]))
 
 
 class FoodDemo(FactoryDemo, TestCase):
@@ -339,6 +352,9 @@ class FoodDemo(FactoryDemo, TestCase):
         self.assertFalse(lane["over"])
         late = next(row for row in data["orders"] if row["order"].notes == demo.LATE_NOTE)
         self.assertEqual((late["waiting"]["centre"], late["waiting"]["job"]), (mixer, job))
+
+    def test_the_mixer_is_waited_for_in_the_load_table(self):
+        self.assertGreater({block["centre"].code: block for block in workcentres.load(self.today)}["DEMO-MIX"]["waiting"], 0)
 
     # ---- F8: the production worker's «شغلي» ----------------------------------------------------------------------------------------------
 

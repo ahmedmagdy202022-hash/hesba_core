@@ -49,6 +49,32 @@ class StoppedPlant(OvenPlant):
         self.worker = person(RoleCode.PRODUCTION_WORKER, "stop_worker")
         self.floor_url = reverse("manufacturing:floor")
 
+    def three_stage_order(self, due=None):
+        """Mixing on the mixer, baking on the oven, packing on the line: a stage after the one on the down machine."""
+
+        if not hasattr(self, "line"):
+            self.line = self.centre("PACK", "خط التعبئة", "Packing line")
+            self.biscuit = make_item(item_code="FG-BISC", item_name="بسكويت", is_stock_tracked=True, default_sale_price="7")
+            self.three = services.save_recipe({"product": self.biscuit, "output_quantity": "10"}, [(self.flour, "1")], self.owner)
+            workcentres.save_routing(self.three, [
+                {"name_ar": "خلط", "name_en": "Mixing", "work_centre": self.mixer.pk, "minutes_per_batch": "30", "setup_minutes": "0"},
+                {"name_ar": "خَبز", "name_en": "Baking", "work_centre": self.oven.pk, "minutes_per_batch": "45", "setup_minutes": "0"},
+                {"name_ar": "تعبئة", "name_en": "Packing", "work_centre": self.line.pk, "minutes_per_batch": "20", "setup_minutes": "0"},
+            ], self.owner)
+        return orders.create_order({"recipe": self.three, "location": self.plant, "quantity": "10", "due_date": due}, self.owner)
+
+    def agree(self, start=TODAY, days=7):
+        """The load table and the grid say the same minutes for every centre and day, and the same over-capacity days."""
+
+        load = {block["centre"].pk: block for block in workcentres.load(start, days)}
+        for lane in schedule.grid(start, days)["lanes"]:
+            if lane["centre"] is None:
+                continue
+            for row, loaded in zip(lane["days"], load[lane["centre"].pk]["days"]):
+                with self.subTest(centre=lane["centre"].code, day=row["date"]):
+                    self.assertEqual((loaded["date"], loaded["minutes"], loaded["over"]), (row["date"], row["minutes"], row["over"]))
+        return load
+
     def cake_order(self, due=None):
         return orders.create_order({"recipe": self.mixed, "location": self.plant, "quantity": "10", "due_date": due}, self.owner)
 
@@ -154,6 +180,76 @@ class ScheduleTests(StoppedPlant):
         self.assertEqual([day for _key, _code, day, _end in self.plan(cake)], [None, None])
         self.assertEqual([(row["centre"], row["index"]) for row in result["waiting"]], [(self.mixer, 0)])
         self.assertEqual(result["warnings"], [])
+
+    def test_every_stage_of_a_waiting_order_is_waiting_in_the_load_and_the_load_agrees_with_the_grid(self):
+        order = self.three_stage_order(due=TODAY - timedelta(days=1))                         # overdue: before, its stages counted today
+        self.down()
+        schedule.arrange(TODAY, self.owner)
+        self.assertEqual([day for _key, _code, day, _end in self.plan(order)], [None, None, None])
+        load = self.agree()
+        self.assertEqual((load[self.mixer.pk]["waiting"], load[self.oven.pk]["waiting"], load[self.line.pk]["waiting"]), (D("30.00"), D("45.00"), D("20.00")))
+        self.assertTrue(all(row["minutes"] == 0 for block in load.values() for row in block["days"]))
+        self.assertEqual((load[self.oven.pk]["unscheduled"], load[self.oven.pk]["later"]), (D("0"), D("0")))
+
+    def test_a_stage_sent_out_while_its_centre_is_down_is_planned_as_before_and_the_next_follow_it(self):
+        order = self.three_stage_order()
+        orders.advance(order, self.owner, minutes=30)                                         # mixed; the baking is next
+        outside.send(order, self.owner, supplier=self.technician, unit_price="2")
+        self.breakdown()                                                                    # the oven is down, the baking is out
+        result = schedule.arrange(TODAY, self.owner)
+        self.assertEqual(result["waiting"], [])
+        self.assertEqual([day for _key, _code, day, _end in self.plan(order)][1:], [TODAY, TODAY])
+        self.assertIsNone(next(row for row in schedule.grid(TODAY)["orders"] if row["order"].pk == order.pk)["waiting"])
+        self.assertTrue(all(not row["waiting"] for row in schedule.order_plan(order)))
+        load = self.agree()
+        self.assertEqual((load[self.oven.pk]["waiting"], load[self.line.pk]["waiting"]), (D("0"), D("0")))
+        self.assertIsNone(maintenance.stage_down(order))
+
+    def test_a_stage_started_before_its_centre_stopped_keeps_its_plan_and_the_next_follow_it(self):
+        stock_in(self.flour, self.plant, 10, "20.00", movement_date=TODAY)
+        order = self.three_stage_order()
+        schedule.arrange(TODAY, self.owner)
+        before = self.plan(order)
+        floor.start(order, self.worker)
+        self.down()
+        result = schedule.arrange(TODAY, self.owner)
+        self.assertEqual(result["waiting"], [])
+        after = self.plan(order)
+        self.assertEqual(after[0], before[0])                                                # the mixing keeps the dates it had
+        self.assertTrue(all(day is not None for _key, _code, day, _end in after))
+        self.assertGreaterEqual(after[1][3], before[0][3])                                    # the baking follows the mixing
+        self.assertIsNone(next(row for row in schedule.grid(TODAY)["orders"] if row["order"].pk == order.pk)["waiting"])
+        load = self.agree()
+        self.assertEqual(load[self.mixer.pk]["waiting"], D("0"))
+        floor.done(order, self.worker)                                                       # and it is still finished
+
+    def test_a_plan_made_before_the_breakdown_says_it_needs_arranging_again_not_that_it_waits(self):
+        order = self.cake_order()
+        schedule.arrange(TODAY, self.owner)
+        self.down()
+        row = next(row for row in schedule.grid(TODAY)["orders"] if row["order"].pk == order.pk)
+        self.assertEqual((row["planned"], row["waiting"]["replan"]), (True, True))
+        self.assertIn("رتّب", row["waiting"]["text"])
+        self.assertNotIn("هيترتبوا", row["waiting"]["text"])
+        self.assertIn("Arrange", next(r for r in schedule.grid(TODAY, lang="en")["orders"] if r["order"].pk == order.pk)["waiting"]["text"])
+        load = self.agree()
+        self.assertEqual((load[self.mixer.pk]["days"][0]["minutes"], load[self.mixer.pk]["days"][0]["over"]), (D("30.00"), True))
+        schedule.arrange(TODAY, self.owner)
+        row = next(row for row in schedule.grid(TODAY)["orders"] if row["order"].pk == order.pk)
+        self.assertEqual((row["planned"], row["waiting"]["replan"]), (False, False))
+
+    def test_a_stage_moved_off_the_down_centre_is_counted_on_its_new_centre(self):
+        spare = self.centre("MIX2", "الخلاط الصغير", "Small mixer")
+        order = self.cake_order(due=TODAY + timedelta(days=2))
+        self.down()
+        schedule.arrange(TODAY, self.owner)
+        schedule.move_order(order, self.owner, step_index=0, centre=spare)
+        load = {block["centre"].pk: block for block in workcentres.load(TODAY)}
+        self.assertEqual(load[self.mixer.pk]["waiting"], D("0"))
+        self.assertEqual(sum(row["minutes"] for row in load[spare.pk]["days"]), D("30.00"))    # on its due day, on the centre it was moved to
+        self.assertEqual(schedule.arrange(TODAY, self.owner)["waiting"], [])
+        self.assertEqual([code for _key, code, _day, _end in self.plan(order)], ["MIX2", "OVEN"])
+        self.agree()
 
     def test_the_load_counts_a_stage_on_a_down_centre_apart_and_never_against_a_day(self):
         self.bread_order(due=TODAY)

@@ -257,6 +257,28 @@ class JobTests(OvenPlant):
         self.assertEqual(schedule.warnings_for({(self.oven.pk, TODAY)}), [])
         self.assertEqual(order.steps.get().work_centre, self.oven)
 
+    def test_a_breakdown_after_the_plan_makes_the_planned_day_over_capacity_and_the_warning_says_so(self):
+        # A plan made before the oven broke stays where it was until the next «رتّب»: today it has no capacity left, the day
+        # is over, and the warning names the 45 minutes against nothing.
+        order = orders.create_order({"recipe": self.recipe, "location": self.plant, "quantity": "10"}, self.owner)
+        schedule.arrange(TODAY, self.owner)
+        job = self.breakdown()
+        day = self.oven_day(TODAY)
+        self.assertEqual((day["minutes"], day["capacity"], day["over"], day["down"]), (D("45.00"), D("0"), True, True))
+        lane = next(lane for lane in schedule.grid(TODAY)["lanes"] if lane["centre"] and lane["centre"].pk == self.oven.pk)
+        self.assertEqual((lane["broken"], lane["over"], lane["days"][0]["minutes"]), (job, True, D("45.00")))
+        warning = schedule.warnings_for({(self.oven.pk, TODAY)})
+        self.assertEqual([(w["centre"], w["day"], w["minutes"], w["capacity"]) for w in warning], [(self.oven, TODAY, D("45.00"), D("0"))])
+        self.assertEqual(schedule.day_of(order.steps.get().planned_start), TODAY)
+
+    def test_a_closed_breakdown_leaves_part_of_the_day_and_a_plan_over_it_is_warned(self):
+        maintenance.close_job(self.breakdown(opened_at=at(YESTERDAY, 10)), self.owner, closed_at=at(YESTERDAY, 14))   # 240 of 480 left
+        for _ in range(6):                                                                  # 6 x 45 = 270 minutes
+            orders.create_order({"recipe": self.recipe, "location": self.plant, "quantity": "10"}, self.owner)
+        self.assertEqual(schedule.arrange(YESTERDAY, self.owner)["waiting"], [])             # closed: the oven is not down now
+        warning = schedule.warnings_for({(self.oven.pk, YESTERDAY)})
+        self.assertEqual([(w["centre"], w["minutes"], w["capacity"]) for w in warning], [(self.oven, D("270.00"), D("240.00"))])
+
     def test_a_planned_job_takes_no_capacity(self):
         job = maintenance.open_job(self.oven, self.owner, kind="planned", opened_at=at(YESTERDAY, 10))
         self.assertEqual(self.oven_day(TODAY)["capacity"], D("480.00"))

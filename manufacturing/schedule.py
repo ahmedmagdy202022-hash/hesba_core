@@ -29,11 +29,15 @@ Rules, stated once:
 * **Breakdowns** (F10, HG-141): a day's capacity on a work centre is its hours less the minutes a breakdown was open on that
   day, and nothing today while one is still open (``maintenance.downtime``). The grid and the over-capacity warnings read it.
 * **A down centre** (manufacturing video finding F4, approved 23 Nov 2026): a work centre with an open breakdown
-  (``maintenance.down_centres``) is given no new work. A breakdown has no expected end, so «رتّب» and a move to a day leave
-  the first unfinished step on a down centre, and every step after it on the same order, **waiting**: their planned dates are
-  cleared, the down centre's queue does not move, and the grid and the order page say which machine the order waits for and
-  why. The steps before it are planned as usual. Closing the breakdown and pressing «رتّب» again plans them. A step cannot be
-  moved onto a down centre. A closed breakdown stays what it was: its minutes leave the day's capacity on the grid.
+  (``maintenance.down_centres``) is given no new work. A step **waits** exactly when it may not start (``maintenance.holds``:
+  its centre is down, it was not started on the floor, it was not sent to an outside supplier). A breakdown has no expected
+  end, so «رتّب» and a move to a day leave the first waiting step, and every step after it on the same order, with no
+  planned dates; the down centre's queue does not move, and the grid and the order page say which machine the order waits
+  for and why. The steps before it are planned as usual. A step started before the machine stopped keeps the planned dates
+  it had and the steps after it follow it; a step sent out is planned as any other. Closing the breakdown and pressing
+  «رتّب» again plans them. A step cannot be moved onto a down centre. A plan made before the breakdown stays where it was
+  until the next «رتّب» (the day shows over capacity, and the order says the plan needs «رتّب» again). A closed breakdown
+  stays what it was: its minutes leave the day's capacity on the grid.
 
 Nothing here touches stock, cost, the inventory engine, average cost, the projector or F12's finish.
 """
@@ -218,21 +222,36 @@ def _pending(order, steps):
     return [s for s in steps if s.index >= order.stage_index and s.finished_at is None]
 
 
-def _place_order(cal, order, steps, first, cursors, force_first, lane_shared=True, down=None):
+def _point(moment):
+    """A planned moment back on the planning clock: (day, minutes into the day)."""
+
+    local = timezone.localtime(moment)
+    return local.date(), (Decimal(local.hour * 60 + local.minute) + Decimal(local.second) / 60).quantize(Decimal("0.01"))
+
+
+def _place_order(cal, order, steps, first, cursors, force_first, lane_shared=True, down=None, outside=None):
     """Lay the unfinished ``steps`` of one order forward from day ``first`` (None = the plan's start already in hand).
 
-    ``down`` is {work centre id: its open breakdown}: the first step on a down centre and every step after it wait (their
-    planned dates are cleared and no centre's queue moves for them). Returns (the steps, to save; the wait or None)."""
+    ``down`` is {work centre id: its open breakdown} and ``outside`` the stages sent out (``maintenance.outside_stages``): the
+    first step that waits (``maintenance.holds``) and every step after it get no planned dates and no centre's queue moves
+    for them. A step on a down centre that was started before it stopped keeps its planned dates, and the next steps follow
+    it. Returns (the steps, to save; the wait or None)."""
+
+    from . import maintenance
 
     ready = (first, ZERO)
     placed = []
-    down = down or {}
+    down, outside = down or {}, outside or set()
     for n, step in enumerate(steps):
         if step.work_centre_id in down:
-            for later in steps[n:]:
-                later.planned_start = later.planned_end = None
-                placed.append(later)
-            return placed, {"order": order, "index": step.index, "centre": step.work_centre, "job": down[step.work_centre_id]}
+            if maintenance.holds(order.pk, step.stage_key, step.work_centre_id, step.started_at, down, outside):
+                for later in steps[n:]:
+                    later.planned_start = later.planned_end = None
+                    placed.append(later)
+                return placed, {"order": order, "index": step.index, "centre": step.work_centre, "job": down[step.work_centre_id]}
+            if step.started_at is not None and step.planned_start and step.planned_end:
+                ready = max(ready, _point(step.planned_end))  # in progress on a machine that stopped: its plan stays, the rest follow
+                continue
         capacity, minutes = _capacity(step), _minutes(step)
         earliest = max(ready, cursors[step.work_centre_id]) if (lane_shared and step.work_centre_id) else ready
         start, end, free = _lay(cal, minutes, earliest, capacity, force=force_first and n == 0)
@@ -263,11 +282,12 @@ def arrange(start, user, lang="ar"):
         if pending:
             work.append((order, pending))
     down = maintenance.down_centres({step.work_centre_id for _order, pending in work for step in pending})  # F4: no new work on a down centre
+    outside = maintenance.outside_stages([order.pk for order, _pending in work]) if down else set()
     changed, waiting = [], []
     for order, pending in work:
         for step in pending:  # the step's work centre is read for its hours: fetch them once
             step.order = order
-        placed, wait = _place_order(cal, order, pending, start, cursors, False, down=down)
+        placed, wait = _place_order(cal, order, pending, start, cursors, False, down=down, outside=outside)
         changed += placed
         if wait:
             waiting.append(wait)
@@ -330,7 +350,8 @@ def move_order(order, user, *, day=None, step_index=None, centre=None, lang="ar"
         for step in pending:
             step.order = order
         down = maintenance.down_centres({step.work_centre_id for step in pending})
-        placed, wait = _place_order(cal, order, pending, day, defaultdict(lambda: (date.min, ZERO)), True, lane_shared=False, down=down)
+        outside = maintenance.outside_stages([order.pk]) if down else set()
+        placed, wait = _place_order(cal, order, pending, day, defaultdict(lambda: (date.min, ZERO)), True, lane_shared=False, down=down, outside=outside)
         waiting = [wait] if wait else []
         OrderStep.objects.bulk_update(placed, ["planned_start", "planned_end"])
         for step in placed:
@@ -504,27 +525,32 @@ def grid(start, days=DAYS, centre=None, lang="ar"):
     for step in OrderStep.objects.filter(order__in=[o.pk for o in orders]).order_by("index"):
         by_order[step.order_id].append(step)
     stopped = maintenance.down_centres({s.work_centre_id for o in orders for s in by_order[o.pk] if s.index >= o.stage_index and s.finished_at is None})
+    sent = maintenance.outside_stages([o.pk for o in orders]) if stopped else set()
     rows = []
     for order in orders:
         planned = [s for s in by_order[order.pk] if s.planned_start and s.index >= order.stage_index and s.finished_at is None]
         rows.append({"order": order, "due": effective_due(order), "late": late.get(order.pk, ""), "rank": order.schedule_rank,
                      "first": min((day_of(s.planned_start) for s in planned), default=None), "last": max((end_day(s) for s in planned), default=None),
-                     "planned": bool(planned), "waiting": _waiting(order, by_order[order.pk], stopped, lang)})
+                     "planned": bool(planned), "waiting": _waiting(order, by_order[order.pk], stopped, sent, lang)})
     return {"days": window, "lanes": lanes, "orders": rows, "late_count": len(late), "start": start, "closed": closed, "day_list": day_list}
 
 
-def _waiting(order, steps, stopped, lang):
-    """F4: {centre, job, index, text} for the first unfinished step of an open order that is on a down centre (the order waits
-    for that machine from there on), else None. ``stopped`` is {work centre id: its open breakdown}."""
+def _waiting(order, steps, stopped, sent, lang):
+    """F4: for the first unfinished step of an open order that may not start (``maintenance.holds``), {centre, job, index,
+    replan, text}, else None. With no planned dates it waits for the machine from there on (``replan`` False); still planned
+    (a plan made before the breakdown) it needs «رتّب» again (``replan`` True). ``stopped`` is {work centre id: its open
+    breakdown}, ``sent`` the stages sent out."""
 
     from . import maintenance
 
-    if order.status not in OPEN:
+    if order.status not in OPEN or not stopped:
         return None
     for step in sorted(steps, key=lambda s: s.index):
-        if step.index >= order.stage_index and step.finished_at is None and step.work_centre_id in stopped:
-            job = stopped[step.work_centre_id]
-            return {"centre": job.work_centre, "job": job, "index": step.index, "text": maintenance.down_text(job, "down_wait", lang)}
+        if (step.index >= order.stage_index and step.finished_at is None
+                and maintenance.holds(order.pk, step.stage_key, step.work_centre_id, step.started_at, stopped, sent)):
+            job, replan = stopped[step.work_centre_id], step.planned_start is not None
+            return {"centre": job.work_centre, "job": job, "index": step.index, "replan": replan,
+                    "text": maintenance.down_text(job, "down_replan" if replan else "down_wait", lang)}
     return None
 
 
@@ -538,11 +564,13 @@ def order_plan(order, lang="ar"):
     steps = sorted(steps + _missing(order, steps), key=lambda s: s.index)  # a read never writes: an order with no steps yet shows its stages unplanned
     centres = {c.pk: c for c in WorkCentre.objects.filter(pk__in=[s.work_centre_id for s in steps if s.work_centre_id])}
     names = {s[0]: (s[2] if lang == "en" else s[1]) for s in order.stages}
-    waiting = _waiting(order, steps, maintenance.down_centres({s.work_centre_id for s in steps}), lang)
+    stopped = maintenance.down_centres({s.work_centre_id for s in steps})
+    waiting = _waiting(order, steps, stopped, maintenance.outside_stages([order.pk]) if stopped else set(), lang)
     rows = []
     for step in steps:
         rows.append({"step": step, "label": names.get(step.stage_key, step.stage_key), "centre": centres.get(step.work_centre_id),
                      "start": day_of(step.planned_start) if step.planned_start else None, "end": end_day(step) if step.planned_end else None,
                      "open": step.index >= order.stage_index and step.finished_at is None and order.status in OPEN,
-                     "waiting": waiting["text"] if waiting and waiting["index"] == step.index else ""})
+                     "waiting": waiting["text"] if waiting and waiting["index"] == step.index else "",
+                     "replan": bool(waiting and waiting["index"] == step.index and waiting["replan"])})
     return rows

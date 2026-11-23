@@ -106,6 +106,7 @@ MESSAGES = {
         "down_start": "المركز «{centre}» واقف للصيانة من {since} بسبب «{cause}»، فالمرحلة دي مش هتبدأ عليه لحد ما أمر الصيانة يتقفل.",
         "down_wait": "مستنية المكنة: «{centre}» واقف للصيانة من {since} بسبب «{cause}»، والمرحلة دي واللي بعدها هيترتبوا لما أمر الصيانة يتقفل.",
         "down_move": "المركز ده واقف للصيانة دلوقتي؛ اختار مركز شغال.",
+        "down_replan": "المركز «{centre}» واقف للصيانة من {since} بسبب «{cause}»، والمرحلة دي لسه متخططة عليه؛ اضغط «رتّب» تاني عشان الجدول يتعدّل.",
     },
     "en": {
         "plan_permission": "Maintenance plans need the permission to manage items.",
@@ -144,6 +145,7 @@ MESSAGES = {
         "down_start": "The work centre “{centre}” is down for maintenance since {since} (“{cause}”), so this stage cannot start on it until the maintenance job is closed.",
         "down_wait": "Waiting for the machine: “{centre}” is down for maintenance since {since} (“{cause}”); this stage and the ones after it are planned once the maintenance job is closed.",
         "down_move": "That work centre is down for maintenance right now; choose one that is running.",
+        "down_replan": "The work centre “{centre}” is down for maintenance since {since} (“{cause}”) and this stage is still planned on it; press «Arrange» again to update the schedule.",
     },
 }
 
@@ -485,23 +487,40 @@ def down_text(job, key, lang="ar"):
     return _words(lang)[key].format(centre=job.work_centre.name(lang), since=since, cause=job.cause)
 
 
-def stage_down(order):
-    """F12: the open breakdown that keeps the order's current stage from starting, or None. It is there when the stage's work
-    centre (its schedule step's, else the one its routing gave it) is down and the stage was not started on the floor before:
-    a stage already started is never held, so work in progress is always finished. A stage sent to an outside supplier (F4,
-    HG-137) is not done on the centre at all, so its return still closes it."""
+def outside_stages(order_ids):
+    """{(order id, stage key)} of the stages sent to an outside supplier (F4, HG-137; sent or back, never a cancelled send)."""
 
-    from .models import OrderStep, OutsideStatus
+    from .models import OutsideJob, OutsideStatus
+
+    return set(OutsideJob.objects.filter(order_id__in=list(order_ids)).exclude(status=OutsideStatus.CANCELLED).values_list("order_id", "stage_key"))
+
+
+def holds(order_id, stage_key, centre_id, started_at, down, outside):
+    """**The one rule of «waiting for the machine»** (video findings F4 and F12): a stage may not start, and so waits, when its
+    work centre is down (``down``: {centre id: open breakdown}), it was not started on the floor before the machine stopped,
+    and it was not sent to an outside supplier (``outside``: ``outside_stages``). A stage started before is never held, so
+    work in progress is always finished; a stage sent out is not done on the centre, so its return still closes it. The
+    floor, the order page, «رتّب», the grid, the order's plan and the load table all ask this."""
+
+    return bool(centre_id) and centre_id in down and started_at is None and (order_id, stage_key) not in outside
+
+
+def stage_down(order):
+    """F12: the open breakdown that keeps the order's current stage from starting (``holds``), or None. The stage's centre is
+    its schedule step's, else the one its routing gave it."""
+
+    from .models import OrderStep
 
     if order.stage_index >= len(order.stages):
         return None
-    if order.outside_jobs.filter(stage_key=order.stages[order.stage_index][0]).exclude(status=OutsideStatus.CANCELLED).exists():
-        return None
     step = OrderStep.objects.filter(order=order, index=order.stage_index).first()
-    if step is not None and step.started_at is not None:
-        return None
+    key = order.stages[order.stage_index][0]
     centre_id = step.work_centre_id if step is not None else workcentres.stage_plan(order.stages[order.stage_index])[0]
-    return down_centres([centre_id]).get(centre_id) if centre_id else None
+    down = down_centres([centre_id])
+    if not down:
+        return None
+    started = step.started_at if step is not None else None
+    return down[centre_id] if holds(order.pk, key, centre_id, started, down, outside_stages([order.pk])) else None
 
 
 def capacity_left(capacity, down):
