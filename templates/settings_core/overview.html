@@ -1,0 +1,39 @@
+{% extends "settings_core/base.html" %}
+{% load hesba_capabilities hesba_labels %}
+{% block settings_content %}
+<div class="set-head"><div><h1>{% if lang == 'en' %}Settings{% else %}الإعدادات{% endif %}</h1><p>{% if lang == 'en' %}Everything about how Hesba works for your business, in one place.{% else %}كل حاجة تخص شغل حسبة عندك، في مكان واحد.{% endif %}</p></div></div>
+
+{% if client %}{% if plain.fiscal_bad %}<p class="op-message op-message-warning" data-fiscal-bad>{% if lang == 'en' %}The financial year starts in month {{ plain.fiscal_bad }}: not a valid month, fix it in company details.{% else %}السنة المالية مكتوب إنها بتبدأ في شهر {{ plain.fiscal_bad }}: ده مش شهر صحيح، صلّحه من بيانات الشركة.{% endif %}</p>{% endif %}{% endif %}
+
+{% if ready and ready.rows %}<section class="set-card set-ready" data-settings-ready="{{ ready.done }}/{{ ready.total }}">
+  <div class="set-ready__ring" style="--p:{{ ready.percent }}" role="img" aria-label="{{ ready.done }} / {{ ready.total }}"><strong>{{ ready.done }}/{{ ready.total }}</strong><small>{% if lang == 'en' %}ready{% else %}جاهز{% endif %}</small></div>
+  <div>
+    <h2>{% if ready.done == ready.total %}{% if lang == 'en' %}Your account is ready for work{% else %}حسابك جاهز للشغل{% endif %}{% else %}{% if lang == 'en' %}A few steps and your account is ready{% else %}فاضل خطوات بسيطة وحسابك يبقى جاهز{% endif %}{% endif %}</h2>
+    <p>{% if lang == 'en' %}What makes invoices complete and your data safe.{% else %}الحاجات اللي بتخلّي فواتيرك كاملة وبياناتك في أمان.{% endif %}</p>
+    <ul class="set-steps">{% for step in ready.rows %}<li class="{% if step.done %}is-done{% endif %}" data-ready-step="{{ step.key }}"><span class="set-steps__dot" aria-hidden="true">{% if step.done %}<svg class="hs-icon"><use href="#hs-i-check"></use></svg>{% endif %}</span>{% if step.done %}<span>{{ step.label }}</span>{% else %}<a href="{{ step.url }}?lang={{ lang }}">{{ step.label }}</a>{% endif %}</li>{% endfor %}</ul>
+  </div>
+</section>{% endif %}
+
+<div class="set-group" data-settings-groups>
+  {% for group in tiles %}{% if group.key != 'business' or group.rows|length > 1 %}
+  <h2 class="set-section-title" data-group="{{ group.key }}">{{ group.title }}</h2>
+  <div class="set-tiles">{% for row in group.rows %}{% if row.key != 'overview' %}<a class="set-tile{% if row.tone == 'todo' %} is-todo{% endif %}" href="{{ row.url }}?lang={{ lang }}" data-settings-tile="{{ row.key }}"{% if row.key == 'taxes' %} data-taxes-link{% elif row.key == 'einvoice' %} data-einvoice-link{% elif row.key == 'backups' %} data-backup-link{% elif row.key == 'storage' %} data-storage-link{% elif row.key == 'daily_email' %} data-daily-email-link{% elif row.key == 'entities' %} data-entities-link{% endif %}>
+    <span class="set-tile__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ row.icon }}"></use></svg></span>
+    <span><strong>{{ row.label }}</strong>{% if row.status %}<small>{{ row.status }}</small>{% endif %}</span>
+    <svg class="hs-icon" aria-hidden="true"><use href="#hs-i-arrow"></use></svg></a>{% endif %}{% endfor %}</div>
+  {% endif %}{% endfor %}
+</div>
+
+{% if setup_questions_url %}<p class="set-wizard-link"><a href="{{ setup_questions_url }}" data-setup-wizard-link>{% if lang == 'en' %}Adjust how your business works: the setup questions{% else %}عايز تعدّل تفاصيل شغلك؟ أسئلة الإعداد{% endif %}</a></p>{% endif %}
+
+<section class="set-group" data-features>
+  <div class="set-group__head"><h2 class="set-section-title">{% if lang == 'en' %}Features at work{% else %}الخصائص الشغّالة عندك{% endif %} <small>{{ features_on }} / {{ features|length }}</small></h2>{% if opens.capabilities %}<a class="set-opt__open" href="{% url 'settings_core:capabilities' %}?lang={{ lang }}">{% if lang == 'en' %}Change{% else %}غيّرها{% endif %} <svg class="hs-icon" aria-hidden="true"><use href="#hs-i-arrow"></use></svg></a>{% endif %}</div>
+  <ul class="set-chips">{% for feature in features %}{% if feature.on %}<li data-feature="{{ feature.slug }}">{% if feature.url %}<a class="set-chip" href="{{ feature.url }}?lang={{ lang }}">{{ feature.label }}</a>{% else %}<span class="set-chip">{{ feature.label }}</span>{% endif %}</li>{% endif %}{% empty %}{% endfor %}
+  {% if not features_on %}<li><span class="set-chip set-chip--muted">{% if lang == 'en' %}None yet: each business picks only what it uses.{% else %}لسه مفيش: كل نشاط بيشغّل اللي بيستخدمه بس.{% endif %}</span></li>{% endif %}</ul>
+</section>
+
+{% if show_advanced %}<details class="set-card set-advanced"><summary><strong>{% if lang == 'en' %}Advanced (for support){% else %}إعدادات متقدمة (للدعم الفني){% endif %}</strong></summary>
+  {% if settings %}<div class="op-table-wrap" style="margin-top:10px"><table class="op-table"><thead><tr><th>{% if lang == 'en' %}Key{% else %}المفتاح{% endif %}</th><th>{% if lang == 'en' %}Value{% else %}القيمة{% endif %}</th><th>{% if lang == 'en' %}Description{% else %}الوصف{% endif %}</th></tr></thead><tbody>{% for setting in settings %}<tr><td>{{ setting.key }}</td><td>{% if setting.is_sensitive %}{{ words.hidden }}{% else %}{{ setting.value }}{% endif %}</td><td>{{ setting.description }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+  {% if can_manage %}<p><a class="op-secondary" href="{{ admin_settings_url }}">{% if lang == 'en' %}Manage in Admin{% else %}إدارة من Admin{% endif %}</a></p>{% endif %}
+</details>{% endif %}
+{% endblock %}

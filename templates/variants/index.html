@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load hesba_paging %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'master_data:items' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if lang == 'en' %}Items{% else %}الأصناف{% endif %}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="search" name="q" value="{{ q }}" placeholder="{{ words.search }}" aria-label="{{ words.search }}"><button type="submit">{{ words.filter }}</button></form>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.code }}</th><th>{{ words.name }}</th><th>{{ words.sizes }}</th><th>{{ words.colors }}</th><th>{{ words.count }}</th><th></th></tr></thead><tbody>
+{% for group in page.object_list %}<tr data-variant-group="{{ group.code }}"><td><bdi>{{ group.code }}</bdi></td><td class="op-cell-text">{{ group.name }}</td><td class="op-cell-text">{{ group.sizes|join:"، "|default:words.none }}</td><td class="op-cell-text">{{ group.colors|join:"، "|default:words.none }}</td><td>{{ group.item_count }}</td><td><a href="{% url 'variants:group' group.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.empty }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% pager page %}
+{% if can_manage %}<form class="op-form" method="post" data-new-model>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ words.new }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="v-code">{{ words.code }}</label><input id="v-code" name="code" maxlength="40" required placeholder="TSHIRT"></div>
+<div class="op-field"><label for="v-name">{{ words.name }}</label><input id="v-name" name="name" maxlength="255" required></div>
+<div class="op-field"><label for="v-sale">{{ words.sale_price }}</label><input id="v-sale" name="sale_price" inputmode="decimal" value="0"></div>
+<div class="op-field"><label for="v-purchase">{{ words.purchase_price }}</label><input id="v-purchase" name="purchase_price" inputmode="decimal" value="0"></div>
+<div class="op-field"><label for="v-cat">{{ words.category }}</label><select id="v-cat" name="category"><option value="">—</option>{% for category in categories %}<option value="{{ category.pk }}">{% if lang == 'en' and category.name_en %}{{ category.name_en }}{% else %}{{ category.name_ar }}{% endif %}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="v-unit">{{ words.unit }}</label><input id="v-unit" name="unit" maxlength="50" value="{% if lang == 'en' %}piece{% else %}قطعة{% endif %}"></div>
+</div><div class="hs-variant-pick">{% include "variants/_chips.html" with kind="sizes" legend=words.sizes options=size_options %}{% include "variants/_chips.html" with kind="colors" legend=words.colors options=color_options %}</div>
+<label class="op-check"><input type="checkbox" name="barcodes" value="1" checked> {{ words.barcodes }}</label><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.create }}</button></div></form>{% else %}<p class="op-muted">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

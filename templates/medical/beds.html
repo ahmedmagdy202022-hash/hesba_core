@@ -1,0 +1,40 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/inpatient.css' %}?v=m8-2">{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ w.title }}</h1><p>{{ w.intro }}</p></div>
+<div class="op-form-actions">{% if can_admit %}<a class="op-primary" href="{% url 'medical:admit' %}?lang={{ lang }}" data-admit>{{ w.admit }}</a>{% endif %}
+{% if can_setup %}<a class="op-secondary" href="{% url 'medical:wards' %}?lang={{ lang }}" data-wards-setup>{{ w.setup }}</a>{% endif %}</div></section>
+{% if attention %}<section class="ip-card ip-attention" data-attention aria-labelledby="ip-attention"><h2 id="ip-attention">{{ w.attention }}</h2><p class="ip-hint">{{ w.attention_intro }}</p>
+<ul class="ip-stays">{% for row in attention %}<li><a class="ip-stay-row" data-attention-stay="{{ row.admission.pk }}" href="{% url 'medical:stay' row.admission.pk %}?lang={{ lang }}">
+<span class="ip-stay-row__who"><strong>{{ row.admission.patient.name }}</strong><small><bdi>{{ row.admission.number }}</bdi> · <bdi>{{ row.admission.bed.code }}</bdi></small></span>
+<span class="ip-stay-row__why">{% for label in row.labels %}<span class="op-status op-status-draft">{{ label }}</span>{% endfor %}</span></a></li>{% endfor %}</ul></section>{% endif %}
+{% for row in board %}
+<section class="ip-ward" data-ward="{{ row.ward.pk }}" aria-labelledby="ip-ward-{{ row.ward.pk }}">
+<header class="ip-ward__head"><h2 id="ip-ward-{{ row.ward.pk }}">{{ row.name }}</h2><p><span>{{ row.free }} {{ w.free_n }}</span><span>{{ row.occupied }} {{ w.occupied_n }}</span></p></header>
+{% if row.beds %}<div class="ip-beds">
+{% for cell in row.beds %}{% if cell.state == 'occupied' %}
+<a class="ip-bed" data-bed="{{ cell.bed.pk }}" data-state="occupied" href="{% url 'medical:stay' cell.admission.pk %}?lang={{ lang }}">
+<span class="hs-ichip hs-ichip--teal hs-ichip--sm"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-beds"></use></svg></span>
+<span class="ip-bed__text"><strong><bdi>{{ cell.bed.code }}</bdi></strong><span class="ip-bed__who">{{ cell.admission.patient.name }}</span>
+<small>{{ cell.day_label }}{% if cell.admission.doctor %} · {{ cell.admission.doctor.name }}{% endif %}</small></span></a>
+{% elif cell.state == 'free' %}
+<{% if can_admit %}a href="{% url 'medical:admit' %}?lang={{ lang }}&bed={{ cell.bed.pk }}"{% else %}div{% endif %} class="ip-bed" data-bed="{{ cell.bed.pk }}" data-state="free">
+<span class="hs-ichip hs-ichip--success hs-ichip--sm"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-beds"></use></svg></span>
+<span class="ip-bed__text"><strong><bdi>{{ cell.bed.code }}</bdi></strong><span class="ip-bed__state">{{ w.free }}</span>
+<small><bdi>{{ cell.bed.daily_service.default_sale_price|money }}</bdi> {{ w.currency_day }}</small></span></{% if can_admit %}a{% else %}div{% endif %}>
+{% else %}
+<div class="ip-bed" data-bed="{{ cell.bed.pk }}" data-state="out">
+<span class="hs-ichip hs-ichip--sm"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-beds"></use></svg></span>
+<span class="ip-bed__text"><strong><bdi>{{ cell.bed.code }}</bdi></strong><span class="ip-bed__state">{{ w.out }}</span></span></div>
+{% endif %}{% endfor %}
+</div>{% else %}<p class="op-empty">{{ w.no_beds }}</p>{% endif %}
+</section>
+{% empty %}
+<div class="ip-card ip-empty" data-no-wards><p><strong>{{ w.no_wards }}</strong></p>{% if can_setup %}<p>{{ w.no_wards_setup }}</p><a class="op-primary" href="{% url 'medical:wards' %}?lang={{ lang }}">{{ w.setup }}</a>{% endif %}</div>
+{% endfor %}
+{% if recent %}<details class="ip-more ip-recent" data-recent-stays><summary>{{ w.recent }}</summary>
+<ul class="ip-stays">{% for admission in recent %}<li><a class="ip-stay-row" data-recent-stay="{{ admission.pk }}" href="{% url 'medical:stay' admission.pk %}?lang={{ lang }}">
+<span class="ip-stay-row__who"><strong>{{ admission.patient.name }}</strong><small><bdi>{{ admission.number }}</bdi> · <bdi>{{ admission.bed.code }}</bdi>{% if admission.discharged_at %} · <bdi>{{ admission.discharged_at|date:"Y/m/d" }}</bdi>{% endif %}</small></span>
+<span class="ip-stay-row__why"><span class="op-status {% if admission.state == 'cancelled' %}op-status-cancelled{% else %}op-status-draft{% endif %}">{{ admission.state_label }}</span></span></a></li>{% endfor %}</ul></details>{% endif %}
+{% endblock %}

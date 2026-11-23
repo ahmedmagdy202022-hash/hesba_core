@@ -1,0 +1,5 @@
+{% if count %}<nav class="hs-pager" data-pager aria-label="{{ words.page }}">
+<span class="hs-pager__count">{{ first }}–{{ last }} {{ words.of }} {{ count }} {{ words.rows }}</span>
+{% if page.has_other_pages %}<span class="hs-pager__steps">{% if prev_url %}<a class="hs-pager__step" href="{{ prev_url }}" rel="prev">‹ {{ words.prev }}</a>{% endif %}<span class="hs-pager__at">{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if next_url %}<a class="hs-pager__step" href="{{ next_url }}" rel="next">{{ words.next }} ›</a>{% endif %}</span>{% endif %}
+{% if show_sizes %}<span class="hs-pager__sizes">{{ words.show }} {% for s in sizes %}{% if s.current %}<b aria-current="true">{{ s.size }}</b>{% else %}<a href="{{ s.url }}">{{ s.size }}</a>{% endif %}{% endfor %} {{ words.per }}</span>{% endif %}
+</nav>{% endif %}

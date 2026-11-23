@@ -1,10 +1,33 @@
+"""Read-only report queries.
+
+Every figure here is derived from movement and ledger rows rather than stored
+on a balance field, so a report can never disagree with the transactions behind
+it.
+
+These run on page load now that the dashboard reads them, so the aggregation
+happens in the database. The earlier versions looped in Python and issued a
+query per item, per location, or per party — correct, but one query per active
+item times each active location is not something a screen can afford.
+"""
+
 from decimal import Decimal
 
+from django.db.models import DecimalField, F, Q, Sum, Value
+from django.db.models.functions import Coalesce
+
 from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement
+from entities import scope as entity_scope
 from inventory.models import StockMovement, StockMovementType
 from master_data.models import Customer, Item, Location, Supplier
 from purchases.models import PurchaseInvoice, SupplierLedgerEntry
-from sales.models import CustomerLedgerEntry, SalesInvoice, SalesLine
+from sales.models import (
+    CustomerLedgerEntry,
+    SalesInvoice,
+    SalesLine,
+    SalesReturn,
+    SalesReturnLine,
+    SalesReturnStatus,
+)
 
 
 STOCK_IN_TYPES = {
@@ -22,6 +45,11 @@ STOCK_OUT_TYPES = {
     StockMovementType.ADJUSTMENT_OUT,
 }
 
+ZERO = Decimal("0")
+
+_QUANTITY = DecimalField(max_digits=14, decimal_places=3)
+_MONEY = DecimalField(max_digits=14, decimal_places=2)
+
 
 def _sum(values):
     total = Decimal("0")
@@ -38,132 +66,271 @@ def _date_filter(queryset, field_name, date_from=None, date_to=None):
     return queryset
 
 
-def stock_report(location=None):
-    """Read-only stock by item and location from StockMovement rows."""
+def _zero_sum(expression, condition, output_field):
+    """Sum that yields 0 rather than None when nothing matches."""
 
-    rows = []
-    items = Item.objects.filter(active=True)
-    locations = Location.objects.filter(active=True)
+    return Coalesce(
+        Sum(expression, filter=condition), Value(ZERO), output_field=output_field
+    )
+
+
+def stock_report(location=None):
+    """Read-only stock by item and location from StockMovement rows.
+
+    Item/location pairs holding nothing are left out: this answers "what is on
+    the shelves", so a net of zero is not a row. Use stock_alert_counts() when
+    the question is which items have run out.
+    """
+
+    locations = entity_scope.locations(Location.objects).filter(active=True)
     if location is not None:
         locations = locations.filter(pk=location.pk)
 
-    for item in items:
-        for current_location in locations:
-            movements = StockMovement.objects.filter(item=item, location=current_location)
-            in_qty = _sum(movements.filter(movement_type__in=STOCK_IN_TYPES).values_list("quantity", flat=True))
-            out_qty = _sum(movements.filter(movement_type__in=STOCK_OUT_TYPES).values_list("quantity", flat=True))
-            quantity = in_qty - out_qty
-            if quantity == 0:
-                continue
-            rows.append(
-                {
-                    "item_id": item.id,
-                    "item_label": item.search_label,
-                    "location_id": current_location.id,
-                    "location_name": current_location.name_ar,
-                    "quantity": quantity,
-                    "stock_value": quantity * item.average_cost,
-                    "min_stock": item.min_stock,
-                }
-            )
+    location_names = dict(locations.values_list("id", "name_ar"))
+    if not location_names:
+        return []
+
+    items = {item.id: item for item in Item.objects.filter(active=True)}
+    if not items:
+        return []
+
+    totals = (
+        StockMovement.objects.filter(item_id__in=items, location_id__in=location_names)
+        .values("item_id", "location_id")
+        .annotate(
+            in_qty=_zero_sum("quantity", Q(movement_type__in=STOCK_IN_TYPES), _QUANTITY),
+            out_qty=_zero_sum("quantity", Q(movement_type__in=STOCK_OUT_TYPES), _QUANTITY),
+        )
+        .order_by("item_id", "location_id")
+    )
+
+    rows = []
+    for total in totals:
+        quantity = total["in_qty"] - total["out_qty"]
+        if quantity == 0:
+            continue
+        item = items[total["item_id"]]
+        rows.append(
+            {
+                "item_id": item.id,
+                "item_label": item.search_label,
+                "location_id": total["location_id"],
+                "location_name": location_names[total["location_id"]],
+                "quantity": quantity,
+                "stock_value": quantity * item.average_cost,
+                "min_stock": item.min_stock,
+            }
+        )
     return rows
 
 
-def customer_report(customer=None):
-    """Read-only customer balance from CustomerLedgerEntry rows."""
+def stock_levels_by_item():
+    """Net quantity per active item across every active location.
 
-    rows = []
+    Unlike stock_report this keeps items sitting at zero, and includes items
+    that have never moved at all — both are out of stock as far as the business
+    is concerned, and dropping them would understate the shortage.
+    """
+
+    location_ids = list(entity_scope.locations(Location.objects).filter(active=True).values_list("id", flat=True))
+    items = Item.objects.filter(active=True, is_stock_tracked=True)
+
+    on_hand = {}
+    if location_ids:
+        totals = (
+            StockMovement.objects.filter(location_id__in=location_ids)
+            .values("item_id")
+            .annotate(
+                in_qty=_zero_sum("quantity", Q(movement_type__in=STOCK_IN_TYPES), _QUANTITY),
+                out_qty=_zero_sum("quantity", Q(movement_type__in=STOCK_OUT_TYPES), _QUANTITY),
+            )
+        )
+        on_hand = {t["item_id"]: t["in_qty"] - t["out_qty"] for t in totals}
+
+    return [
+        {
+            "item_id": item.id,
+            "item_label": item.search_label,
+            "quantity": on_hand.get(item.id, ZERO),
+            "min_stock": item.min_stock,
+        }
+        for item in items
+    ]
+
+
+def made_to_order_ids():
+    """Items that hold nothing by design, so none on hand is not "out of stock".
+
+    A dish made in the kitchen when ordered (RESTO-004), and a custom job's own
+    item (HG-142): it is empty until its production order finishes and empty
+    again once the job is delivered.
+    """
+
+    from manufacturing.models import CostSheet
+    from restaurant.kitchen import kitchen_dish_ids
+
+    # The sheet's own link, not the JOB- code prefix: an item somebody coded JOB-... by hand still alerts.
+    jobs = CostSheet.objects.filter(job_item__isnull=False).values_list("job_item_id", flat=True)
+    return kitchen_dish_ids() | set(jobs)
+
+
+def stock_alert_counts():
+    """How many tracked items have run out, and how many are running low.
+
+    An item is low when it still has stock but has fallen to or below its
+    minimum. Out of stock is counted separately so the two never double up.
+    """
+
+    out_of_stock = 0
+    low_stock = 0
+    cooked = made_to_order_ids()
+
+    for row in stock_levels_by_item():
+        if row["quantity"] <= 0 and row["item_id"] in cooked:
+            continue  # W16: a dish made in the kitchen is cooked to order, not run out
+        if row["quantity"] <= 0:
+            out_of_stock += 1
+        elif row["min_stock"] > 0 and row["quantity"] <= row["min_stock"]:
+            low_stock += 1
+
+    return {"low_stock": low_stock, "out_of_stock": out_of_stock}
+
+
+def customer_report(customer=None):
+    """Read-only customer balance from CustomerLedgerEntry rows.
+
+    Every active customer appears, including one with no entries yet, so the
+    report doubles as the customer list.
+    """
+
     customers = Customer.objects.filter(active=True)
     if customer is not None:
         customers = customers.filter(pk=customer.pk)
 
-    for current_customer in customers:
-        entries = CustomerLedgerEntry.objects.filter(customer=current_customer)
-        due_increase = _sum(entries.values_list("due_increase", flat=True))
-        due_decrease = _sum(entries.values_list("due_decrease", flat=True))
-        rows.append(
-            {
-                "customer_id": current_customer.id,
-                "customer_code": current_customer.customer_code,
-                "customer_name": current_customer.name,
-                "opening_balance": current_customer.opening_balance,
-                "due_increase": due_increase,
-                "due_decrease": due_decrease,
-                "balance": current_customer.opening_balance + due_increase - due_decrease,
-            }
-        )
-    return rows
+    # HG-034: inside an entity, only the rows its documents wrote count;
+    # opening balances belong to the main entity.
+    rows_here = entity_scope.customer_entries_q("ledger_entries__") or None
+    openings = entity_scope.includes_openings()
+    customers = customers.annotate(
+        total_due_increase=_zero_sum("ledger_entries__due_increase", rows_here, _MONEY),
+        total_due_decrease=_zero_sum("ledger_entries__due_decrease", rows_here, _MONEY),
+    ).order_by("id")
+
+    return [
+        {
+            "customer_id": row.id,
+            "customer_code": row.customer_code,
+            "customer_name": row.name,
+            "opening_balance": row.opening_balance if openings else ZERO,
+            "due_increase": row.total_due_increase,
+            "due_decrease": row.total_due_decrease,
+            "balance": (row.opening_balance if openings else ZERO) + row.total_due_increase - row.total_due_decrease,
+        }
+        for row in customers
+    ]
 
 
 def supplier_report(supplier=None):
     """Read-only supplier balance from SupplierLedgerEntry rows."""
 
-    rows = []
     suppliers = Supplier.objects.filter(active=True)
     if supplier is not None:
         suppliers = suppliers.filter(pk=supplier.pk)
 
-    for current_supplier in suppliers:
-        entries = SupplierLedgerEntry.objects.filter(supplier=current_supplier)
-        due_increase = _sum(entries.values_list("due_increase", flat=True))
-        due_decrease = _sum(entries.values_list("due_decrease", flat=True))
-        rows.append(
-            {
-                "supplier_id": current_supplier.id,
-                "supplier_code": current_supplier.supplier_code,
-                "supplier_name": current_supplier.name,
-                "opening_balance": current_supplier.opening_balance,
-                "due_increase": due_increase,
-                "due_decrease": due_decrease,
-                "balance": current_supplier.opening_balance + due_increase - due_decrease,
-            }
-        )
-    return rows
+    rows_here = entity_scope.supplier_entries_q("ledger_entries__") or None
+    openings = entity_scope.includes_openings()
+    suppliers = suppliers.annotate(
+        total_due_increase=_zero_sum("ledger_entries__due_increase", rows_here, _MONEY),
+        total_due_decrease=_zero_sum("ledger_entries__due_decrease", rows_here, _MONEY),
+    ).order_by("id")
+
+    return [
+        {
+            "supplier_id": row.id,
+            "supplier_code": row.supplier_code,
+            "supplier_name": row.name,
+            "opening_balance": row.opening_balance if openings else ZERO,
+            "due_increase": row.total_due_increase,
+            "due_decrease": row.total_due_decrease,
+            "balance": (row.opening_balance if openings else ZERO) + row.total_due_increase - row.total_due_decrease,
+        }
+        for row in suppliers
+    ]
 
 
 def cashbox_report(cashbox=None, date_from=None, date_to=None):
     """Read-only cashbox balance from actual CashboxMovement rows."""
 
-    rows = []
-    cashboxes = Cashbox.objects.filter(active=True)
+    cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
     if cashbox is not None:
         cashboxes = cashboxes.filter(pk=cashbox.pk)
 
-    for current_cashbox in cashboxes:
-        movements = CashboxMovement.objects.filter(cashbox=current_cashbox)
-        movements = _date_filter(movements, "movement_date", date_from, date_to)
-        cash_in = _sum(movements.filter(direction=CashboxDirection.IN).values_list("amount", flat=True))
-        cash_out = _sum(movements.filter(direction=CashboxDirection.OUT).values_list("amount", flat=True))
-        rows.append(
-            {
-                "cashbox_id": current_cashbox.id,
-                "cashbox_code": current_cashbox.cashbox_code,
-                "cashbox_name": current_cashbox.name_ar,
-                "opening_balance": current_cashbox.opening_balance,
-                "cash_in": cash_in,
-                "cash_out": cash_out,
-                "balance": current_cashbox.opening_balance + cash_in - cash_out,
-            }
-        )
-    return rows
+    movement_window = Q()
+    if date_from:
+        movement_window &= Q(movements__movement_date__gte=date_from)
+    if date_to:
+        movement_window &= Q(movements__movement_date__lte=date_to)
+    prior_window = Q(movements__movement_date__lt=date_from) if date_from else Q(pk__isnull=True)
+
+    cashboxes = cashboxes.annotate(
+        total_in=_zero_sum(
+            "movements__amount", Q(movements__direction=CashboxDirection.IN) & movement_window, _MONEY
+        ),
+        total_out=_zero_sum(
+            "movements__amount", Q(movements__direction=CashboxDirection.OUT) & movement_window, _MONEY
+        ),
+        prior_in=_zero_sum(
+            "movements__amount", Q(movements__direction=CashboxDirection.IN) & prior_window, _MONEY
+        ),
+        prior_out=_zero_sum(
+            "movements__amount", Q(movements__direction=CashboxDirection.OUT) & prior_window, _MONEY
+        ),
+    ).order_by("id")
+
+    return [
+        {
+            "cashbox_id": row.id,
+            "cashbox_code": row.cashbox_code,
+            "cashbox_name": row.name_ar,
+            "opening_balance": row.opening_balance,
+            "brought_forward": row.opening_balance + row.prior_in - row.prior_out,
+            "cash_in": row.total_in,
+            "cash_out": row.total_out,
+            "balance": row.opening_balance + row.prior_in - row.prior_out + row.total_in - row.total_out,
+        }
+        for row in cashboxes
+    ]
 
 
-def sales_report(date_from=None, date_to=None):
-    qs = SalesInvoice.objects.select_related("customer", "selling_location", "cashbox")
+def sales_report(date_from=None, date_to=None, status=None):
+    """Sales invoices, newest first.
+
+    Drafts are included by default: this is the invoice list, not a money
+    figure. Pass ``status`` when the caller needs posted invoices only — a total
+    built from drafts would contradict profit_report, which posts-only already.
+    """
+
+    qs = entity_scope.scope(SalesInvoice.objects.select_related("customer", "selling_location", "cashbox"), entity_scope.SALES_INVOICE)
     qs = _date_filter(qs, "invoice_date", date_from, date_to)
+    if status is not None:
+        qs = qs.filter(status=status)
     return qs.order_by("-invoice_date", "-id")
 
 
-def purchase_report(date_from=None, date_to=None):
-    qs = PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox")
+def purchase_report(date_from=None, date_to=None, status=None):
+    """Purchase invoices, newest first. See sales_report on ``status``."""
+
+    qs = entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox"), entity_scope.PURCHASE_INVOICE)
     qs = _date_filter(qs, "invoice_date", date_from, date_to)
+    if status is not None:
+        qs = qs.filter(status=status)
     return qs.order_by("-invoice_date", "-id")
 
 
 def profit_report(date_from=None, date_to=None):
     """Read-only profit rows. Profit equals sales minus cost."""
 
-    lines = SalesLine.objects.filter(invoice__status="posted").select_related("invoice", "item")
+    lines = SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status="posted").select_related("invoice", "item")
     if date_from:
         lines = lines.filter(invoice__invoice_date__gte=date_from)
     if date_to:
@@ -179,9 +346,98 @@ def profit_report(date_from=None, date_to=None):
                 "item_id": line.item_id,
                 "item_label": line.item.search_label,
                 "quantity": line.quantity,
-                "sales_amount": line.line_total_amount,
+                "sales_amount": line.line_cost_amount + line.line_profit_amount,
                 "cost_amount": line.line_cost_amount,
                 "profit_amount": line.line_profit_amount,
+                "is_return": False,
             }
         )
-    return rows
+
+    returns = SalesReturnLine.objects.filter(
+        entity_scope.q(entity_scope.SALES_RETURN, "sales_return__"), sales_return__status=SalesReturnStatus.POSTED
+    ).select_related("sales_return__source_invoice", "source_line__item", "tax")
+    if date_from:
+        returns = returns.filter(sales_return__return_date__gte=date_from)
+    if date_to:
+        returns = returns.filter(sales_return__return_date__lte=date_to)
+    for line in returns.order_by(
+        "-sales_return__return_date", "-sales_return_id", "source_line__line_number"
+    ):
+        rows.append(
+            {
+                "invoice_id": line.sales_return.source_invoice_id,
+                "invoice_number": f"{line.sales_return.return_number} / {line.sales_return.source_invoice.invoice_number}",
+                "invoice_date": line.sales_return.return_date,
+                "item_id": line.source_line.item_id,
+                "item_label": line.source_line.item.search_label,
+                "quantity": -line.quantity,
+                # HG-015: the refund includes tax given back; revenue does not.
+                "sales_amount": -(line.amount - _return_line_tax(line)),
+                "cost_amount": -line.cost_amount,
+                "profit_amount": -(line.amount - _return_line_tax(line) - line.cost_amount),
+                "is_return": True,
+            }
+        )
+    settlements = (_short_settlements(date_from, date_to).values("short_sale__sales_line__invoice_id", "short_sale__sales_line__invoice__invoice_number",
+                                                                  "short_sale__item_id", "entry_date").annotate(total=Sum("amount")))
+    labels = {item.pk: item.search_label for item in Item.objects.filter(pk__in={row["short_sale__item_id"] for row in settlements})}
+    for row in settlements:  # HG-065: the cost settled when the stock of a sale made without it arrived
+        if not row["total"]:
+            continue
+        rows.append(
+            {
+                "invoice_id": row["short_sale__sales_line__invoice_id"],
+                "invoice_number": row["short_sale__sales_line__invoice__invoice_number"],
+                "invoice_date": row["entry_date"],
+                "item_id": row["short_sale__item_id"],
+                "item_label": labels.get(row["short_sale__item_id"], ""),
+                "quantity": Decimal("0"),
+                "sales_amount": Decimal("0.00"),
+                "cost_amount": row["total"],
+                "profit_amount": -row["total"],
+                "is_return": False,
+                "is_settlement": True,
+            }
+        )
+    return sorted(rows, key=lambda row: (row["invoice_date"], row["invoice_number"]), reverse=True)
+
+
+def _return_line_tax(line):
+    tax = getattr(line, "tax", None) if hasattr(line, "tax") else None
+    return tax.tax_amount if tax is not None else Decimal("0")
+
+
+def profit_totals(date_from=None, date_to=None):
+    """Sales, cost and profit for a window, aggregated in the database."""
+
+    totals = SalesLine.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "invoice__"), invoice__status="posted")
+    totals = _date_filter(totals, "invoice__invoice_date", date_from, date_to).aggregate(
+        profit=_zero_sum("line_profit_amount", None, _MONEY),
+        cost=_zero_sum("line_cost_amount", None, _MONEY),
+    )
+    totals["sales"] = totals["profit"] + totals["cost"]
+    returns = entity_scope.scope(SalesReturn.objects, entity_scope.SALES_RETURN).filter(status=SalesReturnStatus.POSTED)
+    returns = _date_filter(returns, "return_date", date_from, date_to)
+    from taxes.services import returns_tax
+
+    returned_tax = returns_tax(returns)  # HG-015: refunds include tax; revenue does not
+    returns = returns.aggregate(
+        sales=_zero_sum("total_amount", None, _MONEY),
+        cost=_zero_sum("cost_amount", None, _MONEY),
+    )
+    returns["sales"] -= returned_tax
+    totals["sales"] -= returns["sales"]
+    totals["cost"] -= returns["cost"]
+    totals["cost"] += _short_settlements(date_from, date_to).aggregate(total=_zero_sum("amount", None, _MONEY))["total"]
+    totals["profit"] = totals["sales"] - totals["cost"]
+    return totals
+
+
+def _short_settlements(date_from=None, date_to=None):
+    """HG-065: the cost added to sales made before their stock arrived, on the day it arrived (net of reversals)."""
+
+    from sales.models import ShortSaleEntry
+
+    entries = ShortSaleEntry.objects.filter(entity_scope.q(entity_scope.SALES_INVOICE, "short_sale__sales_line__invoice__"),
+                                            kind=ShortSaleEntry.Kind.SETTLEMENT, short_sale__sales_line__invoice__status="posted")
+    return _date_filter(entries, "entry_date", date_from, date_to)

@@ -1,0 +1,64 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b"><link rel="stylesheet" href="{% static 'hesba/css/restaurant_reservations.css' %}?v=r8-1">{% endblock %}
+{% block operation_content %}
+{# R8 (HG-118): the day's table bookings. Seen with the floor's right; changed by whoever can open orders; a deposit with the deposits' own rights. #}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:board' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ rw.back }}</a><h1>{{ rw.title }}</h1><p>{{ rw.intro }}</p></div></section>
+<nav class="rv-days" aria-label="{{ rw.day }}" data-reservation-days>
+<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ prev_day|date:'Y-m-d' }}" data-day-prev>{{ rw.prev }}</a>
+<strong data-day="{{ day|date:'Y-m-d' }}"><bdi dir="ltr">{{ day|date:'Y-m-d' }}</bdi></strong>
+<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ next_day|date:'Y-m-d' }}" data-day-next>{{ rw.next }}</a>
+{% if day != today %}<a class="op-secondary" href="?lang={{ lang }}" data-day-today>{{ rw.today }}</a>{% endif %}
+<form method="get"><input type="hidden" name="lang" value="{{ lang }}"><label class="sr-only" for="rv-day">{{ rw.day }}</label><input id="rv-day" type="date" name="day" value="{{ day|date:'Y-m-d' }}" dir="ltr"><button class="op-secondary" type="submit">{{ rw.show }}</button></form>
+</nav>
+{% if policy %}<p class="op-muted" data-deposit-policy>{{ policy }}</p>{% endif %}
+<ul class="rv-list" data-reservation-list>
+{% for card in cards %}{% with r=card.row %}<li class="rv-card rv-card--{{ r.status }}" data-reservation="{{ r.number }}" data-status="{{ r.status }}">
+<header><span class="rv-time"><bdi dir="ltr">{{ card.time }}</bdi></span><span class="rv-name" data-reservation-name>{{ r.name }}</span>{% if r.online %}<span class="rv-tag" data-online-request>{{ rw.online }}</span>{% endif %}<span class="rv-status rv-status--{{ r.status }}" data-status-label>{{ card.status }}</span></header>
+<p class="rv-facts"><span><strong>{{ r.party_size }}</strong> {{ rw.people }}</span><span>{{ rw.until }} <bdi dir="ltr">{{ card.until }}</bdi></span><span data-reservation-table>{{ rw.table }}: <strong>{% if r.table %}{{ r.table.name }} ({{ r.table.seats }} {{ rw.seats }}){% else %}—{% endif %}</strong></span>{% if r.phone %}<span><bdi dir="ltr">{{ r.phone }}</bdi></span>{% endif %}{% if r.customer %}<span>{{ r.customer.name }}</span>{% endif %}{% if grouped %}<span data-reservation-branch>{{ card.branch }}</span>{% endif %}<span class="op-muted"><bdi dir="ltr">{{ r.number }}</bdi></span></p>
+{% if r.notes %}<p class="op-muted">{{ r.notes }}</p>{% endif %}
+{% if card.over and card.live %}<p class="rv-warn" data-over-seats>{{ rw.party }} {{ r.party_size }} · {{ r.table.seats }} {{ rw.seats }}</p>{% endif %}
+{% if card.deposit %}<div class="rv-deposit" data-deposit="{{ card.deposit.status }}"><p>{{ rw.deposit }}: <strong><bdi dir="ltr">{{ card.deposit.payment.amount|money }}</bdi></strong> · {{ card.deposit_label }}</p>
+{% if card.can_forfeit or card.can_refund %}<div class="rv-tools">{% if card.can_forfeit %}<form method="post" data-deposit-forfeit>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="deposit_forfeit"><button class="op-secondary" type="submit">{{ rw.forfeit }}</button></form>{% endif %}
+{% if card.can_refund %}<form method="post" data-deposit-refund>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="deposit_refund"><label>{{ rw.refund_reason }}<input name="reason" required maxlength="200"></label><button class="op-secondary" type="submit">{{ rw.refund }}</button></form>{% endif %}</div>{% endif %}
+</div>{% endif %}
+{% if card.can_take_deposit %}<details class="rv-more" data-deposit-take><summary>{{ rw.take }}</summary><form method="post" class="rv-tools">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="deposit">
+<label>{{ rw.deposit_amount }}<input name="amount" inputmode="decimal" dir="ltr" autocomplete="off" required></label><label>{{ rw.cashbox }}<select name="cashbox">{% for box in card.cashboxes %}<option value="{{ box.pk }}"{% if box.is_default %} selected{% endif %}>{% if lang == "en" and box.name_en %}{{ box.name_en }}{% else %}{{ box.name_ar }}{% endif %}</option>{% endfor %}</select></label><button class="op-primary" type="submit">{{ rw.take }}</button></form></details>
+{% elif card.needs_customer %}<p class="op-muted" data-deposit-needs-customer>{{ rw.needs_customer }}</p>{% endif %}
+{% if card.can_act %}<div class="rv-tools" data-reservation-actions>
+{% if r.status == 'booked' %}<form method="post" data-reservation-confirm>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="confirm"><button class="op-secondary" type="submit">{{ rw.confirm }}</button></form>{% endif %}
+<form method="post" data-reservation-seat>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="seat">
+<label>{{ rw.seat_table }}<select name="table">{% if not r.table %}<option value="">{{ rw.no_table }}</option>{% endif %}{% for t in tables %}{% if t.entity_id == r.entity_id %}<option value="{{ t.pk }}"{% if t.pk == r.table_id %} selected{% endif %}>{{ t.label }}</option>{% endif %}{% endfor %}</select></label>
+<label class="rv-check"><input type="checkbox" name="override"> {{ rw.override }}</label><button class="op-primary" type="submit">{{ rw.seat }}</button></form>
+<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ day|date:'Y-m-d' }}&amp;edit={{ r.pk }}#rv-form" data-reservation-edit>{{ rw.edit }}</a>
+<details class="rv-more"><summary>{{ rw.cancel }} / {{ rw.no_show }}</summary><div class="rv-tools">
+<form method="post" data-confirm="{{ rw.cancel_confirm }}" data-reservation-cancel>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="cancel"><label>{{ rw.reason }}<input name="reason" maxlength="200"></label><button class="op-secondary" type="submit">{{ rw.cancel }}</button></form>
+<form method="post" data-confirm="{{ rw.no_show_confirm }}" data-reservation-no-show>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="pk" value="{{ r.pk }}"><input type="hidden" name="action" value="no_show"><button class="op-secondary" type="submit">{{ rw.no_show }}</button></form>
+</div></details>
+</div>{% elif card.can_order %}<div class="rv-tools"><a class="op-secondary" href="{% url 'restaurant:order' r.order_id %}?lang={{ lang }}" data-reservation-order>{{ rw.open_order }}</a></div>{% endif %}
+</li>{% endwith %}{% empty %}<li class="op-empty" data-no-reservations>{{ rw.none }}</li>{% endfor %}
+</ul>
+{% if can_edit %}<form class="op-form" method="post" id="rv-form" data-reservation-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="save">{% if editing %}<input type="hidden" name="pk" value="{{ editing.pk }}">{% endif %}
+<h2>{% if editing %}{{ rw.edit }} · <bdi dir="ltr">{{ editing.number }}</bdi>{% else %}{{ rw.new }}{% endif %}</h2>
+{% if error %}<div class="op-message op-message-error" role="alert" data-reservation-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+{% if branch_choices and not editing %}<div class="op-field"><label for="rv-entity">{{ rw.branch }}</label><select id="rv-entity" name="entity" required><option value="">{{ rw.choose_branch }}</option>{% for branch in branch_choices %}<option value="{{ branch.pk }}"{% if chosen_branch == branch.pk|stringformat:'s' %} selected{% endif %}>{{ branch.label }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="rv-name">{{ rw.name }}</label><input id="rv-name" name="name" value="{{ form.name|default:'' }}" required maxlength="120" autocomplete="off"></div>
+<div class="op-field"><label for="rv-phone">{{ rw.phone }}</label><input id="rv-phone" name="phone" type="tel" inputmode="tel" dir="ltr" value="{{ form.phone|default:'' }}" maxlength="30" autocomplete="off"></div>
+<div class="op-field"><label for="rv-party">{{ rw.party }}</label><input id="rv-party" name="party_size" inputmode="numeric" dir="ltr" value="{{ form.party_size|default:'' }}" required></div>
+<div class="op-field"><label for="rv-fday">{{ rw.day }}</label><input id="rv-fday" name="day" type="date" dir="ltr" value="{{ form.day|default:'' }}" required></div>
+<div class="op-field"><label for="rv-time">{{ rw.time }}</label><input id="rv-time" name="time" type="time" dir="ltr" value="{{ form.time|default:'' }}" required></div>
+<div class="op-field"><label for="rv-duration">{{ rw.duration }}</label><input id="rv-duration" name="duration_minutes" inputmode="numeric" dir="ltr" value="{{ form.duration_minutes|default:'' }}"></div>
+<div class="op-field"><label for="rv-table">{{ rw.table }}</label><select id="rv-table" name="table"><option value="">{{ rw.no_table }}</option>{% for t in tables %}<option value="{{ t.pk }}"{% if form.table|stringformat:'s' == t.pk|stringformat:'s' %} selected{% endif %}>{{ t.label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="rv-customer">{{ rw.customer }}</label><select id="rv-customer" name="customer"><option value="">{{ rw.no_customer }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if form.customer|stringformat:'s' == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="rv-notes">{{ rw.notes }}</label><input id="rv-notes" name="notes" value="{{ form.notes|default:'' }}" maxlength="255"></div>
+{% if seats_warning %}<label class="op-field rv-check" data-seats-override><input type="checkbox" name="override"> {{ rw.override }}</label>{% endif %}
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ rw.save }}</button>{% if editing %}<a class="op-secondary" href="?lang={{ lang }}&amp;day={{ day|date:'Y-m-d' }}">{{ rw.new }}</a>{% endif %}</div></form>{% endif %}
+{% if page_rows %}<section class="rv-page" data-booking-page-setup aria-labelledby="rv-page-title"><h2 id="rv-page-title">{{ rw.page_title }}</h2><p class="op-muted">{{ rw.page_intro }}</p>
+{% for p in page_rows %}<div class="rv-page-row" data-booking-page="{% if p.on %}on{% else %}off{% endif %}">{% if grouped %}<strong>{{ p.label }}</strong>{% endif %}<span class="rv-status{% if not p.on %} rv-status--cancelled{% endif %}">{% if p.on %}{{ rw.page_on }}{% else %}{{ rw.page_off }}{% endif %}</span>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="entity" value="{{ p.entity.pk }}"><input type="hidden" name="action" value="{% if p.on %}page_off{% else %}page_on{% endif %}"><button class="op-secondary" type="submit" data-booking-page-toggle>{% if p.on %}{{ rw.turn_off }}{% else %}{{ rw.turn_on }}{% endif %}</button></form>
+{% if p.page %}<form method="post" data-confirm="{{ rw.rotate_confirm }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day_view" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="entity" value="{{ p.entity.pk }}"><input type="hidden" name="action" value="rotate"><button class="op-secondary" type="submit" data-booking-page-rotate>{{ rw.rotate }}</button></form>{% endif %}</div>
+{% if p.on %}{% if p.url %}<p class="rv-url">{{ rw.page_link }}: <bdi dir="ltr" data-booking-page-url>{{ p.url }}</bdi></p>{% else %}<p class="rv-url">{{ rw.path }}: <bdi dir="ltr" data-booking-page-url>{{ p.path }}</bdi></p><p class="op-muted">{{ rw.no_base }}</p>{% endif %}{% endif %}
+{% endfor %}</section>{% endif %}
+{% endblock %}

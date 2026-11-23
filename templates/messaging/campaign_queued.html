@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/campaigns.css' %}?v=s8-1">{% endblock %}
+{% block operation_content %}
+<div class="cp cp-grid" data-campaign-queued="{{ campaign.pk }}">
+<section class="cp-card cq-head">
+<span class="cq-ok" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+<h1>{{ title }}</h1><span class="cp-status cp-status--{{ campaign.status }}">{{ status_label }}</span>
+<p class="cp-sub">{{ words.queued_note }}</p>
+<div class="cq-btns"><a class="op-primary" href="{{ outbox_url }}" data-outbox-link>{{ words.outbox }}</a><a class="op-secondary" href="{{ new_url }}">{{ words.new }}</a></div>
+<div class="cp-fine"><span>{{ words.fine2 }}</span></div>
+</section>
+<div class="cp-col">
+<section class="cp-card" aria-labelledby="cq-h1"><h2 id="cq-h1">{{ words.schedule }}</h2>
+<ul class="cq-sched" data-schedule>
+{% for row in schedule %}<li data-day="{{ row.iso }}"><span class="cq-day"><bdi>{{ row.iso|slice:"8:" }}</bdi></span><span><b>{{ row.label }}</b><small>{{ words.sent }} <bdi>{{ row.sent }}</bdi> · {{ words.waiting }} <bdi>{{ row.waiting }}</bdi></small></span><span class="cq-n"><bdi>{{ row.n }}</bdi></span></li>{% endfor %}
+</ul></section>
+<section class="cp-card" aria-labelledby="cq-h2"><h2 id="cq-h2">{{ words.details }}</h2>
+<dl class="cq-dl">{% for key, value in details %}<div><dt>{{ key }}</dt><dd dir="auto">{{ value }}</dd></div>{% endfor %}</dl></section>
+</div>
+</div>
+<p><a href="{{ list_url }}">{{ words.campaigns }}</a></p>
+{% endblock %}

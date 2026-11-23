@@ -1,0 +1,80 @@
+"""AI demo (HG-078 deviation 7): the label every mock answer carries where a person sees it.
+
+While this server answers with the in-process mock (``ai.providers.is_mock``: development, or a showcase install with
+``DEMO_MODE``), the voice summary card (A1), the «اسأل حسبة» page (A2) and the invoice photo pages (A3) say plainly that
+the answer is a sample and that nothing was sent to an AI service. With a live provider, or with AI off, there is no
+label: ``notice`` returns None.
+
+The label says what is sample and what is real on each surface: A1's figures and text come from the reports (only the
+audio is a silent sample), A2's figure comes from the reports (only the routing is by keywords), and A3's reading is a
+fixed sample invoice whatever the photo (``ai.providers.mock.SAMPLE_READING``, a medicine distributor's
+``PHARMACY_SAMPLE_READING`` on a pharmacy).
+"""
+
+from . import providers
+
+#: The sample invoice photo a tester can upload on the demo (the mock reads the same sample whatever the photo); a
+#: pharmacy's is the medicine distributor's invoice, printed with what ``PHARMACY_SAMPLE_READING`` says.
+SAMPLE_INVOICE_IMAGE = "hesba/img/demo/sample-invoice.jpg"
+PHARMACY_SAMPLE_INVOICE_IMAGE = "hesba/img/demo/sample-invoice-pharmacy.jpg"
+
+
+def sample_invoice_image():
+    """The static path of the sample photo to offer: the pharmacy's on a pharmacy, else the car-parts one."""
+
+    from settings_core.demo_ai import pharmacy
+
+    return PHARMACY_SAMPLE_INVOICE_IMAGE if pharmacy() else SAMPLE_INVOICE_IMAGE
+
+WORDS = {
+    "ar": {
+        "title": "رد تجريبي — مفيش اتصال حقيقي",
+        "voice_summary": "الصوت عيّنة ساكتة، مفيش كلام بيتسمع. النص والأرقام من تقاريرك فعلاً.",
+        "ask": "اختيار التقرير هنا عيّنة، بيتم بالكلمات من غير موديل ذكاء اصطناعي. الرقم من تقاريرك فعلاً.",
+        "invoice_photo": "القراية دي فاتورة عيّنة ثابتة، مهما كانت الصورة اللي رفعتها.",
+        "sample_image": "نزّل صورة فاتورة عيّنة تجرّب بيها",
+        # The footnote under each page while the mock answers: what the live footnote says, minus what the label denies.
+        "voice_summary_note": "الأرقام من تقارير حسبة نفسها.",
+        "ask_note": "الأرقام نفسها من تقارير حسبة.",
+        "invoice_photo_note": "الأرقام بتتحسب من السطور في حسبة، والمسودة مش بتتحرك في المخزن ولا الخزنة لحد ما ترحّلها.",
+    },
+    "en": {
+        "title": "Sample reply — no real AI call",
+        "voice_summary": "The audio is a silent sample; nothing is spoken. The text and figures really come from your reports.",
+        "ask": "The report choice is a sample: picked by keywords, with no AI model. The figure really comes from your reports.",
+        "invoice_photo": "This reading is a fixed sample invoice, whatever photo you upload.",
+        "sample_image": "Download a sample invoice photo to try",
+        "voice_summary_note": "The figures come from Hesba's own reports.",
+        "ask_note": "The figures come from Hesba's own reports.",
+        "invoice_photo_note": "The figures are computed from the lines in Hesba, and the draft moves no stock or cash until you post it.",
+    },
+}
+
+FEATURES = ("voice_summary", "ask", "invoice_photo")
+
+
+def footnote_words(words, feature, lang="ar"):
+    """``words`` for a page, with its footnote changed to the sample's while the mock answers (the same test as the label, so
+    the label and the footnote never disagree); with a live provider, or with AI off, ``words`` itself."""
+
+    if feature not in FEATURES:
+        raise ValueError(f"Unknown AI feature {feature!r}.")
+    if not providers.is_mock():
+        return words
+    return {**words, "note": WORDS["en" if lang == "en" else "ar"][f"{feature}_note"]}
+
+
+def notice(feature, lang="ar"):
+    """``{"title", "detail"}`` for ``feature`` while this server answers with the mock, else None."""
+
+    if feature not in FEATURES:
+        raise ValueError(f"Unknown AI feature {feature!r}.")
+    if not providers.is_mock():
+        return None
+    words = WORDS["en" if lang == "en" else "ar"]
+    result = {"title": words["title"], "detail": words[feature]}
+    if feature == "invoice_photo":
+        from django.templatetags.static import static
+
+        result.update(image_url=static(sample_invoice_image()), image_label=words["sample_image"])
+    return result

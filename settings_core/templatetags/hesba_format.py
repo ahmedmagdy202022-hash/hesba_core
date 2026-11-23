@@ -1,0 +1,348 @@
+"""Display-only formatting for money, quantity and currency.
+
+Two things outside this module currently decide how a bare ``{{ value }}``
+looks, and neither of them is a display decision. The first is the active
+locale: LANGUAGE_CODE is "ar", and Django's Arabic locale renders a decimal
+comma. The second is the exponent the database happened to return: the SQLite
+backend quantizes plain columns to their field scale but leaves aggregate
+expressions alone, so one report row can carry Decimal("8000.00") next to
+Decimal("5260") and render "8000,00" beside "5260".
+
+These filters remove both variables. Formatting is written out in explicit
+Python rather than delegated to number_format, floatformat or humanize, so the
+output cannot follow LANGUAGE_CODE; and every value is quantized on the way in,
+so the incoming exponent cannot reach the output. The same input renders the
+same way on SQLite and PostgreSQL, under any locale.
+
+Display only. Rounding is ROUND_HALF_UP, matching config.money, so a rendered
+figure can never disagree with the system's own rounding policy — but the
+result is a string and must never re-enter a calculation path.
+"""
+
+import re
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+from django import template
+from django.db import Error as DatabaseError
+from django.utils.html import conditional_escape
+from django.utils.safestring import mark_safe, SafeData
+
+from config.money import COST_QUANT, MONEY_QUANT
+from settings_core.models import ClientProfile
+
+
+register = template.Library()
+
+
+# A value we cannot show is shown as absent. Rendering it as "0.00" would be a
+# claim about an amount that nobody made.
+MISSING = "—"  # em dash
+
+# Quantity carries at most three decimals anywhere in the schema
+# (inventory.StockMovement.quantity), so three is also the display cap.
+QTY_QUANT = Decimal("0.001")
+
+
+def _to_decimal(value):
+    """Coerce to a finite Decimal, or None when the value cannot be shown.
+
+    Returning None rather than raising is deliberate: a filter that raises
+    takes down a whole page over one unexpected row.
+    """
+
+    # bool is a subclass of int, and "True" is not an amount.
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, Decimal):
+        number = value
+    elif isinstance(value, int):
+        number = Decimal(value)
+    elif isinstance(value, float):
+        # Via str(): Decimal(0.1) carries the binary artefact, Decimal("0.1")
+        # does not.
+        number = Decimal(str(value))
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            number = Decimal(text)
+        except InvalidOperation:
+            return None
+    else:
+        return None
+
+    # "nan" and "inf" parse as Decimals but cannot be quantized or grouped.
+    return number if number.is_finite() else None
+
+
+def _quantized(value, quantum):
+    """Coerce and round to a fixed scale, or None when that is not possible."""
+
+    number = _to_decimal(value)
+    if number is None:
+        return None
+    try:
+        number = number.quantize(quantum, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        # A magnitude beyond the decimal context's precision. Nothing in the
+        # schema reaches this (max_digits tops out at 16), but a filter must
+        # not raise.
+        return None
+
+    # A tiny negative that rounds away leaves Decimal("-0.00"), which formats
+    # as "-0.00" and reads as a real negative amount. Only the sign is dropped,
+    # and only once the value is genuinely zero — Decimal("-0.00") == 0 is
+    # True, so anything that survives this check is a number worth a minus.
+    return abs(number) if number == 0 else number
+
+
+def _split(text):
+    """Split a formatted fixed-point string into whole and fractional halves.
+
+    Stripping trailing zeros from the whole string would turn "12,500.000" into
+    "12,5", so the fractional part is always isolated before it is trimmed.
+    """
+
+    whole, _, fraction = text.partition(".")
+    return whole, fraction
+
+
+@register.filter
+def money(value):
+    """Money with comma thousands, period decimal, always two decimals.
+
+    Decimal("5260"), Decimal("5260.00") and Decimal("5260.0000") all render as
+    "5,260.00": the incoming exponent has no effect on the output.
+    """
+
+    number = _quantized(value, MONEY_QUANT)
+    if number is None:
+        return MISSING
+    return f"{number:,.2f}"
+
+
+@register.filter
+def qty(value):
+    """Quantity with comma thousands, period decimal, no trailing zeros.
+
+    A stored Decimal("8.000") is eight units, and under the Arabic locale a
+    bare render shows it as "8,000" — indistinguishable from eight thousand.
+    This renders it as "8".
+    """
+
+    number = _quantized(value, QTY_QUANT)
+    if number is None:
+        return MISSING
+    whole, fraction = _split(f"{number:,.3f}")
+    fraction = fraction.rstrip("0")
+    return f"{whole}.{fraction}" if fraction else whole
+
+
+@register.filter
+def unit_cost(value):
+    """Unit cost at up to four decimals, never fewer than two.
+
+    Costs are stored at four decimals, so Decimal("70.0000") renders as "70.00"
+    rather than "70,0000", while genuine precision survives: "70.125".
+    """
+
+    number = _quantized(value, COST_QUANT)
+    if number is None:
+        return MISSING
+    whole, fraction = _split(f"{number:,.4f}")
+    fraction = fraction.rstrip("0").ljust(2, "0")
+    return f"{whole}.{fraction}"
+
+
+#: Item.unit's default as stored ("unit") and as either language writes it; all mean one piece.
+DEFAULT_UNITS = ("", "unit", "piece", "قطعة")
+
+
+@register.filter
+def unit_label(value, lang="ar"):
+    """An item's unit as the reader says it (UI-TRACK F01).
+
+    Item.unit defaults to "unit" in the database. That default (or "piece" /
+    "قطعة", which forms store back as "unit") reads "قطعة" on an Arabic screen
+    and "piece" on an English one. Any other unit is shown exactly as typed.
+    """
+
+    text = (value or "").strip()
+    if text.casefold() in DEFAULT_UNITS:  # Codex #233: one stored default, shown in the reader's language
+        return "piece" if lang == "en" else "قطعة"
+    return text
+
+
+@register.filter
+def one_language(value, lang="ar"):
+    """The reader's half of a stored "عربي / English" name (UI-TRACK F04).
+
+    Periods are named in both languages at once ("أكتوبر 2026 / October 2026");
+    each screen shows only the half in its own language.
+    """
+
+    text = str(value or "")
+    if " / " not in text:
+        return text
+    arabic, english = text.split(" / ", 1)
+    return english.strip() if lang == "en" else arabic.strip()
+
+
+@register.simple_tag
+def currency_code():
+    """This installation's currency code, or "" before bootstrap."""
+
+    try:
+        profile = ClientProfile.get_active()
+    except DatabaseError:
+        return ""
+    return profile.default_currency if profile is not None else ""
+
+
+#: AN2 (F33): the field that holds each record's code, for the small code shown after its name.
+_CODE_FIELDS = ("item_code", "customer_code", "supplier_code", "location_code", "cashbox_code", "category_code", "code")
+
+
+def name_and_code(obj, lang="ar"):
+    """(the name a screen shows, the record's code) for an item, a party, a place, a cashbox or a category."""
+
+    if obj is None:
+        return "", ""
+    code = next((getattr(obj, field) for field in _CODE_FIELDS if getattr(obj, field, "")), "")
+    if hasattr(obj, "display_name"):
+        name = obj.display_name
+    elif hasattr(obj, "name_ar"):
+        name = (getattr(obj, "name_en", "") if lang == "en" else "") or obj.name_ar
+    else:
+        name = getattr(obj, "name", "") or str(obj)
+    return name or code, code
+
+
+@register.filter
+def person(user):
+    """TRACK-ACTS W13: a user by the name the shop gave them («المالك»), not the login name («owner»)."""
+
+    if not user:
+        return ""
+    from reports.navigation import display_name
+
+    return display_name(user)
+
+
+@register.filter
+def named(obj, lang="ar"):
+    """AN2 (F33): the name, with the code small beside it (``{{ item|named:lang }}``)."""
+
+    from django.utils.html import conditional_escape, format_html
+
+    name, code = name_and_code(obj, lang)
+    if not code or code == name:
+        return conditional_escape(name)
+    return format_html('{} <small class="hs-code"><bdi>{}</bdi></small>', name, code)
+
+
+@register.filter
+def choice_text(obj, lang="ar"):
+    """AN2: a record inside a dropdown option (plain text): name first, then the code to search by."""
+
+    name, code = name_and_code(obj, lang)
+    return f"{name} · {code}" if code and code != name else name
+
+
+@register.simple_tag
+def currency_unit(lang="ar"):
+    """UX Wave 1: the unit written after an amount on this screen ("ج.م" on an Arabic page, "EGP" in English), or ""."""
+
+    from settings_core.currency import currency_label
+
+    return currency_label(currency_code(), lang)
+
+
+@register.filter
+def money_abs(value):
+    """UX Wave 2: an amount without its sign, for a label that already says which way it goes («ليه عندك 50.00»)."""
+
+    try:
+        return money(abs(Decimal(str(value))))
+    except (ArithmeticError, ValueError, TypeError):
+        return money(value)
+
+
+@register.filter
+def percent(value):
+    """UX Wave 1: a percentage in the same decimal style as money: "31.8%" (period decimal, never the locale's comma)."""
+
+    number = _quantized(value, Decimal("0.1"))
+    if number is None:
+        return MISSING
+    return f"{number:,.1f}%"
+
+
+@register.filter
+def day_text(value, lang=None):
+    """UX Wave 1: one date format for screens: "9 نوفمبر 2026" in Arabic, "9 November 2026" in English.
+
+    The month is named in the page's language, not LANGUAGE_CODE's (there is no LocaleMiddleware). UX Wave 3: without
+    an explicit ``lang`` it follows the active language, which config.middleware.PageLanguageMiddleware sets on ?lang=en.
+    """
+
+    if not value or not hasattr(value, "day"):  # a date or datetime only; anything else reads "—", never an error
+        return MISSING
+    from django.utils import translation
+    from django.utils.formats import date_format
+
+    if lang is None:
+        lang = "en" if (translation.get_language() or "").startswith("en") else "ar"
+    with translation.override("en" if lang == "en" else "ar"):
+        return date_format(value, "j F Y")
+
+
+@register.filter
+def month_text(value, lang=None):
+    """A month in words, the way day_text writes a day: "نوفمبر 2026" in Arabic, "November 2026" in English."""
+
+    if not value or not hasattr(value, "month"):
+        return MISSING
+    from django.utils import translation
+    from django.utils.formats import date_format
+
+    if lang is None:
+        lang = "en" if (translation.get_language() or "").startswith("en") else "ar"
+    with translation.override("en" if lang == "en" else "ar"):
+        return date_format(value, "F Y")
+
+
+# UX Wave 3: numbers, codes and ranges keep their left-to-right order inside an Arabic line. A plain <bdi> is not enough
+# for "31–60": digits are not a strong direction, so the range still reads «60–31» in RTL; dir="ltr" pins it.
+_NUMBER_RUN = re.compile(r"[+\-−]?\d(?:[\d\-–/.:,]|\s(?=\+?\d))*(?<![.,:])")
+
+
+@register.filter(needs_autoescape=True)
+def ltr(value, autoescape=True):
+    """The whole value as one left-to-right run: an invoice number, a code, a barcode, a phone number."""
+
+    if value is None or value == "":
+        return ""
+    text = conditional_escape(value) if autoescape else str(value)
+    return mark_safe(f'<bdi dir="ltr">{text}</bdi>')
+
+
+@register.filter(needs_autoescape=True)
+def ltr_numbers(value, autoescape=True):
+    """Only the number runs of a label pinned left-to-right, the words around them untouched: «0–30 يوم» keeps «يوم»
+    outside, and «31–60» stays «31–60» in an Arabic header."""
+
+    if value is None:
+        return ""
+    if isinstance(value, SafeData):
+        return value  # already markup: leave it as its author wrote it rather than escape it twice
+    escape = conditional_escape if autoescape else str
+    text, out, last = str(value), [], 0
+    for match in _NUMBER_RUN.finditer(text):
+        out.append(escape(text[last:match.start()]))
+        out.append(f'<bdi dir="ltr">{escape(match.group())}</bdi>')
+        last = match.end()
+    out.append(escape(text[last:]))
+    return mark_safe("".join(str(part) for part in out))

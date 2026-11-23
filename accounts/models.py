@@ -34,3 +34,29 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return self.display_name or self.user.get_username()
+
+
+class LoginFailure(models.Model):
+    """SEC-001: one failed sign-in, kept to slow down password guessing."""
+
+    username = models.CharField(max_length=150, db_index=True)
+    ip_address = models.CharField(max_length=64, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class TwoFactor(models.Model):
+    """SEC-002: a confirmed authenticator-app secret for one user (TOTP, RFC 6238)."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="two_factor")
+    secret = models.CharField(max_length=64)
+    # The last 30-second step accepted, so one code cannot be used twice.
+    last_step = models.BigIntegerField(default=0)
+    # SHA-256 of each unused recovery code; a used code is removed.
+    recovery_hashes = models.JSONField(default=list, blank=True)
+    enabled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Two-factor sign-in"

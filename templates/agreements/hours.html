@@ -1,0 +1,33 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+{% if can_log %}<form class="op-form" method="post" data-hours-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="log"><h2>{{ words.log }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="h-customer">{{ words.customer }}</label><select id="h-customer" name="customer" required><option value="">{{ words.choose }}</option>{% for c in customers %}<option value="{{ c.pk }}"{% if post.customer == c.pk|stringformat:'s' %} selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="h-service">{{ words.service }}</label><select id="h-service" name="service" required><option value="">{{ words.choose }}</option>{% for s in services_list %}<option value="{{ s.pk }}"{% if post.service == s.pk|stringformat:'s' %} selected{% endif %}>{{ s.item_name }} — {{ s.default_sale_price|money }}</option>{% endfor %}</select></div>
+{% if can_manage %}<div class="op-field"><label for="h-employee">{{ words.employee }}</label><select id="h-employee" name="employee"><option value="">{% if own %}{{ words.me }}{% else %}—{% endif %}</option>{% for e in employees %}<option value="{{ e.pk }}"{% if post.employee == e.pk|stringformat:'s' %} selected{% endif %}>{{ e.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="h-day">{{ words.worked_on }}</label><input id="h-day" type="date" name="worked_on" value="{% if post %}{{ post.worked_on }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}"></div>
+<div class="op-field"><label for="h-hours">{{ words.hours }}</label><input id="h-hours" name="hours" inputmode="decimal" required value="{{ post.hours|default:'' }}"></div>
+<div class="op-field"><label for="h-rate">{{ words.rate }}</label><input id="h-rate" name="rate" inputmode="decimal" value="{{ post.rate|default:'' }}"></div>
+<div class="op-field"><label for="h-desc">{{ words.description }}</label><input id="h-desc" name="description" maxlength="200" value="{{ post.description|default:'' }}"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>{% endif %}
+<h2>{{ words.unbilled }}</h2>
+{% for group in groups %}<section class="op-card" data-hours-customer="{{ group.customer.pk }}"><div class="op-title-row"><div><h3>{{ group.customer.name }}</h3><p><span data-hours-total>{{ group.hours|qty }}</span> {{ words.hours }} · {{ group.amount|money }}</p></div>
+{% if can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="bill"><input type="hidden" name="customer" value="{{ group.customer.pk }}"><button class="op-primary" type="submit" data-bill-hours="{{ group.customer.pk }}">{{ words.bill }}</button></form>{% endif %}</div>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.worked_on }}</th><th>{{ words.employee }}</th><th>{{ words.description }}</th><th>{{ words.hours }}</th><th>{{ words.rate_short }}</th><th>{{ words.amount }}</th><th></th></tr></thead><tbody>
+{% for entry in group.entries %}<tr><td><bdi>{{ entry.worked_on|date:"Y-m-d" }}</bdi></td><td>{{ entry.employee.name|default:'—' }}</td><td class="op-cell-text">{{ entry.description|default:entry.service.item_name }}</td><td>{{ entry.hours|qty }}</td><td>{{ entry.rate|money }}</td><td>{{ entry.amount|money }}</td>
+<td>{% if can_manage or own and entry.employee_id == own.pk %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="entry" value="{{ entry.pk }}"><button class="op-secondary" type="submit" data-remove-entry="{{ entry.pk }}">{{ words.remove }}</button></form>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% empty %}<p class="op-empty" data-hours-empty>{{ words.none }}</p>{% endfor %}
+{% if sees_all %}<h2>{{ words.team }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-hours-team><thead><tr><th>{{ words.employee }}</th><th>{{ words.hours }}</th><th>{{ words.billed_pct }}</th><th>{{ words.amount }}</th></tr></thead><tbody>
+{% for row in team %}<tr><td>{{ row.employee.name|default:'—' }}</td><td>{{ row.hours|qty }}</td><td>{{ row.billed_pct }}%</td><td>{{ row.amount|money }}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_team }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if recent %}<h2>{{ words.recent }}</h2><div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ words.worked_on }}</th><th>{{ words.customer }}</th><th>{{ words.hours }}</th><th>{{ words.invoice }}</th></tr></thead><tbody>
+{% for entry in recent %}<tr><td><bdi>{{ entry.worked_on|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ entry.customer.name }}</td><td>{{ entry.hours|qty }}</td><td><a href="{% url 'sales:detail' entry.invoice.pk %}?lang={{ lang }}"><bdi>{{ entry.invoice.invoice_number }}</bdi></a></td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+{% endif %}
+{% if not can_manage %}<p class="op-message">{{ words.view_only }}</p>{% endif %}
+{% endblock %}

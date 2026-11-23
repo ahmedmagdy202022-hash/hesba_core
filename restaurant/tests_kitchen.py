@@ -1,0 +1,354 @@
+"""RESTO-004 (HG-044 C1): a dish made in the kitchen takes its ingredients out of stock, through the manufacturing engine."""
+
+from decimal import Decimal as D
+
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.urls import reverse
+
+from hesba_testing.factories import make_item, stock_in
+from inventory.models import StockMovement
+from inventory.services import get_item_location_stock_quantity, recalculate_item_average_cost
+from manufacturing.models import ProductionRun, Recipe
+from master_data.models import Item
+from permissions.models import RoleCode
+from sales.models import SalesLine
+
+from . import kitchen
+from . import services as floor
+from .insights import save_ingredients
+from .models import DishIngredient, OrderStatus
+from .tests import RestaurantSetup, person
+
+
+def ledger_ok(test):
+    from ledger.reports import reconciliation
+
+    result = reconciliation()
+    test.assertTrue(result["balanced"])
+    test.assertTrue(result["ok"], [row for row in result["rows"] if row["difference"]])
+
+
+class KitchenSetup(RestaurantSetup):
+    def setUp(self):
+        super().setUp()
+        self.rice = make_item(item_code="R-RICE", item_name="أرز", unit="كجم", is_stock_tracked=True)
+        self.lentil = make_item(item_code="R-LENT", item_name="عدس", unit="كجم", is_stock_tracked=True)
+        stock_in(self.rice, self.location, 20, "30.00")
+        stock_in(self.lentil, self.location, 10, "50.00")
+        for item in (self.rice, self.lentil):
+            recalculate_item_average_cost(item)
+        save_ingredients(self.koshary, [(self.rice, "0.200"), (self.lentil, "0.100")], self.owner)  # 11.00 a plate
+
+    def stock(self, item):
+        return get_item_location_stock_quantity(item, self.location)
+
+    def order(self, item, quantity=1):
+        order = floor.open_order(self.owner, table=self.t1, guests=2)
+        floor.add_item(order, item, self.owner, quantity=quantity)
+        return order
+
+    def pay(self, order, user=None):
+        invoice, _ = floor.pay(order, user or self.owner, cashbox=self.cashbox, tendered=D("100000"))
+        order.refresh_from_db()
+        return invoice
+
+
+class SwitchTests(KitchenSetup):
+    def test_a_dish_never_sold_becomes_a_stock_item_with_its_recipe(self):
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        self.assertEqual(dish.pk, self.koshary.pk)
+        dish.refresh_from_db()
+        self.assertTrue(dish.is_stock_tracked)
+        recipe = Recipe.objects.get(code=f"DISH-{dish.pk}")
+        self.assertEqual((recipe.product_id, recipe.output_quantity), (dish.pk, D("1")))
+        self.assertEqual({(line.component_id, line.quantity) for line in recipe.lines.all()}, {(self.rice.pk, D("0.200")), (self.lentil.pk, D("0.100"))})
+        self.assertTrue(kitchen.is_kitchen_made(dish))
+        with self.assertRaises(ValidationError):
+            kitchen.make_in_kitchen(dish, self.owner)  # once is enough
+
+    def test_a_dish_without_ingredients_cannot_be_switched(self):
+        with self.assertRaises(ValidationError):
+            kitchen.make_in_kitchen(self.tea, self.owner)
+        self.tea.refresh_from_db()
+        self.assertFalse(self.tea.is_stock_tracked)
+
+    def test_a_dish_sold_before_gets_a_stock_copy_and_its_old_invoices_never_move_stock(self):
+        from sales.services import create_sales_return
+
+        old_invoice = self.pay(self.order(self.koshary, 2))  # sold as a service
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        self.koshary.refresh_from_db()
+        self.assertNotEqual(dish.pk, self.koshary.pk)
+        self.assertFalse(self.koshary.is_stock_tracked)  # the old one never changes kind
+        self.assertFalse(self.koshary.active)
+        self.assertTrue(dish.is_stock_tracked and dish.active)
+        self.assertEqual((dish.item_name, dish.default_sale_price), (self.koshary.item_name, self.koshary.default_sale_price))
+        self.assertEqual(DishIngredient.objects.filter(dish=dish).count(), 2)
+        self.assertFalse(DishIngredient.objects.filter(dish=self.koshary).exists())
+        line = old_invoice.lines.get(item=self.koshary)
+        create_sales_return("SR-OLD-1", old_invoice.invoice_date, old_invoice.pk, [{"source_line": line, "quantity": D("1")}], "رجوع", self.owner)
+        self.assertFalse(StockMovement.objects.filter(item=self.koshary).exists())  # no stock that never went out comes back
+        ledger_ok(self)
+
+    def test_only_who_manages_items_switches_or_prepares(self):
+        cashier = person(RoleCode.CASHIER, "kitchen_cashier")
+        with self.assertRaises(PermissionDenied):
+            kitchen.make_in_kitchen(self.koshary, cashier)
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        with self.assertRaises(PermissionDenied):
+            kitchen.prepare(dish, "3", cashier)
+
+
+class SellingTests(KitchenSetup):
+    def setUp(self):
+        super().setUp()
+        self.dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+
+    def test_paying_makes_the_plates_from_their_ingredients_and_costs_them(self):
+        invoice = self.pay(self.order(self.dish, 3))
+        self.assertEqual(invoice.status, "posted")
+        self.assertEqual(self.stock(self.rice), D("19.400"))  # 20 − 3 × 0.2
+        self.assertEqual(self.stock(self.lentil), D("9.700"))  # 10 − 3 × 0.1
+        self.assertEqual(self.stock(self.dish), D("0"))  # made and sold
+        run = ProductionRun.objects.get(recipe__product=self.dish)
+        self.assertEqual((run.output_quantity, run.total_cost), (D("3.000"), D("33.00")))
+        line = SalesLine.objects.get(invoice=invoice, item=self.dish)
+        self.assertEqual(line.line_cost_amount, D("33.00"))  # the plates' real cost is the cost of sales
+        ledger_ok(self)
+
+    def test_plates_prepared_ahead_are_sold_first(self):
+        kitchen.prepare(self.dish, "5", self.owner)
+        self.assertEqual(self.stock(self.dish), D("5.000"))
+        self.pay(self.order(self.dish, 2))
+        self.assertEqual(ProductionRun.objects.filter(recipe__product=self.dish).count(), 1)  # nothing more to make
+        self.assertEqual(self.stock(self.dish), D("3.000"))
+        self.pay(self.order(self.dish, 4))  # 3 ready, 1 made on the spot
+        run = ProductionRun.objects.filter(recipe__product=self.dish).latest("pk")
+        self.assertEqual(run.output_quantity, D("1.000"))
+        self.assertEqual(self.stock(self.dish), D("0"))
+        ledger_ok(self)
+
+    def test_a_short_ingredient_stops_the_payment_and_says_which(self):
+        order = self.order(self.dish, 200)  # 40 kg of rice needed, 20 there
+        with self.assertRaises(ValidationError) as caught:
+            self.pay(order)
+        message = " ".join(caught.exception.messages)
+        self.assertIn(self.dish.item_name, message)
+        self.assertIn("أرز", message)
+        order.refresh_from_db()
+        self.assertEqual(order.status, OrderStatus.OPEN)  # nothing paid, nothing moved
+        self.assertFalse(ProductionRun.objects.exists())
+        self.assertEqual(self.stock(self.rice), D("20"))
+
+    def test_a_cashier_without_plate_making_sells_what_the_kitchen_prepared_and_is_told_when_it_is_not_ready(self):
+        from permissions.models import RolePermission
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "kitchen_till")
+        # HG-048: the cashier role holds restaurant.prepare_at_payment; an owner may take it away.
+        RolePermission.objects.filter(role__code=RoleCode.CASHIER, permission__code=kitchen.PREPARE_AT_PAYMENT).delete()
+        self.assertFalse(user_has_permission(cashier, "inventory.adjust_stock"))
+        order = self.order(self.dish, 2)
+        with self.assertRaisesMessage(ValidationError, "مش جاهز"):
+            self.pay(order, cashier)
+        self.assertFalse(ProductionRun.objects.exists())
+        kitchen.prepare(self.dish, "2", self.owner)  # the kitchen's batch
+        invoice = self.pay(order, cashier)
+        self.assertEqual(invoice.status, "posted")
+        self.assertEqual(self.stock(self.dish), D("0"))
+        self.assertEqual(self.stock(self.rice), D("19.600"))
+        ledger_ok(self)
+
+    def test_a_cashier_with_plate_making_has_the_missing_plates_made_at_payment(self):
+        """HG-048: restaurant.prepare_at_payment stands in for inventory.adjust_stock in this flow only."""
+
+        from inventory.services import adjust_stock
+        from inventory.models import StockAdjustmentDirection
+        from permissions.services import user_has_permission
+
+        cashier = person(RoleCode.CASHIER, "kitchen_till2")
+        self.assertTrue(user_has_permission(cashier, kitchen.PREPARE_AT_PAYMENT))
+        self.assertFalse(user_has_permission(cashier, "inventory.adjust_stock"))
+        invoice = self.pay(self.order(self.dish, 3), cashier)
+        self.assertEqual(invoice.status, "posted")
+        run = ProductionRun.objects.get(recipe__product=self.dish)
+        self.assertEqual((run.output_quantity, run.total_cost, run.created_by), (D("3.000"), D("33.00"), cashier))
+        self.assertEqual(self.stock(self.rice), D("19.400"))
+        self.assertEqual(SalesLine.objects.get(invoice=invoice, item=self.dish).line_cost_amount, D("33.00"))
+        ledger_ok(self)
+        # It opens nothing else: an ordinary adjustment, or making the day's batch, still needs inventory.adjust_stock.
+        with self.assertRaises(PermissionDenied):
+            adjust_stock("ADJ-X", run.run_date, self.rice, self.location, StockAdjustmentDirection.OUT, D("1"), "test", cashier)
+        with self.assertRaises(PermissionDenied):
+            kitchen.prepare(self.dish, "2", cashier)
+
+    def test_changed_ingredients_are_used_from_the_next_plate(self):
+        save_ingredients(self.dish, [(self.rice, "0.300")], self.owner)
+        self.pay(self.order(self.dish, 1))
+        self.assertEqual(self.stock(self.rice), D("19.700"))
+        self.assertEqual(self.stock(self.lentil), D("10"))
+
+    def test_a_service_dish_still_moves_no_stock(self):
+        self.pay(self.order(self.tea, 2))
+        self.assertFalse(StockMovement.objects.filter(item=self.tea).exists())
+
+
+class KitchenScreenTests(KitchenSetup):
+    def test_the_dish_page_switches_and_prepares(self):
+        self.client.force_login(self.owner)
+        url = reverse("restaurant:dish", args=[self.koshary.pk])
+        page = self.client.get(url)
+        self.assertContains(page, "data-kitchen-switch")
+        self.client.post(url, {"action": "kitchen"})
+        self.koshary.refresh_from_db()
+        self.assertTrue(self.koshary.is_stock_tracked)
+        page = self.client.get(url)
+        self.assertContains(page, "data-kitchen-on")
+        self.client.post(url, {"action": "prepare", "quantity": "4"})
+        self.assertEqual(self.stock(self.koshary), D("4.000"))
+        costing = self.client.get(reverse("restaurant:costing"))
+        self.assertContains(costing, "data-kitchen-badge")
+        self.assertContains(costing, f'data-dish="{self.koshary.pk}"')
+
+    def test_a_bad_quantity_is_refused_with_a_message(self):
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        for raw in ("0", "-2", "abc", "20000"):
+            with self.subTest(raw=raw), self.assertRaises(ValidationError):
+                kitchen.prepare(dish, raw, self.owner)
+        self.assertFalse(ProductionRun.objects.exists())
+        self.assertTrue(Item.objects.filter(pk=dish.pk, is_stock_tracked=True).exists())
+
+
+class MadeToOrderAlertTests(KitchenSetup):
+    """W16: a dish made in the kitchen with no plates ready is cooked to order, not "out of stock"."""
+
+    def test_no_plates_ready_is_not_an_out_of_stock_alert(self):
+        from django.utils import timezone
+
+        from reports.followup import todo
+        from reports.selectors import stock_alert_counts
+
+        before = stock_alert_counts()["out_of_stock"]
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        self.assertEqual(self.stock(dish), 0)
+        self.assertEqual(stock_alert_counts()["out_of_stock"], before)
+        make_item(item_code="R-SALT", item_name="ملح", is_stock_tracked=True)  # an ingredient that ran out still counts
+        self.assertEqual(stock_alert_counts()["out_of_stock"], before + 1)
+        labels = [label for item in todo(self.owner, timezone.localdate(), "morning") if item["key"] == "out_of_stock" for label in item["lines"]]
+        self.assertNotIn(dish.item_name, " ".join(labels))
+
+    def test_cooking_a_plate_is_not_waste(self):
+        from django.utils import timezone
+
+        from inventory.services import adjust_stock
+        from restaurant.insights import waste
+
+        today = timezone.localdate()
+        dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        kitchen.prepare(dish, "3", self.owner, location=self.location)
+        self.assertEqual(waste(today, today), ([], D("0.00")))
+        adjust_stock("WASTE-1", today, self.rice, self.location, "out", "1", "هالك", self.owner)
+        rows, total = waste(today, today)
+        self.assertEqual(([row["movement"].item for row in rows], total), ([self.rice], D("30.00")))
+
+
+class KitchenRunOperationTests(KitchenSetup):
+    """Manufacturing F11b (HG-102) and HG-107: what the stock operations screen does with the operations of a kitchen run.
+
+    A plate prepared in the kitchen is an ordinary production run. The screen leaves a run's operations to the run's
+    own page wherever that page can open. In a restaurant the manufacturing module is off and the run's page is closed:
+    since HG-107 the screen leaves a preparation's operations to the dish's page («إلغاء التحضير»), and only where
+    neither page can open (both modules off after use) does it keep reversing them one by one, as before. With the
+    module on, a preparation is cancelled whole from its run's page, like any run. More in ``tests_kitchen_cancel``.
+
+    The clock stands still on a Wednesday at noon."""
+
+    def setUp(self):
+        from datetime import date, datetime, timezone as dt_timezone
+        from unittest import mock
+
+        clock = mock.patch("django.utils.timezone.now", return_value=datetime(2026, 11, 11, 10, 0, tzinfo=dt_timezone.utc))
+        clock.start()
+        self.addCleanup(clock.stop)
+        self.day = date(2026, 11, 11)
+        super().setUp()
+        self.dish = kitchen.make_in_kitchen(self.koshary, self.owner)
+        self.client.force_login(self.owner)
+
+    def position(self):
+        from config.money import money_round
+        from inventory.services import get_item_authoritative_average_cost, get_item_stock_value
+
+        return (self.stock(self.dish), money_round(get_item_stock_value(self.dish)), get_item_authoritative_average_cost(self.dish))
+
+    def reverse_from_the_stock_screen(self, operation, lang="ar"):
+        return self.client.post(reverse("inventory:operation_cancel", args=[operation.pk]),
+                                {"lang": lang, "reversal_date": self.day.isoformat(), "reason": "اتحضّر بالغلط"}, follow=True)
+
+    def operations(self, run):
+        return [run.output_operation] + [row.operation for row in run.consumptions.select_related("operation").order_by("pk")]
+
+    def test_with_neither_page_open_a_preparation_is_still_reversed_from_the_stock_screen(self):
+        # HG-107 (edited): this test pinned the screen reversing a preparation with the manufacturing module off. That
+        # is now refused while the dish's page can open (``tests_kitchen_cancel``); the old behaviour is kept, and
+        # pinned here, only where the dish's page is closed too, so nobody is sent to a closed page.
+        from manufacturing import guards
+        from settings_core.models import FeatureFlag
+        from settings_core.setup_services import module_flag_code
+
+        run = kitchen.prepare(self.dish, "5", self.owner)
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("5.000"), D("55.00"), D("11.0000")), D("19.000"), D("9.500")))
+        FeatureFlag.objects.filter(code=module_flag_code("tables_orders")).update(enabled=False)   # both modules off after use
+        self.assertFalse(guards.pages_open())
+        self.assertEqual(self.client.get(reverse("manufacturing:run", args=[run.pk])).status_code, 403)   # closed: the module is off
+        self.assertEqual(self.client.get(reverse("restaurant:dish", args=[self.dish.pk])).status_code, 403)
+        listed = self.client.get(reverse("inventory:operations"))
+        self.assertEqual([row.owner for row in listed.context["page"].object_list], [None, None, None])
+        for operation in self.operations(run):                # the plates out, then each ingredient back
+            self.assertContains(self.reverse_from_the_stock_screen(operation), "تم عكس حركة المخزون.")
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("0.000"), D("0.00"), D("0")), D("20.000"), D("10.000")))
+        run.refresh_from_db()
+        self.assertEqual(run.status, "posted")                # as before: the screen knows nothing of the run
+        ledger_ok(self)
+
+    def test_with_manufacturing_off_the_wrong_average_is_refused(self):
+        # HG-107 (edited): this test pinned the gap HG-100 described, left open for a kitchen with the module off
+        # (HG-102, question 1): 3 plates at 11.00, 2 sold, the recipe grows (14.00 a plate), 3 more made: 4 plates
+        # worth 53.00, 13.25 each; reversing the first preparation's output from the screen left one plate at 20.00.
+        # The screen now refuses it and sends the person to the dish's page; nothing moves.
+        first = kitchen.prepare(self.dish, "3", self.owner)
+        self.pay(self.order(self.dish, 2))
+        save_ingredients(self.dish, [(self.rice, "0.300"), (self.lentil, "0.100")], self.owner)
+        kitchen.prepare(self.dish, "3", self.owner)
+        self.assertEqual(self.position(), (D("4.000"), D("53.00"), D("13.2500")))
+        rows = StockMovement.objects.count()
+        page = self.reverse_from_the_stock_screen(first.output_operation)
+        self.assertContains(page, f"الحركة دي تابعة لتحضير «{self.dish.item_name}» رقم {first.number}، ومينفعش تتعكس من شاشة التحويلات والتسويات.")
+        self.assertEqual((self.position(), StockMovement.objects.count()), ((D("4.000"), D("53.00"), D("13.2500")), rows))
+
+    def test_with_manufacturing_on_a_preparation_is_cancelled_from_its_run_page(self):
+        from manufacturing import guards
+        from settings_core.setup_services import set_module_enabled
+
+        set_module_enabled(self.profile, "manufacturing", True, self.owner)
+        run = kitchen.prepare(self.dish, "5", self.owner)
+        self.assertTrue(guards.pages_open())
+        target = reverse("manufacturing:run", args=[run.pk])
+        for lang, text, link in (
+            ("ar", f"الحركة دي تابعة لتشغيلة الإنتاج {run.number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. "
+                   "ألغِ التشغيلة من صفحتها، والمنتج بيخرج من المخزن وكل خاماته بترجع مع بعض.", "افتح صفحة التشغيلة"),
+            ("en", f"This operation belongs to production run {run.number} and cannot be reversed from the transfers and adjustments screen. "
+                   "Cancel the run from its own page: its product leaves stock and all of its materials come back, together.", "Open the run"),
+        ):
+            for operation in self.operations(run):
+                with self.subTest(lang=lang, operation=operation.reference_number):
+                    page = self.reverse_from_the_stock_screen(operation, lang)
+                    self.assertContains(page, text)
+                    self.assertContains(page, f'<a href="{target}?lang={lang}" data-owner-link>{link}</a>', count=3)
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("5.000"), D("55.00"), D("11.0000")), D("19.000"), D("9.500")))
+        self.assertEqual(StockMovement.objects.filter(reversal_of__isnull=False).count(), 0)
+        self.client.post(target, {"lang": "ar", "reason": "اتحضّر بالغلط"})       # the run's own page: everything together
+        run.refresh_from_db()
+        self.assertEqual(run.status, "cancelled")
+        self.assertEqual((self.position(), self.stock(self.rice), self.stock(self.lentil)), ((D("0.000"), D("0.00"), D("0")), D("20.000"), D("10.000")))
+        ledger_ok(self)

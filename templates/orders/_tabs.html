@@ -1,0 +1,4 @@
+<nav class="op-form-actions wo-tabs" aria-label="{{ words.title }}" data-orders-tabs>
+<a class="{% if tab == 'board' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'orders:list' %}?lang={{ lang }}"{% if tab == 'board' %} aria-current="page"{% endif %}>{{ words.title }}</a>
+{% if can_manage %}<a class="{% if tab == 'new' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'orders:new' %}?lang={{ lang }}"{% if tab == 'new' %} aria-current="page"{% endif %} data-new-quote>{{ words.new }}</a>{% endif %}
+</nav>

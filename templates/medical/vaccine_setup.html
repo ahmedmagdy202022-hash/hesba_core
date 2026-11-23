@@ -1,0 +1,22 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/vaccines.css' %}?v=m7-1">{% endblock %}
+{% block operation_content %}
+{# M7 (HG-090): the vaccines the clinic gives: set-up for the owner and manager. #}
+<section class="op-title-row hs-head"><div><h1>{{ vx.setup_title }}</h1><p>{{ vx.setup_intro }}</p></div></section>
+{% include "medical/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% for v in rows %}<section class="vx-card{% if not v.active %} vx-card--off{% endif %}" data-vaccine="{{ v.pk }}">
+<header class="vx-card__head"><div class="vx-vaccine"><h2>{{ v.name_ar }}{% if v.name_en %} <small dir="ltr">{{ v.name_en }}</small>{% endif %}</h2>
+<p>{{ v.species_label }} · {{ v.interval_label }}{% if v.item %} · {{ v.item.item_name }} <bdi>{{ v.item.default_sale_price|money }}</bdi>{% endif %}{% if v.doses_label %} · {{ v.doses_label }}{% endif %}</p></div>
+<span class="op-status {% if v.active %}op-status-posted{% else %}op-status-draft{% endif %}">{% if v.active %}{{ vx.active }}{% else %}{{ vx.off }}{% endif %}</span></header>
+<details class="vx-more" data-edit-vaccine{% if v.bound %} open{% endif %}><summary>{{ vx.edit }}</summary>
+<form method="post" class="op-form vx-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="vaccine" value="{{ v.pk }}">
+{% include "medical/_vaccine_fields.html" with v=v suffix=v.pk bound=v.bound %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ vx.save_vaccine }}</button></div></form></details>
+</section>{% empty %}<p class="vx-empty" data-no-vaccines>{{ vx.none_vaccines }}</p>{% endfor %}
+<section class="vx-card" data-new-vaccine><h2>{{ vx.new_vaccine }}</h2>
+<form method="post" class="op-form vx-inner-form">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+{% include "medical/_vaccine_fields.html" with v=None suffix="new" bound=new_bound %}
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ vx.add_vaccine }}</button></div></form></section>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/restaurant.css' %}?v=resto-r1b">{% endblock %}
+{# a saved quantity is a Decimal (shown by qty: 0.2, never 0,200); after a refused save the box echoes what was typed #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'restaurant:costing' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ iw.back }}</a><h1>{{ dish.item_name }}</h1>
+<p>{{ iw.price }}: {{ dish.default_sale_price|money }} · {{ iw.cost }}: <strong data-plate-cost>{% if cost is not None %}{{ cost|money }}{% else %}—{% endif %}</strong></p></div></section>
+{% if error %}<p class="op-message op-message-error" role="alert">{{ error }}</p>{% endif %}
+<form class="op-form" method="post" data-dish-ingredients>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ iw.ingredient }}</th><th>{{ iw.quantity }}</th></tr></thead><tbody>
+{% for row in rows %}<tr><td><label class="sr-only" for="ing-{{ forloop.counter }}">{{ iw.ingredient }}</label><select id="ing-{{ forloop.counter }}" name="ingredient" style="min-height:44px"{% if not can_edit %} disabled{% endif %}><option value="">—</option>{% for item in ingredients %}<option value="{{ item.pk }}"{% if item.pk == row.ingredient %} selected{% endif %}>{{ item.item_name }}{% if item.unit %} ({{ item.unit|unit_label:lang }}){% endif %} — {{ item.average_cost|unit_cost }}</option>{% endfor %}</select></td>
+<td><label class="sr-only" for="qty-{{ forloop.counter }}">{{ iw.quantity }}</label><input id="qty-{{ forloop.counter }}" name="quantity" inputmode="decimal" value="{% if row.quantity.as_tuple %}{{ row.quantity|qty }}{% elif row.quantity is not None %}{{ row.quantity }}{% endif %}" style="min-height:44px;width:120px"{% if not can_edit %} disabled{% endif %}></td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_edit %}<div class="op-form-actions"><button class="op-primary" type="submit">{{ iw.save }}</button></div>{% endif %}</form>
+{# R1a (HG-109): the questions the dish asks when it is ordered. Its own form (action=groups), so saving it never touches the ingredients. #}
+<section class="op-detail-meta" data-dish-groups aria-labelledby="dish-groups-title">
+<h2 id="dish-groups-title">{{ mw.box_title }}</h2>
+{% if dish_groups %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="groups">
+<fieldset class="rs-checks"><legend>{{ mw.box_intro }}</legend>
+{% for row in dish_groups %}<label class="rs-check-chip"><input type="checkbox" name="group" value="{{ row.group.pk }}"{% if row.on %} checked{% endif %}{% if not can_edit %} disabled{% endif %}><span>{{ row.label }} <small>{{ row.rule }} · {% if row.group.min_choices %}{{ mw.required }}{% else %}{{ mw.optional }}{% endif %}{% if not row.group.active %} · {{ mw.off }}{% endif %}</small></span></label>
+{% endfor %}</fieldset>
+{% if can_edit %}<div class="op-form-actions"><button class="op-secondary" type="submit">{{ mw.box_save }}</button><a class="op-secondary" href="{% url 'restaurant:modifiers' %}?lang={{ lang }}">{{ mw.title }}</a></div>{% endif %}</form>
+{% else %}<p class="op-muted">{{ mw.box_none }}{% if can_edit %} <a href="{% url 'restaurant:modifiers' %}?lang={{ lang }}">{{ mw.box_setup }}</a>{% endif %}</p>{% endif %}
+</section>
+<section class="op-detail-meta" data-kitchen>
+<h2>{{ kw.title }}</h2>
+{% if kitchen_made %}<p data-kitchen-on>{{ kw.on }}</p><p class="op-muted">{{ kw.auto }}</p>
+<p>{{ kw.in_stock }}: <strong data-kitchen-stock>{{ in_stock|qty|default:"0" }}</strong></p>
+{% if can_edit %}<form class="op-form-actions" method="post" data-kitchen-prepare>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="prepare"><label for="prep-qty">{{ kw.quantity }}</label><input id="prep-qty" name="quantity" inputmode="decimal" required style="min-height:44px;width:110px"><button class="op-primary" type="submit">{{ kw.prepare }}</button></form>{% endif %}
+{# HG-107: «إلغاء التحضير». A preparation is a production run; the manufacturing pages are closed in a restaurant, so it is cancelled whole here. #}
+<h3>{{ kw.preps }}</h3>
+{% if preparations %}<p class="op-muted">{{ kw.cancel_note }}</p>
+<ul class="rs-lines rs-preps" data-preparations>
+{% for row in preparations %}<li class="rs-line" data-preparation="{{ row.run.pk }}" data-status="{{ row.run.status }}">
+<span class="rs-line__name"><bdi dir="ltr">{{ row.run.number }}</bdi></span>
+<span class="rs-line__amount">{{ row.run.output_quantity|qty }} {{ kw.plates }}</span>
+<span class="rs-line__note">{{ row.run.run_date|date:"Y-m-d" }} · {{ kw.per_plate }}: {{ row.run.output_operation.unit_cost|unit_cost }} · {{ kw.by }}: <bdi>{{ row.run.created_by|person }}</bdi></span>
+{% if not row.posted %}<span class="rs-line__note" data-cancelled-reason><span class="op-status op-status-cancelled">{{ kw.cancelled_state }}</span> {{ kw.why }}: {{ row.run.cancellation_reason }}</span>
+{% elif row.waiting %}<span class="rs-line__note" data-awaiting-approval>{{ kw.waiting }}</span>
+{% elif row.why_not %}<span class="rs-line__note op-muted" data-cannot-cancel>{{ row.why_not }}</span>
+{% elif can_cancel %}<div class="rs-actions"><form method="post" data-cancel-preparation>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cancel_preparation"><input type="hidden" name="run" value="{{ row.run.pk }}"><label for="why-{{ row.run.pk }}">{{ kw.reason }}<input id="why-{{ row.run.pk }}" name="reason" maxlength="255" required></label><button class="op-secondary" type="submit">{{ kw.cancel }}</button></form></div>
+{% endif %}</li>{% endfor %}
+</ul>
+{% else %}<p class="op-muted" data-no-preparations>{{ kw.no_preps }}</p>{% endif %}
+{% else %}<p data-kitchen-off>{{ kw.off }}</p>
+{% if can_edit %}<form method="post" data-kitchen-switch>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="kitchen"><p class="op-muted">{{ kw.switch_hint }}</p><div class="op-form-actions"><button class="op-secondary" type="submit">{{ kw.switch }}</button></div></form>{% endif %}
+{% endif %}
+</section>
+{% endblock %}

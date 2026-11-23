@@ -1,0 +1,37 @@
+{% load static %}<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>زيارة - حِسبة</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_feedback_inbox.css' %}?v=demo-feedback-2">
+</head>
+<body class="fb-inbox">
+<header class="fb-inbox__head">
+  <img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة" width="642" height="225">
+  <div><h1>{% if visit.name %}{{ visit.name }}{% else %}زائر #{{ visit.visitor|slice:":6" }}{% endif %}</h1>
+    <p>{% if visit.phone %}<bdi dir="ltr">{{ visit.phone }}</bdi> · {% endif %}{{ visit.started_at|date:"Y-m-d H:i" }} · {{ visit.pages }} صفحة في {{ visit.minutes }} دقيقة</p></div>
+</header>
+<main class="fb-inbox__main">
+  <nav class="fb-inbox__filters" aria-label="روابط"><a href="?key={{ key|urlencode }}">كل الزيارات</a></nav>
+  {% if notes %}
+  <section class="fb-section" aria-labelledby="notes-title">
+    <h2 id="notes-title">ملاحظاته</h2>
+    {% for note in notes %}<article class="fb-note" data-feedback-note><header><time>{{ note.created_at|date:"Y-m-d H:i" }}</time></header><p class="fb-note__text">{{ note.message|linebreaksbr }}</p></article>{% endfor %}
+  </section>
+  {% endif %}
+  <section class="fb-section" aria-labelledby="pages-title">
+    <h2 id="pages-title">الصفحات بالترتيب</h2>
+    <div class="fb-table-wrap"><table class="fb-table">
+      <thead><tr><th>الوقت</th><th>النشاط</th><th>الصفحة</th></tr></thead>
+      <tbody>{% for view in views %}
+        <tr data-page-view><td dir="ltr">{{ view.at|date:"H:i:s" }}</td><td>{{ view.activity_name|default:"—" }}</td><td><bdi dir="ltr">{{ view.path }}</bdi></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <p class="fb-device"><bdi dir="ltr">{{ visit.user_agent }}</bdi></p>
+  </section>
+</main>
+</body>
+</html>

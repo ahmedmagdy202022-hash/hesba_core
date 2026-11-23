@@ -1,0 +1,10 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div><div class="op-form-actions"><a class="op-secondary" href="{% url 'payroll:salaries' %}?lang={{ lang }}" data-payroll-salaries>{{ words.salaries }}</a><a class="op-secondary" href="{% url 'payroll:rules' %}?lang={{ lang }}" data-payroll-rules>{{ words.rules }}</a></div></section>
+{% if can_manage %}<form class="op-form" method="post" data-payroll-prepare>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid"><div class="op-field"><label for="pr-month">{{ words.month }}</label><input id="pr-month" type="month" name="month" value="{{ this_month }}" required></div></div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.prepare }}</button></div></form>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-payroll-runs><thead><tr><th>{{ words.month }}</th><th>{{ words.status }}</th><th>{{ words.gross }}</th><th>{{ words.net }}</th><th>{{ words.left }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-payroll-run="{{ row.run.pk }}"><td><bdi>{{ row.run.month|date:"Y-m" }}</bdi></td><td><span class="op-status op-status-{% if row.run.status == 'posted' %}posted{% elif row.run.status == 'reversed' %}cancelled{% else %}draft{% endif %}">{% for key, label in status_words.items %}{% if key == row.run.status %}{{ label }}{% endif %}{% endfor %}</span></td><td>{{ row.totals.gross|money }}</td><td>{{ row.totals.net|money }}</td><td>{% if row.left is not None %}{{ row.left|money }}{% else %}—{% endif %}</td><td><a href="{% url 'payroll:detail' row.run.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

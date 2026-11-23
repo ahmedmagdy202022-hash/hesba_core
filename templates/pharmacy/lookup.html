@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% include "pharmacy/_tabs.html" %}
+<form class="op-filters" method="get" data-drug-search><input type="hidden" name="lang" value="{{ lang }}">
+<label class="sr-only" for="ph-q">{{ words.search }}</label><input id="ph-q" type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}" autofocus><button type="submit">{{ words.find }}</button></form>
+<nav class="op-form-actions wo-tabs" data-drug-filter>
+<a class="{% if not missing %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}">{{ words.all_filter }}</a>
+<a class="{% if missing %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&missing=1" data-missing-filter>{{ words.missing_filter }} ({{ missing_count }})</a>
+</nav>
+{% if missing_count %}<div class="op-message" role="status" data-missing-hint>{{ missing_text }}</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-drugs><thead><tr><th>{{ words.item }}</th><th>{{ words.ingredient }}</th><th>{{ words.form }}</th><th>{{ words.stock }}</th><th>{{ words.price }}</th><th>{{ words.alternatives }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-drug="{{ row.item.pk }}"><td class="op-cell-text">{{ row.item.item_name }}{% if row.drug.prescription_only %} <span class="op-status op-status-draft">{{ words.rx_only }}</span>{% endif %}</td>
+<td class="op-cell-text">{% if row.drug %}<bdi>{{ row.drug.active_ingredient }}{% if row.drug.strength %} {{ row.drug.strength }}{% endif %}</bdi>{% else %}<span class="op-muted">{{ words.no_data }}</span>{% endif %}</td>
+<td>{% if row.drug.form %}{% for key, label in forms.items %}{% if key == row.drug.form %}{{ label }}{% endif %}{% endfor %}{% else %}—{% endif %}</td>
+<td data-on-hand>{% if row.item.is_stock_tracked %}{% if row.on_hand > 0 %}{{ row.on_hand|qty }}{% else %}<span class="op-status op-status-cancelled">{{ words.sold_out }}</span>{% endif %}{% else %}—{% endif %}</td>
+<td>{{ row.price|money }}</td><td data-alternatives>{% if row.drug %}{{ row.alternatives }}{% else %}—{% endif %}</td>
+<td><a class="op-secondary" href="{% url 'pharmacy:drug' row.item.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% url 'imports:home' as import_url %}{% link_ok import_url as import_ok %}{% if import_ok %}<section class="op-detail-meta" data-import-hint><p>{{ words.import_hint }}</p>
+<div class="op-form-actions"><a class="op-secondary" href="{{ import_url }}?lang={{ lang }}">{{ words.import }}</a></div></section>{% endif %}
+{% endblock %}

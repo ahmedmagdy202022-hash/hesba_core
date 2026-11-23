@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{% if lang == 'en' %}ltr{% else %}rtl{% endif %}"><head><meta charset="utf-8"><title>{{ label }}</title></head>
+<body data-popup-done="{{ record_id }}">
+{# FB-26: the record is saved; the invoice that opened the box picks it. #}
+{{ label|json_script:"popup-label" }}
+<script>
+  if (window.parent !== window) {
+    window.parent.postMessage({ hesbaQuickAdd: 'saved', id: '{{ record_id }}', label: JSON.parse(document.getElementById('popup-label').textContent) }, window.location.origin);
+  }
+</script>
+</body></html>

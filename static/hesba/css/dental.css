@@ -1,0 +1,21 @@
+/* MED-003: the dental chart. Colours come from the tokens only. */
+.dn-jaws{display:grid;gap:14px;margin:0 0 18px;padding:18px;background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:16px}
+/* As charts are drawn: the patient's right on the viewer's left, whatever the page direction. */
+.dn-jaw h3{margin:0 0 8px;color:var(--hs-navy);font-size:15px}
+.dn-row{display:flex;direction:ltr;justify-content:center;gap:10px;overflow-x:auto;padding-bottom:4px}
+.dn-side{display:flex;gap:4px;align-items:flex-start}
+.dn-side+.dn-side{border-inline-start:2px dashed var(--hs-line-strong);padding-inline-start:10px}
+.dn-tooth{display:flex;flex-direction:column;align-items:center;justify-content:center;width:48px;min-height:56px;flex:0 0 auto;padding:4px;border:2px solid var(--hs-line-strong);border-radius:12px;background:var(--hs-surface);color:var(--hs-ink);font:inherit;cursor:pointer}
+.dn-tooth strong{font-size:15px}
+.dn-tooth small{font-size:11px;color:var(--hs-muted);text-align:center;line-height:1.2}
+.dn-tooth[data-condition="caries"],.dn-tooth[data-condition="fractured"]{background:var(--hs-danger-wash);border-color:var(--hs-danger-line)}
+.dn-tooth[data-condition="filled"],.dn-tooth[data-condition="root_canal"]{background:var(--hs-info-wash);border-color:var(--hs-info)}
+.dn-tooth[data-condition="crown"],.dn-tooth[data-condition="bridge"],.dn-tooth[data-condition="implant"]{background:var(--hs-gold-wash);border-color:var(--hs-warning-line)}
+.dn-tooth[data-condition="missing"]{background:var(--hs-neutral-wash);border-style:dashed;color:var(--hs-muted)}
+.dn-tooth[aria-pressed="true"]{outline:3px solid var(--hs-teal);outline-offset:2px}
+.dn-legend{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none;font-size:13px;color:var(--hs-muted)}
+.dn-legend li{display:flex;align-items:center;gap:6px}
+.dn-legend .dn-tooth{width:20px;min-height:20px;padding:0;border-radius:6px;cursor:default}
+.dn-totals{display:flex;flex-wrap:wrap;gap:16px;margin:12px 0;color:var(--hs-navy)}
+@media(max-width:900px){.dn-row{flex-direction:column;align-items:center}.dn-side+.dn-side{border-inline-start:0;padding-inline-start:0;border-top:2px dashed var(--hs-line-strong);padding-top:8px}}
+@media(max-width:480px){.dn-tooth{width:38px;min-height:48px}.dn-tooth small{font-size:9px}}

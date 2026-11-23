@@ -1,0 +1,2 @@
+{% load hesba_format %}
+{% if cells %}<ul class="edu-pay-list" data-pay-payer>{% for cell in cells %}{% with s=cell.s pl=cell.pl lang=cell.lang next=cell.next %}<li data-pay-line="{{ s.invoice.pk }}"><span class="edu-pay-list__what"><bdi>{{ s.invoice.invoice_number }}</bdi> · {{ s.students|join:"، " }} · <strong>{{ s.ask|money }}</strong></span>{% include "education/_paylink_action.html" %}</li>{% endwith %}{% endfor %}</ul>{% endif %}

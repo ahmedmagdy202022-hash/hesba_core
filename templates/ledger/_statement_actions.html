@@ -1,0 +1,2 @@
+<div class="op-statement-actions"><a class="op-secondary" href="?{{ request.GET.urlencode }}{% if request.GET %}&{% endif %}format=csv" data-export>{{ words.export }}</a><button type="button" class="op-secondary" data-print>{{ words.print }}</button>{% if not entity and entities|length > 1 %}<small class="op-muted">{{ words.group_note }}</small>{% endif %}</div>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>

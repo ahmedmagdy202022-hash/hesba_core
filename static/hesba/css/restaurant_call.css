@@ -1,0 +1,28 @@
+/* R7 (HG-116): the call screen (the caller by number, their addresses, last orders) and the zones' set-up. Tokens only; 44 px targets. */
+.rc-search{margin-block-end:var(--hs-space-4)}
+.rc-card,.rc-section{display:grid;gap:var(--hs-space-3);margin:0 0 var(--hs-space-4);padding:var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface)}
+.rc-card h2,.rc-section h2,.rc-section h3{margin:0;color:var(--hs-navy)}
+.rc-section h2{font-size:var(--hs-text-lg)}
+.rc-who{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--hs-space-3)}
+.rc-phone{margin:0;color:var(--hs-muted)}
+.rc-balance{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin:0;color:var(--hs-muted)}
+.rc-balance strong{color:var(--hs-navy)}
+.rc-address,.rc-order{display:grid;gap:var(--hs-space-2);padding:var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.rc-address--default{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.rc-address header,.rc-order header{display:flex;flex-wrap:wrap;align-items:center;gap:var(--hs-space-2)}
+.rc-address header strong,.rc-order header strong{color:var(--hs-navy)}
+.rc-order header span:last-child{margin-inline-start:auto;font-weight:var(--hs-weight-bold)}
+.rc-badge{border-radius:var(--hs-radius-pill);padding:2px 10px;font-size:var(--hs-text-sm);font-weight:var(--hs-weight-bold);background:var(--hs-navy);color:var(--hs-surface)}
+.rc-text,.rc-zone{margin:0}
+.rc-zone{color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.rc-open{display:flex;flex-wrap:wrap;align-items:flex-end;gap:var(--hs-space-2);margin:0}
+.rc-open button,.rc-tools button{min-block-size:var(--hs-control-height)}
+.rc-fee{display:grid;gap:var(--hs-space-1);font-size:var(--hs-text-sm);color:var(--hs-muted)}
+.rc-fee input,.rc-fee select{min-block-size:var(--hs-control-height);max-inline-size:100%}
+.rc-fee input{inline-size:110px}
+.rc-tools{display:flex;flex-wrap:wrap;gap:var(--hs-space-2)}
+.rc-tools form{margin:0}
+.rc-check{display:flex;align-items:center;gap:var(--hs-space-2);min-block-size:44px}
+.rc-zones-actions{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);align-items:center}
+.rc-zones-actions form{margin:0}
+.rc-zones-actions button{min-block-size:var(--hs-control-height)}

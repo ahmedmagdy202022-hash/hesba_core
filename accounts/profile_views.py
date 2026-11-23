@@ -1,0 +1,43 @@
+from django.shortcuts import render
+
+from .two_factor import device_for
+
+
+STRINGS = {
+    "ar": {"page_title": "الملف الشخصي", "dashboard": "لوحة القيادة", "language": "English", "profile": "ملفي الشخصي", "role": "الدور", "permissions": "صلاحياتي", "none": "مفيش صلاحيات تشغيل مربوطة بالمستخدم ده."},
+    "en": {"page_title": "Profile", "dashboard": "Dashboard", "language": "العربية", "profile": "My profile", "role": "Role", "permissions": "My permissions", "none": "No operational permissions are linked to this user."},
+}
+
+
+def profile(request):
+    lang = "en" if request.GET.get("lang") == "en" else "ar"
+    user_profile = getattr(request.user, "hesba_profile", None)
+    role = user_profile.role if user_profile and user_profile.active else None
+    permissions = []
+    if role and role.active:
+        permissions = role.rolepermission_set.filter(
+            allow=True, permission__active=True
+        ).select_related("permission").order_by("permission__module", "permission__code")
+        # TRACK-START S07: what this business uses, like the roles screen (UI-TRACK F25).
+        from settings_core.operational_views import _section_fits
+
+        fits = {}
+        for row in permissions:
+            if row.permission.module not in fits:
+                fits[row.permission.module] = _section_fits(row.permission.module)
+        permissions = [row for row in permissions if fits[row.permission.module]]
+    return render(
+        request,
+        "accounts/profile.html",
+        {
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": STRINGS[lang],
+            "page_title": STRINGS[lang]["page_title"],
+            "user_profile": user_profile,
+            "role": role,
+            "role_permissions": permissions,
+            "two_factor_on": device_for(request.user) is not None,
+        },
+    )
+

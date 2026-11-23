@@ -1,0 +1,24 @@
+{% extends "printing/share_base.html" %}
+{% load static hesba_format %}
+{% comment %}E6: the page the certificate's QR opens. It shows what the sheet prints and nothing else: no phone, guardian, birth date, school, notes, hours, attendance, group, teacher or revoke reason. Every failure is the one plain page.{% endcomment %}
+{% block title %}{% if state == 'valid' or state == 'revoked' %}{{ vw.title }}{% elif state == 'busy' %}{{ vw.busy_h }}{% else %}{{ vw.dead_h }}{% endif %} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/education_certificate.css' %}?v=e6-1">{% endblock %}
+{% block content %}{% if state == 'valid' or state == 'revoked' %}<main class="cl-main cv-main" data-certificate-verify data-state="{{ state }}">
+{% if state == 'valid' %}<div class="cl-msg cl-msg--ok" data-banner="valid"><strong>{{ vw.valid_h }}</strong> {{ vw.valid_p }}</div>
+{% else %}<div class="cl-msg cl-msg--danger" data-banner="revoked"><strong>{{ vw.revoked_h }}</strong> {{ vw.revoked_p }}</div>{% endif %}
+<section class="cl-card" aria-labelledby="cv-t"><div class="cl-eyebrow" id="cv-t">{{ vw.title }}</div>
+<dl class="cl-dl">
+<div><dt>{{ vw.number }}</dt><dd><bdi dir="ltr" data-verify-number>{{ certificate.number }}</bdi></dd></div>
+<div><dt>{{ vw.name }}</dt><dd><bdi data-verify-name>{{ student_name }}</bdi></dd></div>
+<div><dt>{{ vw.course }}</dt><dd data-verify-course><bdi>{{ course }}</bdi>{% if level %} · {{ vw.level }} <bdi>{{ level }}</bdi>{% endif %}</dd></div>
+<div><dt>{{ vw.period }}</dt><dd data-verify-period><bdi>{{ first|day_text:lang }}</bdi> {{ vw.to }} <bdi>{{ last|day_text:lang }}</bdi></dd></div>
+<div><dt>{{ vw.issued }}</dt><dd data-verify-issued><bdi>{{ certificate.issued_on|day_text:lang }}</bdi></dd></div>
+{% if certificate.grade_text %}<div><dt>{{ vw.grade }}</dt><dd data-verify-grade><bdi>{{ certificate.grade_text }}</bdi></dd></div>{% endif %}
+<div><dt>{{ vw.business }}</dt><dd data-verify-business><bdi>{{ business }}</bdi></dd></div>
+<div><dt>{{ vw.status }}</dt><dd><span class="cl-badge {% if state == 'valid' %}cl-badge--ready{% else %}cl-badge--cancelled{% endif %}" data-verify-status>{% if state == 'valid' %}{{ vw.status_valid }}{% else %}{{ vw.status_revoked }}{% endif %}</span></dd></div>
+</dl></section></main>
+{% else %}<main class="cl-card cl-center" data-certificate-dead data-state="{{ state }}">
+{% if state == 'busy' %}<h1 class="cl-h1">{{ vw.busy_h }}</h1><p>{{ vw.busy_p }}</p>{% else %}<h1 class="cl-h1">{{ vw.dead_h }}</h1><p>{{ vw.dead_p }}</p>{% endif %}
+{% if phone %}<div class="cl-actions"><a class="cl-btn cl-btn--primary" href="tel:{{ phone }}">{{ vw.call }}</a>{% if whatsapp %}<a class="cl-btn" href="https://wa.me/{{ whatsapp }}">{{ vw.whatsapp }}</a>{% endif %}</div>{% endif %}
+</main>{% endif %}{% endblock %}
+{% block foot_note %}{% endblock %}

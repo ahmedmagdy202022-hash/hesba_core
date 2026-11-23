@@ -1,0 +1,33 @@
+/* MED-007 — video finding 14: the reception queue on a phone.
+
+   The walk-in search result put the patient, the phone, the doctor's picker and «وصل» in one table row, so at 390 px
+   the picker was squeezed to about 120 px — a few characters of a doctor's name. The result's cells stack instead, so
+   the picker and the button each take the row's full width. Tokens only; every control stays at least 44 px tall. */
+@media (max-width: 640px) {
+  [data-queue-found],
+  [data-queue-found] tbody,
+  [data-queue-found] tr,
+  [data-queue-found] td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+  [data-queue-found] tr {
+    padding: var(--hs-space-3) 0;
+    border-block-end: 1px solid var(--hs-line);
+  }
+  [data-queue-found] tr:last-child { border-block-end: 0; }
+  [data-queue-found] td {
+    padding: var(--hs-space-1) 0;
+    border: 0;
+    white-space: normal;
+  }
+  [data-queue-found] td:first-child {
+    color: var(--hs-navy);
+    font-weight: var(--hs-weight-bold);
+  }
+  [data-queue-found] select {
+    width: 100%;
+    min-height: var(--hs-control-height);
+  }
+}

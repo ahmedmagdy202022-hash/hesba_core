@@ -1,0 +1,3 @@
+{% if shown %}<form class="op-form edu-bulk" method="post" action="{% url 'education:paylinks_bulk' %}" data-pay-bulk>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="month" value="{{ month|date:'Y-m' }}">
+<p class="op-muted" data-pay-bulk-hint>{{ hint }} <strong data-pay-bulk-ready="{{ ready }}">{{ ready_text }}</strong></p>
+<div class="op-form-actions"><button class="op-secondary" type="submit" data-pay-bulk-btn>{{ pl.bulk }}</button></div></form>{% endif %}

@@ -1,0 +1,7 @@
+{% if shown %}<section class="op-form" data-gift-card-box>
+<h2>{% if lang == 'en' %}Pay with a gift card{% else %}ادفع بكارت هدية{% endif %}</h2>
+<form method="post" action="{% url 'giftcards:pay_invoice' invoice.pk %}" data-gift-card-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="op-form-grid"><div class="op-field"><label for="gc-code">{% if lang == 'en' %}Card code{% else %}كود الكارت{% endif %}</label><input id="gc-code" name="code" dir="ltr" autocomplete="off" required></div>
+<div class="op-field"><label for="gc-amount">{% if lang == 'en' %}Amount (up to what is left){% else %}المبلغ (لحد الباقي){% endif %}</label><input id="gc-amount" name="amount" inputmode="decimal" dir="ltr" value="{{ due|stringformat:'s' }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{% if lang == 'en' %}Pay with the card{% else %}ادفع بالكارت{% endif %}</button></div></form>
+</section>{% endif %}

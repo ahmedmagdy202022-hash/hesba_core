@@ -1,0 +1,24 @@
+/* AN5 (Ahmed: "شاشة المقاسات والألوان ممكن تبقى أحسن"): the model page as a grid of small item cards. */
+.vr-facts{display:flex;flex-wrap:wrap;gap:var(--hs-space-2) var(--hs-space-4);margin:var(--hs-space-1) 0 0;color:var(--hs-muted)}
+.vr-facts b{color:var(--hs-ink)}
+.vr-card{background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);padding:var(--hs-space-4) var(--hs-space-5);margin-block-end:var(--hs-space-4);display:grid;gap:var(--hs-space-3);min-width:0}
+.vr-card h2{margin:0;font-size:var(--hs-text-lg)}
+.vr-card header p{margin:var(--hs-space-1) 0 0}
+.vr-grid-wrap{overflow-x:auto}
+.vr-grid{display:grid;grid-template-columns:minmax(56px,auto) repeat(var(--vr-cols),minmax(128px,1fr)) minmax(72px,auto);gap:var(--hs-space-2);align-items:stretch;min-width:min-content}
+.vr-grid__corner,.vr-grid__head{font-size:var(--hs-text-sm);color:var(--hs-muted);font-weight:var(--hs-weight-semibold);padding:var(--hs-space-1) var(--hs-space-2);align-self:end}
+.vr-grid__size{display:flex;align-items:center;justify-content:center;font-weight:var(--hs-weight-bold);color:var(--hs-navy);background:var(--hs-ground);border-radius:var(--hs-radius-sm)}
+.vr-grid__total{display:flex;align-items:center;justify-content:center;font-weight:var(--hs-weight-semibold);color:var(--hs-ink)}
+.vr-grid__total--grand{color:var(--hs-teal-deep);font-size:var(--hs-text-lg)}
+.vr-grid__size--total{background:transparent;color:var(--hs-muted);font-weight:var(--hs-weight-semibold)}
+.vr-cell{display:grid;gap:2px;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-inline-start:3px solid var(--hs-teal);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);text-decoration:none;min-width:0}
+.vr-cell:hover,.vr-cell:focus-visible{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.vr-cell strong{font-size:var(--hs-text-lg);line-height:1.2}
+.vr-cell small{font-size:var(--hs-text-xs);color:var(--hs-muted);overflow-wrap:anywhere}
+.vr-cell--empty{border-inline-start-color:var(--hs-line-strong)}
+.vr-cell--empty strong{color:var(--hs-muted)}
+.vr-cell--off{opacity:.6}
+.vr-cell--none{display:flex;align-items:center;justify-content:center;border-style:dashed;border-inline-start-width:1px;color:var(--hs-muted)}
+.vr-forms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:var(--hs-space-4);align-items:start}
+.vr-forms .vr-card{margin:0}
+.vr-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--hs-space-3)}

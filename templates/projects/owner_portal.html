@@ -1,0 +1,93 @@
+{% extends "printing/share_base.html" %}{% load static hesba_format %}
+{% comment %}Contracting C10 (HG-135): the project owner's page behind a signed link. Read-only figures from the project's own
+functions, posted certificates only, and the owner's approval of a draft variation order. Never cost, budget, subcontractors,
+profit, purchases, notes or staff names.{% endcomment %}
+{% block title %}{{ project.name }} · {{ company.name }}{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{% static 'hesba/css/owner_portal.css' %}?v=op-001">{% endblock %}
+{% block sub %}<div class="cl-shopsub">{{ pw.sub }}</div>{% endblock %}
+{% block content %}<main class="cl-main" data-owner-portal>
+
+{% if message %}<div class="cl-msg {% if message_ok %}cl-msg--ok{% else %}cl-msg--danger{% endif %}" role="{% if message_ok %}status{% else %}alert{% endif %}" data-portal-message>{{ message }}</div>{% endif %}
+
+<section class="cl-card" aria-labelledby="op-project-t" data-portal-project>
+  <div class="cl-eyebrow" id="op-project-t">{{ pw.eyebrow }} <bdi>{{ project.code }}</bdi></div>
+  <h1 class="cl-h1 op-title">{{ project.name }}</h1>
+  <dl class="cl-dl op-facts">
+    <div><dt>{{ pw.owner }}</dt><dd>{{ project.customer.name }}</dd></div>
+    {% if project.site %}<div><dt>{{ pw.site }}</dt><dd>{{ project.site }}</dd></div>{% endif %}
+    {% if project.start_date %}<div><dt>{{ pw.start }}</dt><dd>{{ project.start_date|day_text:lang }}</dd></div>{% endif %}
+    {% if planned_end %}<div><dt>{{ pw.end }}</dt><dd>{{ planned_end|day_text:lang }}</dd></div>{% endif %}
+  </dl>
+</section>
+
+<section class="cl-card" aria-labelledby="op-contract-t" data-portal-contract>
+  <h2 class="cl-h" id="op-contract-t">{{ pw.contract_h }}</h2>
+  <dl class="op-figures">
+    <div><dt>{{ pw.original }}</dt><dd data-figure="original"><bdi>{{ contract.original|money }}</bdi></dd></div>
+    <div><dt>{{ pw.variations }}</dt><dd data-figure="variations"><bdi>{{ contract.approved|money }}</bdi></dd></div>
+    <div class="op-figures__grand"><dt>{{ pw.revised }}</dt><dd data-figure="revised"><bdi>{{ contract.revised|money }}</bdi> <small>{{ company.currency }}</small></dd></div>
+  </dl>
+</section>
+
+<section class="cl-card" aria-labelledby="op-money-t" data-portal-money>
+  <h2 class="cl-h" id="op-money-t">{{ pw.money_h }}</h2>
+  <dl class="op-figures">
+    <div><dt>{{ pw.certified }}</dt><dd data-figure="certified"><bdi>{{ position.certified|money }}</bdi><small class="op-pct">{{ position.certified_progress }}% {{ pw.of_contract }}</small></dd></div>
+    <div><dt>{{ pw.retention }}</dt><dd data-figure="retention_held"><bdi>{{ position.retention_held|money }}</bdi></dd></div>
+    <div><dt>{{ pw.advance_left }}</dt><dd data-figure="advance_left"><bdi>{{ position.advance_left|money }}</bdi></dd></div>
+    {% if position.under_collection %}<div><dt>{{ pw.under_collection }}</dt><dd data-figure="under_collection"><bdi>{{ position.under_collection|money }}</bdi></dd></div>{% endif %}
+    <div class="op-figures__grand"><dt>{{ pw.due_now }}</dt><dd data-figure="due_now"><bdi>{{ position.due_now|money }}</bdi> <small>{{ company.currency }}</small></dd></div>
+  </dl>
+</section>
+
+{% if waiting and can_approve %}{% for row in waiting %}<section class="cl-card op-waiting" id="vo-{{ row.order.pk }}" aria-labelledby="op-vo-{{ row.order.pk }}-t" data-portal-waiting="{{ row.order.number }}">
+  <div class="cl-orderhead"><div><div class="cl-eyebrow">{{ pw.vo_waiting }}</div><h2 class="cl-h" id="op-vo-{{ row.order.pk }}-t">{{ row.title }}</h2></div><span class="cl-badge cl-badge--quoted">{{ pw.vo_waiting }}</span></div>
+  {% include "projects/_owner_order.html" %}
+  <form class="cl-ask op-approve" method="post" action="{% url 'share_project_variation_approve' token row.order.pk %}" data-approve-form>{% csrf_token %}
+    <input type="hidden" name="fingerprint" value="{{ row.fingerprint }}"><input type="hidden" name="lang" value="{{ lang }}">
+    <h3 class="op-sub">{{ pw.approve_h }}</h3>
+    <p>{{ pw.approve_p }}</p>
+    <label class="op-label" for="op-name-{{ row.order.pk }}">{{ pw.name }}</label>
+    <input class="op-input" id="op-name-{{ row.order.pk }}" name="name" maxlength="80" autocomplete="name" required>
+    <div class="cl-actions"><button class="cl-btn cl-btn--primary" type="submit">{{ pw.approve }}</button></div>
+  </form>
+</section>{% endfor %}{% endif %}
+
+<section class="cl-card" aria-labelledby="op-certs-t" data-portal-certificates>
+  <h2 class="cl-h" id="op-certs-t">{{ pw.certs_h }}</h2>
+  {% if statements %}<ul class="op-list">{% for s in statements %}<li class="op-cert" data-certificate="{{ s.certificate.number }}">
+    <details>
+      <summary class="op-cert__head"><span class="op-cert__title">{{ s.title }}</span><span class="op-cert__meta"><bdi>{{ s.certificate.certificate_date|day_text:lang }}</bdi></span><strong class="op-cert__net"><bdi>{{ s.net|money }}</bdi></strong></summary>
+      {% include "projects/_owner_statement.html" %}
+      <div class="cl-actions"><a class="cl-btn" href="{{ here }}&amp;c={{ s.certificate.number }}" rel="nofollow" data-print-link>{{ pw.print_one }}</a></div>
+    </details>
+  </li>{% endfor %}</ul>
+  {% else %}<p data-no-certificates>{{ pw.no_certs }}</p>{% endif %}
+</section>
+
+{% if schedule %}<section class="cl-card" aria-labelledby="op-schedule-t" data-portal-schedule>
+  <h2 class="cl-h" id="op-schedule-t">{{ pw.schedule_h }}</h2>
+  <dl class="op-figures">
+    <div><dt>{{ pw.planned }}</dt><dd data-figure="planned"><bdi>{{ schedule.planned }}%</bdi></dd></div>
+    <div><dt>{{ pw.actual }}</dt><dd data-figure="actual"><bdi>{{ schedule.actual }}%</bdi></dd></div>
+    {% if schedule.planned_end %}<div><dt>{{ pw.planned_end }}</dt><dd>{{ schedule.planned_end|day_text:lang }}</dd></div>{% endif %}
+  </dl>
+  <ul class="op-list op-tasks">{% for row in schedule.rows %}<li class="op-task" data-task>
+    <div class="op-task__name">{{ row.name }}</div>
+    <progress class="op-bar" max="100" value="{{ row.actual }}" aria-label="{{ row.name }}: {{ pw.task_actual }} {{ row.actual }}%">{{ row.actual }}%</progress>
+    <div class="op-task__nums"><span>{{ pw.task_actual }} <bdi>{{ row.actual }}%</bdi></span><span>{{ pw.task_planned }} <bdi>{{ row.planned }}%</bdi></span></div>
+  </li>{% endfor %}</ul>
+</section>{% endif %}
+
+{% if approved_orders %}<section class="cl-card" aria-labelledby="op-vo-t" data-portal-orders>
+  <h2 class="cl-h" id="op-vo-t">{{ pw.vo_h }}</h2>
+  <ul class="op-list">{% for row in approved_orders %}<li class="op-cert" data-order="{{ row.order.number }}">
+    <details>
+      <summary class="op-cert__head"><span class="op-cert__title">{{ row.title }}</span><span class="op-cert__meta">{{ pw.vo_approved }}{% if row.order.approved_on %} · <bdi>{{ row.order.approved_on|day_text:lang }}</bdi>{% endif %}</span><strong class="op-cert__net" dir="ltr">{{ row.value_text }}</strong></summary>
+      {% include "projects/_owner_order.html" %}
+      {% if row.by_owner and row.order.owner_reference %}<p class="cl-note" data-approved-by>{{ pw.vo_by_owner }}: <bdi>{{ row.order.owner_reference }}</bdi></p>{% endif %}
+    </details>
+  </li>{% endfor %}</ul>
+</section>{% endif %}
+
+</main>{% endblock %}

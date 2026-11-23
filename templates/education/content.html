@@ -1,0 +1,7 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row hs-head"><div><a class="op-back" href="{% if can_view %}{% url 'education:group' group.pk %}{% else %}{% url 'education:today' %}{% endif %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{% if can_view %}{{ cw.back_group }}{% else %}{{ words.today }}{% endif %}</a><h1>{{ cw.content }}</h1><p>{{ group.course.name }} — {{ group.name }}{% if group.teacher %} · {{ group.teacher.name }}{% endif %}</p></div>
+<div class="op-form-actions">{% if group.active %}<a class="op-primary" href="{% url 'education:content_new' group.pk %}?lang={{ lang }}" data-new-content>{{ cw.add }}</a>{% endif %}</div></section>
+<p class="op-muted" data-content-hint>{{ cw.hint }}</p>
+{% include "education/_content_list.html" %}
+{% endblock %}

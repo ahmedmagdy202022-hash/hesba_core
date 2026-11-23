@@ -1,0 +1,784 @@
+"""GL-002 (HG-032): the general journal, projected from the posted sub-ledgers.
+
+Hesba already records every posted effect in four authoritative sub-ledgers:
+customer and supplier ledger entries, cashbox movements, and stock movements.
+The projector reads those rows (and nothing else that moves money), groups
+them by the document that caused them and the date, and turns each group into
+one balanced journal entry:
+
+* the sub-ledger rows give the receivable, payable, cash and inventory lines
+  exactly, so those accounts reconcile with the existing reports by
+  construction;
+* the document type decides where the balancing side goes — revenue and VAT
+  for a sale, COGS for the stock it took out, input VAT for a purchase, the
+  expense account of an expense, gain or loss for a stock count, and so on.
+
+Posting services are never called or changed. A cancelled document's reversal
+rows carry their own date, so the cancellation appears as its own reversing
+entry. Whatever cannot be placed lands in the suspense account, which the
+reconciliation screen shows; it should always read zero.
+"""
+
+from collections import defaultdict
+from datetime import date
+from decimal import Decimal
+
+from django.db import transaction
+from django.db.models import Max, Sum
+from django.utils import timezone
+
+from config.money import money_round
+
+from . import services
+from .models import Account, EntryKind, JournalEntry, JournalLine
+
+ZERO = Decimal("0")
+CENT = Decimal("0.01")
+
+STOCK_IN = {"purchase_in", "sale_return_in", "transfer_in", "adjustment_in", "opening_stock"}
+
+#: Sub-ledger foreign keys that name the document behind a row, in priority order.
+CUSTOMER_KEYS = ("sales_invoice", "sales_return", "customer_payment", "opening_balance_adjustment")
+SUPPLIER_KEYS = ("purchase_invoice", "purchase_return", "supplier_payment", "opening_balance_adjustment")
+CASH_KEYS = ("sales_invoice", "sales_return", "customer_payment", "purchase_invoice", "purchase_return", "supplier_payment",
+             "opening_balance_adjustment", "cashbox_operation")
+STOCK_KEYS = ("sales_invoice", "sales_return", "purchase_invoice", "purchase_return", "stock_operation")
+
+
+def _key(row, keys):
+    for name in keys:
+        value = getattr(row, f"{name}_id")
+        if value:
+            return name, value
+    # A reversal row may carry only a pointer to the row it reverses.
+    original = getattr(row, "reversal_of", None)
+    if original is not None:
+        return _key(original, keys)
+    return None
+
+
+class _Accounts:
+    """Control key → Account, resolved once per rebuild."""
+
+    def __init__(self):
+        services.ensure_chart()
+        self.by_control = {a.control: a for a in Account.objects.exclude(control="")}
+        self.products = None
+        self._maintenance = None
+
+    def __getitem__(self, control):
+        account = self.by_control.get(control)
+        if account is None:
+            account = self.by_control["suspense"]
+        return account
+
+    def has(self, control):
+        return control in self.by_control
+
+    def inventory(self, item_id):
+        if self.has("inventory"):
+            return self["inventory"]
+        if self.products is None:
+            from manufacturing.models import Recipe
+
+            self.products = set(Recipe.objects.values_list("product_id", flat=True))
+            # Manufacturing F9 (HG-139): a by-product or a co-product is made, not bought: finished goods too (trap 7).
+            from manufacturing.models import RecipeOutput, RunOutput
+
+            self.products |= set(RecipeOutput.objects.values_list("item_id", flat=True)) | set(RunOutput.objects.values_list("item_id", flat=True))
+        return self["finished_goods" if item_id in self.products else "raw_materials"]
+
+    def maintenance(self):
+        """Manufacturing F10 (HG-141): where maintenance expense goes: the account of the expense category «صيانة وإصلاحات»
+        (``maintenance``; 5206 on every default chart, which has no control key of its own), as an expense of that
+        category books; general expenses where the category has no account. Read once per rebuild."""
+
+        if self._maintenance is None:
+            from .models import ExpenseAccount
+
+            link = ExpenseAccount.objects.filter(category__code="maintenance").select_related("account").first()
+            self._maintenance = link.account if link else self["general_expense"]
+        return self._maintenance
+
+
+class _Group:
+    """The rows of one document on one date, becoming one entry."""
+
+    def __init__(self, source_type, source_id, day):
+        self.source_type, self.source_id, self.day = source_type, source_id, day
+        self.lines = []  # dicts: account, entity_id, amount (+debit / -credit), dims
+        self.money = ZERO  # receivable + payable + cash lines, signed as debits
+        self.stock = ZERO  # inventory lines, signed as debits
+        self.entity_id = None
+
+    def add(self, account, amount, entity_id, kind=None, **dims):
+        amount = money_round(Decimal(amount))
+        if not amount:
+            return
+        self.lines.append({"account": account, "amount": amount, "entity_id": entity_id, **dims})
+        if kind == "money":
+            self.money += amount
+        elif kind == "stock":
+            self.stock += amount
+        if self.entity_id is None and entity_id:
+            self.entity_id = entity_id
+
+    def balance(self):
+        return sum((line["amount"] for line in self.lines), ZERO)
+
+
+class Projector:
+    def __init__(self):
+        self.acc = _Accounts()
+        from entities.services import main_entity
+
+        self.main_id = main_entity().pk
+        self.groups = {}
+        self._extra_outputs = None
+
+    #: T3/T4: where each kind of cashbox keeps its money in the chart.
+    #: S6 (HG-071): a gift-card box's (negative) balance is the liability to the cards' holders.
+    KIND_CONTROLS = {"bank": "bank", "cheques_in": "notes_receivable", "cheques_out": "notes_payable", "courier": "courier_receivable",
+                     "gift_card": "gift_card_liability"}
+
+    def money_account(self, cashbox):
+        """T3 (HG-055): a bank account's money sits in the banks account, a cashbox's in cash on hand.
+        T4 (HG-056): cheques in hand are notes receivable; cheques issued and not yet paid are notes payable."""
+
+        control = self.KIND_CONTROLS.get(cashbox.kind)
+        if control and self.acc.has(control):
+            return self.acc[control]
+        return self.acc["cash"]
+
+    # ---- collecting sub-ledger rows ----
+
+    def group(self, source_type, source_id, day):
+        key = (source_type, source_id, day)
+        if key not in self.groups:
+            self.groups[key] = _Group(source_type, source_id, day)
+        return self.groups[key]
+
+    def collect(self):
+        from cashboxes.models import CashboxMovement
+        from inventory.models import StockMovement
+        from purchases.models import SupplierLedgerEntry
+        from sales.models import CustomerLedgerEntry
+
+        self._doc_entity = {}
+        for row in CustomerLedgerEntry.objects.select_related("sales_invoice__selling_location", "customer_payment__cashbox", "sales_return__source_invoice__selling_location"):
+            source = _key(row, CUSTOMER_KEYS) or ("customer_entry", row.pk)
+            amount = (row.due_increase or ZERO) - (row.due_decrease or ZERO)
+            entity = self._entity_of_customer_row(row)
+            self.group(*source, row.entry_date).add(self.acc["receivable"], amount, entity, "money", customer_id=row.customer_id)
+        for row in SupplierLedgerEntry.objects.select_related("purchase_invoice__receiving_location", "supplier_payment__cashbox", "purchase_return__source_invoice__receiving_location"):
+            source = _key(row, SUPPLIER_KEYS) or ("supplier_entry", row.pk)
+            amount = (row.due_increase or ZERO) - (row.due_decrease or ZERO)
+            entity = self._entity_of_supplier_row(row)
+            self.group(*source, row.entry_date).add(self.acc["payable"], -amount, entity, "money", supplier_id=row.supplier_id)
+        for row in CashboxMovement.objects.select_related("cashbox", "reversal_of"):
+            source = _key(row, CASH_KEYS) or ("cash_movement", row.pk)
+            amount = row.amount if row.direction == "in" else -row.amount
+            self.group(*source, row.movement_date).add(self.money_account(row.cashbox), amount, row.cashbox.entity_id or self.main_id, "money", cashbox_id=row.cashbox_id)
+        for row in StockMovement.objects.select_related("location", "reversal_of"):
+            source = _key(row, STOCK_KEYS) or ("opening_stock" if row.movement_type == "opening_stock" else "stock_movement", row.pk)
+            value = money_round(row.quantity * row.unit_cost)
+            amount = value if row.movement_type in STOCK_IN else -value
+            self.group(*source, row.movement_date).add(self.acc.inventory(row.item_id), amount, row.location.entity_id or self.main_id, "stock", location_id=row.location_id)
+        self._openings()
+        self._fixed_assets()
+        self._payroll()
+        self._contracts()
+        self._deposits()
+        self._gift_cards()
+
+    def _deposits(self):
+        """S5 (HG-069): a deposit at booking is the customer's money until its invoice posts.
+
+        The payment ids make ``_place_customer_payment`` book the deposit in customer advances (2105) from its payment
+        date, as a project owner's advance is. The settlement rows (source ``deposit``) move it to receivables on the
+        date of the posted invoice it settles or was forfeited into; when that invoice is cancelled the row is gone
+        and the deposit sits in 2105 again. Both sets are additive beside ``_advances`` and ``_certificates``.
+        """
+
+        from deposits.models import Deposit
+        from settlements.models import InvoiceSettlement, SettlementSource
+
+        self._deposit_payments = set(Deposit.objects.values_list("payment_id", flat=True))
+        self._settled = {}
+        # Only rows backed by a posted payment, as ``settlements.services.applied`` reads them: a cancelled payment's
+        # money went back to the customer, so its row (if one were left) moves nothing between 2105 and 1103.
+        rows = InvoiceSettlement.objects.filter(source=SettlementSource.DEPOSIT, customer_payment__status="posted")
+        for invoice_id, amount in rows.values_list("invoice_id", "amount"):
+            self._settled[invoice_id] = self._settled.get(invoice_id, ZERO) + Decimal(amount)
+
+    def _gift_cards(self):
+        """S6 (HG-071): a breakage (the unspent rest of a card written off, approved by hand) is a direct cash in to the
+        gift-card box; its counter-line is sundry income (4201), not the owner's account. Keyed on the operation id
+        whatever its status, so a reversed breakage's entry on its reversal date lands in 4201 too."""
+
+        from giftcards.models import EntryKind, GiftCardEntry
+
+        self._breakage_ops = set(GiftCardEntry.objects.filter(kind=EntryKind.BREAKAGE, operation__isnull=False).values_list("operation_id", flat=True))
+
+    def _contracts(self):
+        """CONTRACT-002 (HG-038): what the project screens add to the journal.
+
+        The customer and supplier rows stay exactly as posted; these only say
+        which part of a balance is an advance or retention, so the general
+        ledger shows it in its own account. Releases are dated events of their
+        own: they move retention back to what the party may now be paid or owe.
+        """
+
+        from projects.models import (Certificate, ProjectPayment, ProjectPaymentKind, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractPayment,
+                                     SubcontractRelease)
+
+        self._advances = set(ProjectPayment.objects.filter(kind=ProjectPaymentKind.ADVANCE).values_list("payment_id", flat=True))
+        self._certificates = {invoice: (retention, recovery) for invoice, retention, recovery
+                              in Certificate.objects.values_list("invoice_id", "retention_amount", "recovery_amount")}
+        self._sub_bills = dict(SubcontractBill.objects.values_list("invoice_id", "retention_amount"))
+        # C11 (HG-128): the advance each subcontractor bill recovers, and the supplier payments that are advances.
+        self._sub_recoveries = dict(SubcontractBill.objects.exclude(recovery_amount=0).values_list("invoice_id", "recovery_amount"))
+        self._sub_advances = set(SubcontractPayment.objects.filter(kind="advance").values_list("payment_id", flat=True))
+        self._project_purchases = set(ProjectPurchase.objects.values_list("invoice_id", flat=True))
+        if self.acc.has("retention_receivable"):
+            for release in RetentionRelease.objects.select_related("project"):
+                certificates = Certificate.objects.filter(project=release.project_id).select_related("invoice__selling_location").order_by("number")
+                first = certificates.first()  # one entity per project, for good (projects.contract.project_entity)
+                entity = (first.invoice.selling_location.entity_id if first else None) or self.main_id
+                # A reversed release keeps its entry and gets the opposite one on its reversal date.
+                for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
+                    if day is None:
+                        continue
+                    g = self.group("retention_release", release.pk, day)
+                    g.add(self.acc["receivable"], sign * Decimal(release.amount), entity, customer_id=release.project.customer_id)
+                    g.add(self.acc["retention_receivable"], -sign * Decimal(release.amount), entity)
+        if self.acc.has("retention_payable"):
+            for release in SubcontractRelease.objects.select_related("subcontract"):
+                bills = release.subcontract.bills.select_related("invoice__receiving_location").order_by("number")
+                first = bills.first()  # one entity per subcontract, for good (projects.costs.subcontract_entity)
+                entity = (first.invoice.receiving_location.entity_id if first else None) or self.main_id
+                for day, sign in ((release.release_date, 1), (release.reversed_on, -1)):
+                    if day is None:
+                        continue
+                    g = self.group("subcontract_release", release.pk, day)
+                    g.add(self.acc["retention_payable"], sign * Decimal(release.amount), entity)
+                    g.add(self.acc["payable"], -sign * Decimal(release.amount), entity, supplier_id=release.subcontract.supplier_id)
+
+    @staticmethod
+    def _party(g, key):
+        """The customer or supplier on a document's receivable or payable line."""
+
+        return next((line[key] for line in g.lines if line.get(key)), None)
+
+    def _entity_of_customer_row(self, row):
+        location = None
+        if row.sales_invoice_id:
+            location = row.sales_invoice.selling_location
+        elif row.sales_return_id:
+            location = row.sales_return.source_invoice.selling_location
+        elif row.customer_payment_id:
+            return row.customer_payment.cashbox.entity_id or self.main_id
+        return (location.entity_id if location else None) or self.main_id
+
+    def _entity_of_supplier_row(self, row):
+        location = None
+        if row.purchase_invoice_id:
+            location = row.purchase_invoice.receiving_location
+        elif row.purchase_return_id:
+            location = row.purchase_return.source_invoice.receiving_location
+        elif row.supplier_payment_id:
+            return row.supplier_payment.cashbox.entity_id or self.main_id
+        return (location.entity_id if location else None) or self.main_id
+
+    def _openings(self):
+        """Opening balances typed on the customer, supplier and cashbox records."""
+
+        from cashboxes.models import Cashbox
+        from master_data.models import Customer, Supplier
+
+        for customer in Customer.objects.exclude(opening_balance=0):
+            g = self.group("opening_customer", customer.pk, timezone.localdate(customer.created_at))
+            g.add(self.acc["receivable"], customer.opening_balance, self.main_id, "money", customer_id=customer.pk)
+        for supplier in Supplier.objects.exclude(opening_balance=0):
+            g = self.group("opening_supplier", supplier.pk, timezone.localdate(supplier.created_at))
+            g.add(self.acc["payable"], -supplier.opening_balance, self.main_id, "money", supplier_id=supplier.pk)
+        for cashbox in Cashbox.objects.exclude(opening_balance=0):
+            g = self.group("opening_cashbox", cashbox.pk, timezone.localdate(cashbox.created_at))
+            g.add(self.money_account(cashbox), cashbox.opening_balance, cashbox.entity_id or self.main_id, "money", cashbox_id=cashbox.pk)
+
+    def _fixed_assets(self):
+        from fixed_assets.models import AssetStatus, FixedAsset
+        from fixed_assets.services import accumulated, charged_months
+
+        today = timezone.localdate()
+        self._asset_ops = {}
+        for asset in FixedAsset.objects.exclude(status=AssetStatus.CANCELLED):
+            if asset.payment_operation_id:
+                self._asset_ops[asset.payment_operation_id] = ("purchase", asset)
+            else:
+                g = self.group("asset_opening", asset.pk, asset.in_service_on)
+                g.add(self.acc["fixed_assets"], asset.cost, self.main_id)
+                g.add(self.acc["opening_equity"], -Decimal(asset.cost), self.main_id)
+            for month, amount in charged_months(asset):
+                if month > today:
+                    break
+                g = self.group("depreciation", asset.pk, month)
+                g.add(self.acc["depreciation"], amount, self.main_id)
+                g.add(self.acc["accumulated_depreciation"], -amount, self.main_id)
+            if asset.status == AssetStatus.DISPOSED and asset.disposed_on:
+                if asset.disposal_operation_id:
+                    self._asset_ops[asset.disposal_operation_id] = ("disposal", asset)
+                g = self.group("asset_disposal", asset.pk, asset.disposed_on)
+                g.add(self.acc["fixed_assets"], -Decimal(asset.cost), self.main_id)
+                g.add(self.acc["accumulated_depreciation"], accumulated(asset, asset.disposed_on), self.main_id)
+                g.add(self.acc["asset_disposal"], -g.balance(), self.main_id)
+
+    #: T12: which debt each kind of payroll payment settles.
+    PAYROLL_DEBTS = {"net": "salaries_payable", "insurance": "insurance_payable", "tax": "payroll_tax_payable"}
+
+    def _payroll(self):
+        """T12 (HG-060): a posted run's accrual on its posting date, and the opposite entry on its reversal date.
+
+        Cost (gross + the company's insurance share) is owed as net pay, insurance (both shares) and income tax.
+        Each payment is a cashbox operation; ``_place_cashbox_operation`` puts it against its debt.
+        """
+
+        from payroll.models import PayrollPayment, PayrollRun, RunStatus
+        from payroll.services import run_totals
+
+        self._payroll_ops = dict(PayrollPayment.objects.values_list("operation_id", "pay_to"))
+        for run in PayrollRun.objects.exclude(status=RunStatus.DRAFT).exclude(posted_on__isnull=True):
+            totals = run_totals(run)
+            for day, sign in ((run.posted_on, 1), (run.reversed_on, -1)):
+                if day is None:
+                    continue
+                g = self.group("payroll_run", run.pk, day)
+                g.add(self.acc["salaries" if self.acc.has("salaries") else "general_expense"], sign * (totals["gross"] + totals["company_insurance"]), self.main_id)
+                g.add(self.acc["salaries_payable"], -sign * totals["net"], self.main_id)
+                g.add(self.acc["insurance_payable"], -sign * (totals["employee_insurance"] + totals["company_insurance"]), self.main_id)
+                g.add(self.acc["payroll_tax_payable"], -sign * totals["income_tax"], self.main_id)
+
+    # ---- placing the balancing side ----
+
+    def place(self, g):
+        handler = getattr(self, f"_place_{g.source_type}", None)
+        if handler is not None:
+            handler(g)
+        remainder = g.balance()
+        if remainder:
+            g.add(self.acc["suspense"], -remainder, g.entity_id or self.main_id)
+
+    @staticmethod
+    def _split_tax(money, tax, total):
+        if not total:
+            return ZERO
+        return money_round(money * Decimal(tax) / Decimal(total))
+
+    def _place_sales_invoice(self, g):
+        from sales.models import SalesInvoice
+
+        inv = SalesInvoice.objects.get(pk=g.source_id)
+        tax = self._split_tax(g.money, inv.tax_amount, inv.total_amount)
+        g.add(self.acc["vat_out"], -tax, g.entity_id)
+        g.add(self.acc["sales"], -(g.money - tax), g.entity_id)
+        g.add(self.acc["cogs"], -g.stock, g.entity_id)
+        if g.source_id in self._certificates and g.money:
+            # HG-038: a certificate's retention waits in retention receivable and
+            # its recovery pays back the advance. The cancellation entry carries
+            # the opposite sign, so a cancelled certificate nets to nothing.
+            retention, recovery = self._certificates[g.source_id]
+            sign = 1 if g.money > 0 else -1
+            customer = self._party(g, "customer_id") or inv.customer_id
+            if retention and self.acc.has("retention_receivable"):
+                g.add(self.acc["retention_receivable"], sign * retention, g.entity_id)
+                g.add(self.acc["receivable"], -sign * retention, g.entity_id, customer_id=customer)
+            if recovery and self.acc.has("customer_advances"):
+                g.add(self.acc["customer_advances"], sign * recovery, g.entity_id)
+                g.add(self.acc["receivable"], -sign * recovery, g.entity_id, customer_id=customer)
+        settled = self._settled.get(g.source_id)
+        if settled and g.money and self.acc.has("customer_advances"):
+            # S5 (HG-069): the deposit held in 2105 pays this invoice on its date. A cancelled invoice has no
+            # settlement row left, so this line never appears with the cancellation's opposite sign.
+            sign = 1 if g.money > 0 else -1
+            customer = self._party(g, "customer_id") or inv.customer_id
+            g.add(self.acc["customer_advances"], sign * settled, g.entity_id)
+            g.add(self.acc["receivable"], -sign * settled, g.entity_id, customer_id=customer)
+
+    def _place_customer_payment(self, g):
+        """HG-038: an owner's advance is a liability until certificates recover it; S5 (HG-069): so is a deposit."""
+
+        if (g.source_id not in self._advances and g.source_id not in self._deposit_payments) or not self.acc.has("customer_advances"):
+            return
+        for line in g.lines:
+            if line["account"] == self.acc["receivable"]:
+                line["account"] = self.acc["customer_advances"]
+
+    def _place_supplier_payment(self, g):
+        """C11 (HG-128): a subcontractor's advance is an asset until their bills recover it. Its cancellation rows sit
+        in the same group (same payment, same date), so a cancelled advance nets to nothing."""
+
+        if g.source_id not in self._sub_advances or not self.acc.has("subcontractor_advances"):
+            return
+        for line in g.lines:
+            if line["account"] == self.acc["payable"]:
+                line["account"] = self.acc["subcontractor_advances"]
+
+    def _place_sales_return(self, g):
+        from sales.models import SalesReturn
+        from taxes.models import SalesReturnLineTax
+
+        ret = SalesReturn.objects.get(pk=g.source_id)
+        returned_tax = SalesReturnLineTax.objects.filter(return_line__sales_return=ret).aggregate(t=Sum("tax_amount"))["t"] or ZERO
+        tax = self._split_tax(g.money, returned_tax, ret.total_amount)
+        g.add(self.acc["vat_out"], -tax, g.entity_id)
+        g.add(self.acc["sales_returns"], -(g.money - tax), g.entity_id)
+        g.add(self.acc["cogs"], -g.stock, g.entity_id)
+        if ret.source_invoice_id in self._certificates and g.money:
+            # HG-038: a return on a certificate takes back the same share of its
+            # retention and recovery (projects.contract.return_share), so the
+            # project and the books agree. Its cancellation entry reverses it.
+            from projects.contract import return_share
+
+            invoice = ret.source_invoice
+            retention, recovery = self._certificates[ret.source_invoice_id]
+            sign = 1 if g.money < 0 else -1
+            customer = self._party(g, "customer_id") or invoice.customer_id
+            share = return_share(retention, invoice, ret)
+            if share and self.acc.has("retention_receivable"):
+                g.add(self.acc["retention_receivable"], -sign * share, g.entity_id)
+                g.add(self.acc["receivable"], sign * share, g.entity_id, customer_id=customer)
+            share = return_share(recovery, invoice, ret)
+            if share and self.acc.has("customer_advances"):
+                g.add(self.acc["customer_advances"], -sign * share, g.entity_id)
+                g.add(self.acc["receivable"], sign * share, g.entity_id, customer_id=customer)
+
+    def _place_purchase_invoice(self, g):
+        from purchases.models import PurchaseInvoice
+
+        inv = PurchaseInvoice.objects.get(pk=g.source_id)
+        tax = self._split_tax(g.money, inv.tax_amount, inv.total_amount)
+        g.add(self.acc["vat_in"], -tax, g.entity_id)
+        # Whatever the stock lines do not carry was bought as a service or expense.
+        g.add(self._service_cost(g.source_id), -(g.money - tax) - g.stock, g.entity_id)
+        retention = self._sub_bills.get(g.source_id)
+        if retention and g.money and self.acc.has("retention_payable"):
+            # HG-038: retention held from a subcontractor waits in retention payable.
+            sign = 1 if g.money < 0 else -1
+            g.add(self.acc["payable"], sign * retention, g.entity_id, supplier_id=self._party(g, "supplier_id") or inv.supplier_id)
+            g.add(self.acc["retention_payable"], -sign * retention, g.entity_id)
+        recovery = self._sub_recoveries.get(g.source_id)
+        if recovery and g.money and self.acc.has("subcontractor_advances"):
+            # C11 (HG-128): the advance this bill recovers pays part of it, so it leaves the advances account. The
+            # cancellation entry carries the opposite sign, so a cancelled bill gives the advance back.
+            sign = 1 if g.money < 0 else -1
+            g.add(self.acc["payable"], sign * recovery, g.entity_id, supplier_id=self._party(g, "supplier_id") or inv.supplier_id)
+            g.add(self.acc["subcontractor_advances"], -sign * recovery, g.entity_id)
+
+    def _service_cost(self, purchase_id):
+        """HG-038: services bought for a project are a project cost."""
+
+        if purchase_id in self._project_purchases and self.acc.has("project_cost"):
+            return self.acc["project_cost"]
+        return self.acc["general_expense"]
+
+    def _place_purchase_return(self, g):
+        from purchases.models import PurchaseReturn
+        from taxes.models import PurchaseReturnLineTax
+
+        ret = PurchaseReturn.objects.get(pk=g.source_id)
+        returned_tax = PurchaseReturnLineTax.objects.filter(return_line__purchase_return=ret).aggregate(t=Sum("tax_amount"))["t"] or ZERO
+        tax = self._split_tax(g.money, returned_tax, ret.total_amount)
+        g.add(self.acc["vat_in"], -tax, g.entity_id)
+        g.add(self._service_cost(ret.source_invoice_id), -(g.money - tax) - g.stock, g.entity_id)
+        retention = self._sub_bills.get(ret.source_invoice_id)
+        if retention and g.money and self.acc.has("retention_payable"):
+            # HG-038: the returned share of a subcontractor bill's retention.
+            from projects.costs import return_share
+
+            share = return_share(retention, ret.source_invoice, ret)
+            sign = 1 if g.money > 0 else -1
+            g.add(self.acc["payable"], -sign * share, g.entity_id, supplier_id=self._party(g, "supplier_id") or ret.source_invoice.supplier_id)
+            g.add(self.acc["retention_payable"], sign * share, g.entity_id)
+        recovery = self._sub_recoveries.get(ret.source_invoice_id)
+        if recovery and g.money and self.acc.has("subcontractor_advances"):
+            # C11 (HG-128): the returned share of the recovery (projects.costs.return_share) is advance again; the
+            # return's cancellation entry reverses it.
+            from projects.costs import return_share
+
+            share = return_share(recovery, ret.source_invoice, ret)
+            sign = 1 if g.money > 0 else -1
+            g.add(self.acc["payable"], -sign * share, g.entity_id, supplier_id=self._party(g, "supplier_id") or ret.source_invoice.supplier_id)
+            g.add(self.acc["subcontractor_advances"], sign * share, g.entity_id)
+
+    def _place_opening_balance_adjustment(self, g):
+        g.add(self.acc["opening_equity"], -g.balance(), g.entity_id)
+
+    _place_opening_customer = _place_opening_supplier = _place_opening_cashbox = _place_opening_stock = _place_opening_balance_adjustment
+
+    def _place_cashbox_operation(self, g):
+        from cashboxes.models import CashboxOperation
+
+        op = CashboxOperation.objects.get(pk=g.source_id)
+        expense = getattr(op, "expense", None) if hasattr(op, "expense") else None
+        asset = self._asset_ops.get(op.pk)
+        remainder = -g.balance()
+        if expense is not None:
+            link = getattr(expense.category, "ledger_link", None)
+            account = link.account if link else self.acc["general_expense"]
+            g.add(account, remainder, g.entity_id)
+        elif asset is not None and asset[0] == "purchase":
+            g.add(self.acc["fixed_assets"], remainder, g.entity_id)
+        elif asset is not None and asset[0] == "disposal":
+            g.add(self.acc["asset_disposal"], remainder, g.entity_id)
+        elif op.pk in self._payroll_ops:  # T12: a payroll payment settles its debt
+            g.add(self.acc[self.PAYROLL_DEBTS[self._payroll_ops[op.pk]]], remainder, g.entity_id)
+        elif op.pk in self._breakage_ops:  # S6 (HG-071): a gift card's unspent rest becomes sundry income
+            g.add(self.acc["other_income"], remainder, g.entity_id)
+        elif op.operation_type == "bank_fee":
+            g.add(self.acc["bank_charges" if self.acc.has("bank_charges") else "general_expense"], remainder, g.entity_id)
+        elif remainder:
+            g.add(self.acc["owner_drawings"], remainder, g.entity_id)
+
+    def _place_stock_operation(self, g):
+        from inventory.models import StockOperation
+
+        op = StockOperation.objects.get(pk=g.source_id)
+        remainder = -g.balance()
+        if not remainder:
+            return
+        if hasattr(op, "production_output"):
+            # Manufacturing F12 (HG-132): work in progress gives back exactly what the run's materials put into it (their
+            # own journal values); what the output is worth beyond that (labour and overhead, and the piastres of the
+            # four-decimal unit cost) is absorbed production cost. A reversal on another day mirrors it by the sign.
+            net = self._run_wip(op.production_output)
+            if net is not None:
+                # Manufacturing F9 (HG-139): the run's extra outputs already took their part out of work in progress, each
+                # on its own entry (below); the product's entry gives back the rest. Nothing for a run without them.
+                net -= self.extra_outputs()[1].get(op.production_output.pk, ZERO)
+                wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+                absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+                cleared = net if remainder > 0 else -net
+                g.add(wip, cleared, g.entity_id)
+                g.add(absorbed, remainder - cleared, g.entity_id)
+                return
+        if op.pk in self.extra_outputs()[0]:
+            # Manufacturing F9 (HG-139): a by-product or a co-product books like the product: its share of the run's labour
+            # and overhead (none for a by-product) is absorbed production cost, the rest of its value clears work in
+            # progress. A reversal on another day mirrors it by the sign.
+            wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+            absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+            conversion = min(self.extra_outputs()[0][op.pk], abs(remainder))
+            conversion = conversion if remainder > 0 else -conversion
+            g.add(absorbed, conversion, g.entity_id)
+            g.add(wip, remainder - conversion, g.entity_id)
+            return
+        if hasattr(op, "production_output") and op.production_output.conversion_cost:
+            # HG-036: the product came in at materials + labour + overhead. The
+            # materials clear work in progress; labour and overhead are credited
+            # to absorbed production cost (they were already spent as expenses).
+            wip = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+            absorbed = self.acc["production_cost"] if self.acc.has("production_cost") else wip
+            conversion = min(op.production_output.conversion_cost, abs(remainder))
+            conversion = conversion if remainder > 0 else -conversion
+            g.add(absorbed, conversion, g.entity_id)
+            g.add(wip, remainder - conversion, g.entity_id)
+            return
+        if hasattr(op, "production_consumption") or hasattr(op, "production_output") or hasattr(op, "order_issue"):
+            account = self.acc["wip"] if self.acc.has("wip") else self.acc["cogs"]
+        elif hasattr(op, "project_issue"):
+            account = self.acc["project_cost"] if self.acc.has("project_cost") else self.acc["cogs"]
+        elif hasattr(op, "maintenance_part"):
+            # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is maintenance expense, not a
+            # stock-count loss. The part taken back (the reversal, on its own date) mirrors it by the sign.
+            account = self.acc.maintenance()
+        else:
+            account = self.acc["stock_loss"] if remainder > 0 else self.acc["stock_gain"]
+        g.add(account, remainder, g.entity_id)
+
+    @staticmethod
+    def _run_wip(run):
+        """Manufacturing F12 (HG-132): what a run's materials put into work in progress, as the journal valued them (each
+        original movement of its consumption operations at money_round(quantity x unit cost); an order's return, an
+        adjustment in, takes off). None for a run with no consumption rows."""
+
+        from inventory.models import StockMovement
+
+        rows = list(StockMovement.objects.filter(stock_operation__production_consumption__run_id=run.pk, reversal_of__isnull=True)
+                    .values_list("quantity", "unit_cost", "movement_type"))
+        if not rows:
+            return None
+        return sum(((-1 if movement_type in STOCK_IN else 1) * money_round(quantity * unit_cost) for quantity, unit_cost, movement_type in rows), ZERO)
+
+    def extra_outputs(self):
+        """Manufacturing F9 (HG-139): the extra outputs of every run (``manufacturing.RunOutput``), read once per rebuild:
+        ({stock operation pk: its share of the run's labour and overhead}, {run pk: what its extra outputs took out of
+        work in progress}). An output's value is its original movement at money_round(quantity x unit cost), as the
+        journal values it; its share is never more than that value, and work in progress gave the rest."""
+
+        if self._extra_outputs is None:
+            from inventory.models import StockMovement
+
+            shares, cleared = {}, defaultdict(Decimal)
+            rows = (StockMovement.objects.filter(stock_operation__run_output__isnull=False, reversal_of__isnull=True)
+                    .values_list("stock_operation_id", "stock_operation__run_output__run_id", "stock_operation__run_output__conversion_share", "quantity", "unit_cost"))
+            for operation, run, share, quantity, unit_cost in rows:
+                value = money_round(quantity * unit_cost)
+                shares[operation] = min(share, value)
+                cleared[run] += value - shares[operation]
+            self._extra_outputs = shares, cleared
+        return self._extra_outputs
+
+    def _place_stock_movement(self, g):
+        remainder = -g.balance()
+        g.add(self.acc["stock_loss"] if remainder > 0 else self.acc["stock_gain"], remainder, g.entity_id)
+
+    # ---- entities ----
+
+    def balance_entities(self, g):
+        """A document that moves value between entities leaves each one owing
+        or owed: the difference goes to the due-between-entities account."""
+
+        by_entity = defaultdict(Decimal)
+        for line in g.lines:
+            line["entity_id"] = line["entity_id"] or g.entity_id or self.main_id
+            by_entity[line["entity_id"]] += line["amount"]
+        if len([e for e, v in by_entity.items() if v]) > 1:
+            for entity_id, value in by_entity.items():
+                if value:
+                    g.add(self.acc["intercompany"], -value, entity_id)
+
+    # ---- writing ----
+
+    def document_entities(self):
+        """A sale or purchase belongs to the entity of its store, whichever
+        cashbox took the money: {(source_type, source_id): entity_id}."""
+
+        from purchases.models import PurchaseInvoice, PurchaseReturn
+        from sales.models import SalesInvoice, SalesReturn
+
+        owners = {}
+        for source_type, model, path in (("sales_invoice", SalesInvoice, "selling_location__entity_id"),
+                                         ("sales_return", SalesReturn, "source_invoice__selling_location__entity_id"),
+                                         ("purchase_invoice", PurchaseInvoice, "receiving_location__entity_id"),
+                                         ("purchase_return", PurchaseReturn, "source_invoice__receiving_location__entity_id")):
+            wanted = {key[1] for key in self.groups if key[0] == source_type}
+            if wanted:
+                owners.update({(source_type, pk): entity for pk, entity in model.objects.filter(pk__in=wanted).values_list("pk", path) if entity})
+        return owners
+
+    def rebuild(self):
+        self.collect()
+        owners = self.document_entities()
+        entries = []
+        for key in sorted(self.groups, key=lambda k: (k[2], k[0], k[1])):
+            g = self.groups[key]
+            if not g.lines:
+                continue
+            g.entity_id = owners.get((key[0], key[1])) or g.entity_id or self.main_id
+            self.place(g)
+            self.balance_entities(g)
+            entries.append(g)
+        with transaction.atomic():
+            JournalEntry.objects.filter(kind=EntryKind.PROJECTED).delete()
+            for g in entries:
+                entry = JournalEntry.objects.create(entry_date=g.day, kind=EntryKind.PROJECTED, source_type=g.source_type,
+                                                    source_id=g.source_id, reference=_reference(g))
+                JournalLine.objects.bulk_create([
+                    JournalLine(entry=entry, account=line["account"], entity_id=line["entity_id"],
+                                debit=line["amount"] if line["amount"] > 0 else ZERO, credit=-line["amount"] if line["amount"] < 0 else ZERO,
+                                customer_id=line.get("customer_id"), supplier_id=line.get("supplier_id"),
+                                cashbox_id=line.get("cashbox_id"), location_id=line.get("location_id"))
+                    for line in g.lines if line["amount"]
+                ])
+        return len(entries)
+
+
+def _reference(g):
+    from cashboxes.models import CashboxOperation, OpeningBalanceAdjustment
+    from inventory.models import StockOperation
+    from purchases.models import PurchaseInvoice, PurchaseReturn, SupplierPayment
+    from sales.models import CustomerPayment, SalesInvoice, SalesReturn
+
+    lookup = {
+        "sales_invoice": (SalesInvoice, "invoice_number"), "sales_return": (SalesReturn, "return_number"),
+        "customer_payment": (CustomerPayment, "payment_number"), "purchase_invoice": (PurchaseInvoice, "invoice_number"),
+        "purchase_return": (PurchaseReturn, "return_number"), "supplier_payment": (SupplierPayment, "payment_number"),
+        "cashbox_operation": (CashboxOperation, "reference_number"), "stock_operation": (StockOperation, "reference_number"),
+        "opening_balance_adjustment": (OpeningBalanceAdjustment, "adjustment_number"),
+    }
+    if g.source_type in lookup:
+        model, field = lookup[g.source_type]
+        return model.objects.filter(pk=g.source_id).values_list(field, flat=True).first() or ""
+    return f"{g.source_type}-{g.source_id}"
+
+
+# ---- freshness ----
+
+def fingerprint():
+    """Changes whenever anything the projection reads changes."""
+
+    from cashboxes.models import Cashbox, CashboxMovement
+    from fixed_assets.models import FixedAsset
+    from inventory.models import StockMovement
+    from master_data.models import Customer, Supplier
+    from purchases.models import SupplierLedgerEntry
+    from sales.models import CustomerLedgerEntry
+
+    parts = []
+    for model in (CustomerLedgerEntry, SupplierLedgerEntry, CashboxMovement, StockMovement):
+        agg = model.objects.aggregate(n=Max("pk"))
+        parts.append(f"{model.objects.count()}:{agg['n']}")
+    for model in (Customer, Supplier, Cashbox):
+        parts.append(str(model.objects.aggregate(s=Sum("opening_balance"))["s"]))
+    parts.append(",".join(f"{pk}{kind}" for pk, kind in Cashbox.objects.exclude(kind="cash").order_by("pk").values_list("pk", "kind")))  # T3/T4: kinds
+    parts.append(";".join(f"{a.pk}{a.status}{a.disposed_on}" for a in FixedAsset.objects.order_by("pk")))
+    parts.append(timezone.localdate().strftime("%Y-%m"))  # depreciation months roll over
+    parts.append(_contracts_fingerprint())
+    from payroll.models import PayrollPayment, PayrollRun
+
+    parts.append(";".join(f"{pk}{status}{posted}{reversed_on}" for pk, status, posted, reversed_on
+                          in PayrollRun.objects.order_by("pk").values_list("pk", "status", "posted_on", "reversed_on")))  # T12
+    parts.append(str(PayrollPayment.objects.aggregate(n=Max("pk"))["n"]))
+    parts.append(str(Account.objects.count()))
+    from deposits.models import Deposit
+    from settlements.models import InvoiceSettlement
+
+    # S5 (HG-069): a settlement row added or removed, or a deposit changing hands, moves money between 2105 and 1103.
+    parts.append(";".join(f"{pk}{status}" for pk, status in Deposit.objects.order_by("pk").values_list("pk", "status")))
+    parts.append(f"{InvoiceSettlement.objects.count()}:{InvoiceSettlement.objects.aggregate(n=Max('pk'))['n'] or 0}")
+    from giftcards.models import EntryKind, GiftCardEntry
+
+    # S6 (HG-071): a breakage moves its counter-line from the owner's account to sundry income.
+    parts.append(str(GiftCardEntry.objects.filter(kind=EntryKind.BREAKAGE).aggregate(n=Max("pk"))["n"] or 0))
+    return "|".join(parts)
+
+
+def _contracts_fingerprint():
+    """HG-038: advances, certificates, subcontractor bills, project purchases and releases."""
+
+    from projects.models import Certificate, ProjectPayment, ProjectPurchase, RetentionRelease, SubcontractBill, SubcontractPayment, SubcontractRelease
+
+    parts = [";".join(f"{p}{k}" for p, k in ProjectPayment.objects.order_by("pk").values_list("payment_id", "kind")),
+             ";".join(f"{p}{k}" for p, k in SubcontractPayment.objects.order_by("pk").values_list("payment_id", "kind")),  # C11 (HG-128)
+             str(RetentionRelease.objects.filter(reversed_on__isnull=False).count() + SubcontractRelease.objects.filter(reversed_on__isnull=False).count())]
+    for model in (Certificate, SubcontractBill, ProjectPurchase, RetentionRelease, SubcontractRelease):
+        agg = model.objects.aggregate(n=Max("pk"))
+        parts.append(f"{model.objects.count()}:{agg['n'] or 0}")
+    return ",".join(parts)
+
+
+def ensure_fresh():
+    """Rebuild the projected journal if any source changed since the last build."""
+
+    from settings_core.models import SystemSetting
+
+    from . import services
+
+    services.ensure_chart()
+    current = fingerprint()
+    stored = SystemSetting.objects.filter(key="ledger.fingerprint").values_list("value", flat=True).first()
+    if stored == current:
+        return False
+    Projector().rebuild()
+    SystemSetting.objects.update_or_create(key="ledger.fingerprint", defaults={"value": current, "description": "GL-002 projection fingerprint", "active": True})
+    return True

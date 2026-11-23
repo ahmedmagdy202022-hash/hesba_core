@@ -1,0 +1,376 @@
+"""Real figures for the dashboard, built from the report layer.
+
+Everything here goes through reports.selectors rather than querying models
+directly, which is what docs/dashboard_kpis.md requires: "Dashboard cards must
+read from report logic only." That also keeps one definition of a balance, so a
+card and its report can never disagree.
+
+Figures are computed lazily and cached per request. A cashier sees three cards,
+so a cashier's page should not pay for the other nine.
+"""
+
+from decimal import Decimal
+
+from django.db.models import Sum
+
+from cashboxes.models import Cashbox
+from entities import scope as entity_scope
+from inventory.models import StockMovement
+from master_data.models import Customer, Item, Supplier
+from purchases.models import PurchaseInvoice, PurchaseInvoiceStatus, SupplierPayment, SupplierPaymentStatus
+from sales.models import CustomerPayment, CustomerPaymentStatus, SalesInvoice, SalesInvoiceStatus
+from settings_core.services import collect_usage_metrics, evaluate_usage_status
+from settings_core.templatetags.hesba_format import money as display_money
+
+from . import selectors
+from .dashboard_kpis import SCOPE_OWN
+
+
+ZERO = Decimal("0")
+
+
+def _money(value):
+    return value if value is not None else ZERO
+
+
+def _positive_total(rows, key="balance"):
+    """Sum only what is owed.
+
+    A party in credit reduces nothing that is outstanding, so netting it against
+    another party's debt would understate what is actually out there.
+    """
+
+    total = ZERO
+    for row in rows:
+        if row[key] > 0:
+            total += row[key]
+    return total
+
+
+class SharedReads:
+    """Selector results a single dashboard needs more than once.
+
+    The cards and the alerts both ask about stock, customers
+    and cashboxes. Without this each of the three would re-run the same query,
+    which is most of a dashboard's query count for no gain.
+    """
+
+    def __init__(self):
+        self._cache = {}
+
+    def _get(self, key, produce):
+        if key not in self._cache:
+            self._cache[key] = produce()
+        return self._cache[key]
+
+    def stock_alerts(self):
+        return self._get("stock_alerts", selectors.stock_alert_counts)
+
+    def overdue_instalments(self, today):
+        from installments.services import overdue_summary  # INSTAL-001
+
+        return self._get("overdue_instalments", lambda: overdue_summary(today))
+
+    def expiring_batches(self, today):
+        from batches.services import expiry_alerts  # BATCH-001
+
+        return self._get("expiring_batches", lambda: expiry_alerts(today))
+
+    def customers(self):
+        return self._get("customers", selectors.customer_report)
+
+    def cashboxes(self):
+        return self._get("cashboxes", selectors.cashbox_report)
+
+    def expiry_only(self):
+        from batches.words import expiry_only
+
+        return self._get("expiry_only", expiry_only)
+
+    def card_cashbox_id(self):
+        """AN8: the card machine's cashbox, which keeps no float and so never runs low."""
+
+        def produce():
+            from sales.pos_buttons import card_cashbox
+
+            card = card_cashbox()
+            return card.pk if card else None
+
+        return self._get("card_cashbox_id", produce)
+
+    def credit_limits(self):
+        return self._get(
+            "credit_limits",
+            lambda: dict(
+                Customer.objects.filter(active=True, credit_limit__gt=0).values_list(
+                    "id", "credit_limit"
+                )
+            ),
+        )
+
+    def customers_over_limit(self):
+        def produce():
+            limits = self.credit_limits()
+            if not limits:
+                return []
+            return [
+                row
+                for row in self.customers()
+                if row["customer_id"] in limits and row["balance"] > limits[row["customer_id"]]
+            ]
+
+        return self._get("over_limit", produce)
+
+
+class DashboardFigures:
+    """Computes a dashboard's numbers on demand, once each."""
+
+    def __init__(self, user, today, shared=None):
+        self.user = user
+        self.today = today
+        self.shared = shared or SharedReads()
+        self._cache = {}
+
+    def value_for(self, key, scope):
+        cache_key = (key, scope)
+        if cache_key not in self._cache:
+            resolver = getattr(self, f"_{key}", None)
+            self._cache[cache_key] = ZERO if resolver is None else resolver(scope)
+        return self._cache[cache_key]
+
+    # ---- sales ----
+
+    def _sales_invoices_today(self, scope):
+        invoices = selectors.sales_report(
+            date_from=self.today, date_to=self.today, status=SalesInvoiceStatus.POSTED
+        )
+        if scope == SCOPE_OWN:
+            invoices = invoices.filter(created_by=self.user)
+        return invoices
+
+    def _sales_today(self, scope):
+        return _money(
+            self._sales_invoices_today(scope).aggregate(total=Sum("total_amount"))["total"]
+        )
+
+    def _invoice_count_today(self, scope):
+        return self._sales_invoices_today(scope).count()
+
+    # ---- purchases ----
+
+    def _purchases_today(self, scope):
+        invoices = selectors.purchase_report(
+            date_from=self.today, date_to=self.today, status=PurchaseInvoiceStatus.POSTED
+        )
+        return _money(invoices.aggregate(total=Sum("total_amount"))["total"])
+
+    # ---- profit ----
+
+    def _profit_today(self, scope):
+        return selectors.profit_totals(date_from=self.today, date_to=self.today)["profit"]
+
+    # ---- cash and parties ----
+
+    def _cashbox_balance(self, scope):
+        return sum((row["balance"] for row in self.shared.cashboxes()), ZERO)
+
+    def _customer_dues(self, scope):
+        return _positive_total(self.shared.customers())
+
+    def _supplier_dues(self, scope):
+        return _positive_total(selectors.supplier_report())
+
+    def _receipts_today(self, scope):
+        payments = entity_scope.scope(CustomerPayment.objects, entity_scope.CUSTOMER_PAYMENT).filter(
+            payment_date=self.today, status=CustomerPaymentStatus.POSTED
+        )
+        if scope == SCOPE_OWN:
+            payments = payments.filter(created_by=self.user)
+        return _money(payments.aggregate(total=Sum("amount"))["total"])
+
+    def _supplier_payments_today(self, scope):
+        payments = entity_scope.scope(SupplierPayment.objects, entity_scope.SUPPLIER_PAYMENT).filter(
+            payment_date=self.today, status=SupplierPaymentStatus.POSTED
+        )
+        return _money(payments.aggregate(total=Sum("amount"))["total"])
+
+    # ---- stock ----
+
+    def _low_stock_count(self, scope):
+        return self.shared.stock_alerts()["low_stock"]
+
+    def _out_of_stock_count(self, scope):
+        return self.shared.stock_alerts()["out_of_stock"]
+
+    # ---- usage ----
+
+    def _usage_status(self, scope):
+        # USAGE-002: the worse of the row-count level and the real database size.
+        from settings_core.storage import database_size_bytes, level_for, limit_bytes, worse
+
+        return worse(evaluate_usage_status(sum(collect_usage_metrics().values())), level_for(database_size_bytes(), limit_bytes()))
+
+
+def has_any_business_data():
+    """Whether this installation has been used yet.
+
+    Master data alone does not count. Someone who added a cashbox but has never
+    recorded anything still needs the four-step guide, not an empty dashboard.
+    """
+
+    return (
+        SalesInvoice.objects.exists()
+        or PurchaseInvoice.objects.exists()
+        or StockMovement.objects.exists()
+    )
+
+
+def onboarding_progress():
+    """Which of the four starting steps are already done."""
+
+    return [
+        Cashbox.objects.filter(active=True).exists(),
+        Customer.objects.filter(active=True).exists() or Supplier.objects.filter(active=True).exists(),
+        Item.objects.filter(active=True).exists(),
+        SalesInvoice.objects.exists() or PurchaseInvoice.objects.exists(),
+    ]
+
+
+# Thresholds for the alert list. Deliberately conservative: an alert the owner
+# learns to ignore is worse than no alert.
+CASHBOX_LOW_THRESHOLD = Decimal("500")
+
+
+def build_alerts(held_permissions, today, shared=None):
+    """Real alerts from real thresholds, newest risk first.
+
+    Only alerts the viewer is allowed to see are built at all, so this never
+    leaks a figure the KPI row would have withheld. Cheques are absent because
+    no cheque model exists yet; docs/120_DASHBOARD_CORE_PLAN is explicit that
+    missing data should show nothing rather than empty noise.
+    """
+
+    shared = shared or SharedReads()
+    alerts = []
+
+    if "reports.view_inventory_report" in held_permissions:
+        counts = shared.stock_alerts()
+        if counts["out_of_stock"]:
+            alerts.append(
+                {
+                    "key": "out_of_stock",
+                    "severity": "urgent",
+                    "ar": f"{counts['out_of_stock']} صنف نفد من المخزون",
+                    "en": f"{counts['out_of_stock']} item(s) out of stock",
+                    "detail_ar": "لا يمكن البيع من هذه الأصناف الآن.",
+                    "detail_en": "These cannot be sold right now.",
+                    "amount": "",
+                }
+            )
+        if counts["low_stock"]:
+            alerts.append(
+                {
+                    "key": "low_stock",
+                    "severity": "soon",
+                    "ar": f"{counts['low_stock']} صنف تحت الحد الأدنى",
+                    "en": f"{counts['low_stock']} item(s) below minimum",
+                    "detail_ar": "راجع الأصناف قبل نفاذها.",
+                    "detail_en": "Review before they run out.",
+                    "amount": "",
+                }
+            )
+
+        # BATCH-001: batches still on hand that expired or expire soon.
+        expiring = shared.expiring_batches(today)
+        from batches.words import WORDS as EXPIRY_WORDS
+
+        dated = getattr(shared, "expiry_only", lambda: False)()  # AN8: a shop keeping expiry dates only reads "items", not "batches"
+        if expiring["expired"]:
+            alerts.append(
+                {
+                    "key": "batches_expired",
+                    "severity": "urgent",
+                    "ar": EXPIRY_WORDS["ar"]["expired_alert"].format(n=len(expiring["expired"])) if dated else f"{len(expiring['expired'])} تشغيلة منتهية الصلاحية لسه في المخزون",
+                    "en": EXPIRY_WORDS["en"]["expired_alert"].format(n=len(expiring["expired"])) if dated else f"{len(expiring['expired'])} expired batch(es) still in stock",
+                    "detail_ar": EXPIRY_WORDS["ar"]["expired_detail"] if dated else "شيلها من الرف وراجع شاشة التشغيلات.",
+                    "detail_en": EXPIRY_WORDS["en"]["expired_detail"] if dated else "Take them off the shelf; see the batches screen.",
+                    "amount": "",
+                }
+            )
+        if expiring["soon"]:
+            alerts.append(
+                {
+                    "key": "batches_expiring",
+                    "severity": "soon",
+                    "ar": EXPIRY_WORDS["ar"]["soon_alert"].format(n=len(expiring["soon"])) if dated else f"{len(expiring['soon'])} تشغيلة صلاحيتها قربت تخلص",
+                    "en": EXPIRY_WORDS["en"]["soon_alert"].format(n=len(expiring["soon"])) if dated else f"{len(expiring['soon'])} batch(es) expiring soon",
+                    "detail_ar": "بيعها الأول أو رجّعها للمورد.",
+                    "detail_en": "Sell them first or return them to the supplier.",
+                    "amount": "",
+                }
+            )
+
+    if "reports.view_customer_report" in held_permissions:
+        limits = shared.credit_limits()
+        for row in shared.customers_over_limit():
+            limit = limits[row["customer_id"]]
+            alerts.append(
+                {
+                    "key": f"customer_over_limit_{row['customer_id']}",
+                    "severity": "urgent",
+                    "ar": f"{row['customer_name']} تجاوز حد المديونية",
+                    "en": f"{row['customer_name']} is over the credit limit",
+                    # The quoted limit is exact: a rounded threshold can claim a
+                    # customer passed a line they are still inside.
+                    "detail_ar": f"الحد المسموح {display_money(limit)}.",
+                    "detail_en": f"Limit is {display_money(limit)}.",
+                    "amount": display_money(row["balance"]),
+                }
+            )
+
+        # INSTAL-001: instalments past their due date and still open.
+        late = shared.overdue_instalments(today)
+        if late["count"]:
+            alerts.append(
+                {
+                    "key": "instalments_overdue",
+                    "severity": "urgent",
+                    "ar": f"{late['count']} قسط متأخر على {late['plans']} عميل",
+                    "en": f"{late['count']} overdue instalment(s) on {late['plans']} plan(s)",
+                    "detail_ar": "راجع شاشة التقسيط وابعت تذكير.",
+                    "detail_en": "See the instalments screen and send a reminder.",
+                    "amount": display_money(late["amount"]),
+                }
+            )
+
+    if "cashboxes.view_finance" in held_permissions:
+        card_id = getattr(shared, "card_cashbox_id", lambda: None)()
+        for row in shared.cashboxes():
+            if row["balance"] < 0:
+                alerts.append(
+                    {
+                        "key": f"cashbox_negative_{row['cashbox_id']}",
+                        "severity": "urgent",
+                        "ar": f"{row['cashbox_name']} رصيدها سالب",
+                        "en": f"{row['cashbox_name']} has a negative balance",
+                        "detail_ar": "راجع الحركات المسجلة على الخزنة.",
+                        "detail_en": "Review the movements recorded on it.",
+                        "amount": display_money(row["balance"]),
+                    }
+                )
+            elif row["balance"] < CASHBOX_LOW_THRESHOLD and row["cashbox_id"] != card_id:  # AN8: the card machine keeps no float
+                alerts.append(
+                    {
+                        "key": f"cashbox_low_{row['cashbox_id']}",
+                        "severity": "watch",
+                        "ar": f"{row['cashbox_name']} رصيدها منخفض",
+                        "en": f"{row['cashbox_name']} balance is low",
+                        "detail_ar": "أقل من الحد المعتاد للتشغيل.",
+                        "detail_en": "Below the usual working level.",
+                        "amount": display_money(row["balance"]),
+                    }
+                )
+
+    severity_order = {"urgent": 0, "soon": 1, "watch": 2}
+    alerts.sort(key=lambda alert: severity_order[alert["severity"]])
+    return alerts

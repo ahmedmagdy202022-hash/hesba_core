@@ -1,0 +1,23 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% include "pharmacy/_tabs.html" %}
+<section class="op-summary-grid">
+<article><small>{{ words.f_open }}</small><strong data-count-open>{{ counts.open }}</strong></article>
+<article><small>{{ words.f_due }}</small><strong data-count-due>{{ counts.due }}</strong></article>
+</section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="show" value="{{ show }}">
+<label class="sr-only" for="rx-q">{{ words.search }}</label><input id="rx-q" type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+<nav class="op-form-actions wo-tabs" data-rx-filter>
+<a class="{% if show == 'open' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=open">{{ words.f_open }}</a>
+<a class="{% if show == 'due' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=due">{{ words.f_due }}</a>
+<a class="{% if show == 'all' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=all">{{ words.f_all }}</a>
+</nav>
+<div class="op-table-wrap"><table class="op-table" data-prescriptions><thead><tr><th>{{ words.number }}</th><th>{{ words.patient }}</th><th>{{ words.doctor }}</th><th>{{ words.date }}</th><th>{{ words.status }}</th><th>{{ words.next_refill }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-rx="{{ row.pk }}"><td><a href="{% url 'pharmacy:prescription' row.pk %}?lang={{ lang }}"><bdi>{{ row.number }}</bdi></a></td>
+<td class="op-cell-text">{{ row.patient_name }}{% if row.patient_phone %} <small class="op-muted"><bdi>{{ row.patient_phone }}</bdi></small>{% endif %}</td><td class="op-cell-text">{{ row.doctor_name|default:"—" }}</td>
+<td><bdi>{{ row.issued_on|date:"Y-m-d" }}</bdi></td><td>{% with state=row.state %}{% include "pharmacy/_state.html" %}{% endwith %}</td>
+<td>{% if row.next_refill %}<bdi>{{ row.next_refill|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,12 +1,22 @@
 from decimal import Decimal
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
 
 from audit.models import AuditEventType, AuditLog
-from cashboxes.models import CashboxDirection, CashboxMovement, CashboxMovementType
+from cashboxes.models import Cashbox, CashboxDirection, CashboxMovement, CashboxMovementType
+from cashboxes.services import get_cashbox_balance
+from config.money import allocate_proportionally
 from inventory.models import StockMovement, StockMovementType
-from inventory.services import get_item_location_stock_quantity, recalculate_item_average_cost
+from inventory.services import (
+    get_item_authoritative_average_cost,
+    get_item_location_stock_quantity,
+    lock_items_for_stock_check,
+    recalculate_item_average_cost,
+)
+from permissions.services import user_has_permission
 from .models import (
     CustomerLedgerEntry,
     CustomerLedgerEntryType,
@@ -14,35 +24,153 @@ from .models import (
     CustomerPaymentStatus,
     SalesInvoice,
     SalesInvoiceStatus,
+    SalesLine,
+    SalesReturn,
+    SalesReturnLine,
+    SalesReturnStatus,
     money_round,
 )
+
+
+@transaction.atomic
+def default_salesperson(customer, user):
+    """PERF-001: the customer's rep, else the employee linked to whoever is selling.
+
+    Nobody while the employees module is off (FEEDBACK-R1), so an invoice
+    never names a rep the business does not use."""
+
+    from staff.services import reps_in_use
+
+    if not reps_in_use():
+        return None
+    rep = getattr(customer, "sales_rep", None)
+    if rep is not None and rep.active:
+        return rep
+    employee = getattr(user, "employee", None) if user is not None else None
+    return employee if employee is not None and employee.active else None
+
+
+def _salesperson(header, user):
+    """FEEDBACK-R1: the one rule for every invoice: no rep while the business does not use reps."""
+
+    from staff.services import reps_in_use
+
+    if not reps_in_use():
+        return None
+    return header.get("salesperson") or default_salesperson(header["customer"], user)
+
+
+def create_sales_draft(header, lines, user=None):
+    """Create a validated sales draft while leaving posting effects untouched."""
+
+    prepared_lines = []
+    subtotal = Decimal("0")
+    for number, data in enumerate(lines, start=1):
+        line_discount = data.get("line_discount_amount") or Decimal("0")
+        line_total = money_round(
+            (data["quantity"] * data["unit_sale_price"]) - line_discount
+        )
+        if line_total < 0:
+            raise ValidationError("A sales line discount cannot exceed its gross amount.")
+        prepared_lines.append((number, data, line_total))
+        subtotal += line_total
+
+    if not prepared_lines:
+        raise ValidationError("Sales invoice must have at least one line.")
+
+    invoice_discount = header.get("discount_amount") or Decimal("0")
+    tax_amount = header.get("tax_amount") or Decimal("0")
+    paid_now = header.get("paid_now") or Decimal("0")
+    total_amount = money_round(subtotal - invoice_discount + tax_amount)
+    if total_amount < 0:
+        raise ValidationError("Invoice discount cannot make the total negative.")
+
+    invoice = SalesInvoice(
+        invoice_number=header["invoice_number"],
+        invoice_date=header["invoice_date"],
+        customer=header["customer"],
+        selling_location=header["selling_location"],
+        cashbox=header.get("cashbox"),
+        subtotal=money_round(subtotal),
+        discount_amount=invoice_discount,
+        tax_amount=tax_amount,
+        total_amount=total_amount,
+        paid_now=paid_now,
+        remaining_due=money_round(total_amount - paid_now),
+        notes=header.get("notes", ""),
+        salesperson=_salesperson(header, user),
+        created_by=user,
+    )
+    invoice.payment_status = invoice.calculate_payment_status()
+    invoice.full_clean()
+    invoice.save()
+
+    for number, data, line_total in prepared_lines:
+        line = SalesLine(
+            invoice=invoice,
+            line_number=number,
+            item=data["item"],
+            description=data.get("description", ""),
+            quantity=data["quantity"],
+            unit_sale_price=data["unit_sale_price"],
+            line_discount_amount=data.get("line_discount_amount") or Decimal("0"),
+            line_total_amount=line_total,
+        )
+        line.full_clean()
+        line.save()
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user,
+        module="sales",
+        action="create_sales_draft",
+        object_type="SalesInvoice",
+        object_id=str(invoice.id),
+        after_data={
+            "invoice_number": invoice.invoice_number,
+            "status": invoice.status,
+            "customer_id": invoice.customer_id,
+            "line_count": len(prepared_lines),
+            "total_amount": str(invoice.total_amount),
+            "paid_now": str(invoice.paid_now),
+            "remaining_due": str(invoice.remaining_due),
+        },
+    )
+    return invoice
 
 
 def _line_unit_cost(line):
     if not line.item.is_stock_tracked:
         return Decimal("0")
-    return line.item.average_cost or Decimal("0")
+    return get_item_authoritative_average_cost(line.item)
 
 
 def _line_cost_amount(line, unit_cost):
     return money_round(line.quantity * unit_cost)
 
 
-def _validate_stock_available(invoice, lines):
-    for line in lines:
-        if not line.item.is_stock_tracked:
-            continue
-        available = get_item_location_stock_quantity(line.item, invoice.selling_location)
-        if available < line.quantity:
-            raise ValidationError(
-                f"Not enough stock for item {line.item}. Available: {available}, required: {line.quantity}."
-            )
+def _validate_stock_available(invoice, lines, allow_short=False):
+    """HG-065: the lines of one item are checked together. A shortage is refused unless the seller agreed and the
+    owner allows selling without stock; then the shortages are returned for the audit log."""
+
+    from . import short_sales
+
+    lock_items_for_stock_check(line.item_id for line in lines if line.item.is_stock_tracked)
+    found = short_sales.shortages(invoice, lines)
+    if found and not allow_short:
+        raise short_sales.StockShortage(found)
+    return found
 
 
 @transaction.atomic
-def post_sales_invoice(invoice_id, user=None):
+def post_sales_invoice(invoice_id, user=None, allow_short=False, short_source="invoice"):
+    """Post a draft. ``allow_short`` is the seller's agreement to sell what is not in stock (HG-065); it counts only
+    while the owner allows selling without stock. ``short_source`` says where it was given: invoice, pos or offline."""
+
+    from . import short_sales
+
     invoice = (
-        SalesInvoice.objects.select_for_update()
+        SalesInvoice.objects.select_for_update(of=("self",))
         .select_related("customer", "selling_location", "cashbox")
         .prefetch_related("lines__item")
         .get(pk=invoice_id)
@@ -50,6 +178,7 @@ def post_sales_invoice(invoice_id, user=None):
 
     if invoice.status != SalesInvoiceStatus.DRAFT:
         raise ValidationError("Only draft sales invoices can be posted.")
+    _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
 
     invoice.full_clean()
 
@@ -60,7 +189,9 @@ def post_sales_invoice(invoice_id, user=None):
     for line in lines:
         line.full_clean()
 
-    _validate_stock_available(invoice, lines)
+    found = _validate_stock_available(invoice, lines, allow_short=bool(allow_short) and short_sales.enabled())
+    if found:
+        short_sales.record_agreement(invoice, found, user, short_source)
 
     if invoice.remaining_due and invoice.remaining_due > 0:
         CustomerLedgerEntry.objects.create(
@@ -86,11 +217,27 @@ def post_sales_invoice(invoice_id, user=None):
             created_by=user,
         )
 
+    # HG-015: each line's share of the total is weighted by what it charges
+    # including its tax, and revenue is that share minus the tax. With no tax
+    # this is exactly the previous allocation.
+    from taxes.services import line_taxes
+
+    taxes = line_taxes(invoice, lines)
+    financial_weights = [line.line_total_amount + taxes[line.pk] for line in lines]
+    if sum(financial_weights, Decimal("0")) <= 0:
+        financial_weights = [Decimal("1") for _ in lines]
+    financial_allocations = allocate_proportionally(invoice.total_amount, financial_weights)
+
     affected_items = {}
-    for line in lines:
-        unit_cost = _line_unit_cost(line)
+    for line, financial_amount in zip(lines, financial_allocations):
+        unit_cost, estimate = _line_unit_cost(line), None
+        if line.item.is_stock_tracked:
+            # HG-065: units no stock stands behind take an estimate; with stock on hand this is the average as before.
+            unit_cost, estimate = short_sales.line_cost(line.item, line.quantity)
+            on_shelf = get_item_location_stock_quantity(line.item, invoice.selling_location)
+            location_short = line.quantity - min(max(on_shelf, Decimal("0")), line.quantity)
         line_cost = _line_cost_amount(line, unit_cost)
-        line_profit = money_round(line.line_total_amount - line_cost)
+        line_profit = money_round(financial_amount - taxes[line.pk] - line_cost)
 
         line.unit_cost = unit_cost
         line.line_cost_amount = line_cost
@@ -112,6 +259,7 @@ def post_sales_invoice(invoice_id, user=None):
             notes=f"Sales invoice {invoice.invoice_number}",
             created_by=user,
         )
+        short_sales.record_line(line, invoice.selling_location, location_short, estimate, user)
         affected_items[line.item_id] = line.item
 
     for item in affected_items.values():
@@ -144,7 +292,7 @@ def post_sales_invoice(invoice_id, user=None):
 @transaction.atomic
 def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
     invoice = (
-        SalesInvoice.objects.select_for_update()
+        SalesInvoice.objects.select_for_update(of=("self",))
         .select_related("customer", "selling_location", "cashbox")
         .prefetch_related("lines__item")
         .get(pk=invoice_id)
@@ -152,6 +300,17 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
 
     if invoice.status != SalesInvoiceStatus.POSTED:
         raise ValidationError("Only posted sales invoices can be cancelled.")
+    _ensure_posting_period(invoice.invoice_date)  # HG-011: closed months stay closed.
+    from einvoice.guards import before_sales_invoice_cancel
+
+    before_sales_invoice_cancel(invoice)  # HG-039: an invoice the Tax Authority holds is cancelled there first
+    if invoice.shipments.filter(status="with_courier").exists():
+        # T14 (HG-061): a parcel still out is brought back or written off on the shipments screen first.
+        raise ValidationError("This invoice has a parcel with a courier; mark it came back or lost on the shipments screen first.")
+    if invoice.returns.filter(status=SalesReturnStatus.POSTED).exists():
+        raise ValidationError(
+            "A sales invoice with posted return documents cannot be cancelled."
+        )
 
     lines = list(invoice.lines.all())
     if not lines:
@@ -181,6 +340,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
             created_by=user,
         )
 
+    from . import short_sales
+
+    short_sales.reverse_for_cancel(invoice, user)  # HG-065: its cost settlements go first, each on its own date
     affected_items = {}
     for line in lines:
         if not line.item.is_stock_tracked:
@@ -205,6 +367,7 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
 
     invoice.status = SalesInvoiceStatus.CANCELLED
     invoice.save(update_fields=["status", "updated_at"])
+    short_sales.rebalance_items(affected_items.values(), invoice.invoice_date, user)  # the stock back may settle others
 
     AuditLog.objects.create(
         event_type=AuditEventType.UPDATE,
@@ -224,6 +387,9 @@ def cancel_posted_sales_invoice(invoice_id, user=None, reason=""):
         },
     )
 
+    from projects.guards import after_sales_invoice_change
+
+    after_sales_invoice_change(invoice)  # HG-038: a project's contract figures stay possible
     return invoice
 
 
@@ -237,6 +403,7 @@ def record_customer_payment(payment_number, payment_date, customer, cashbox, amo
     - No supplier, purchase, inventory, or cost effect.
     """
 
+    _ensure_posting_period(payment_date)  # HG-011: closed months stay closed.
     payment = CustomerPayment.objects.create(
         payment_number=payment_number,
         payment_date=payment_date,
@@ -289,9 +456,392 @@ def record_customer_payment(payment_number, payment_date, customer, cashbox, amo
     return payment
 
 
+def _ensure_posting_period(action_date):
+    from closing.services import ensure_period_is_open
+
+    return ensure_period_is_open(action_date)
+
+
+def _ensure_return_period(action_date):
+    from closing.services import ensure_period_is_open
+
+    return ensure_period_is_open(action_date)
+
+
+def _require_sales_return_permission(user):
+    if not user_has_permission(user, "sales.return_sale"):
+        raise PermissionDenied("Sales returns require sales.return_sale.")
+
+
+def _sales_source_allocations(invoice, source_lines, taxes=None):
+    # HG-015: weighted like posting, by what each line charges including tax.
+    taxes = taxes or {}
+    weights = [line.line_total_amount + taxes.get(line.pk, Decimal("0")) for line in source_lines]
+    if sum(weights, Decimal("0")) <= 0:
+        weights = [Decimal("1") for _ in source_lines]
+    allocations = allocate_proportionally(invoice.total_amount, weights)
+    return {line.pk: amount for line, amount in zip(source_lines, allocations)}
+
+
+def _prepare_sales_return_lines(invoice, source_lines, requested_lines):
+    from taxes.services import line_taxes, return_tax_share
+
+    from . import short_sales
+
+    by_id = {line.pk: line for line in source_lines}
+    taxes = line_taxes(invoice, source_lines)
+    allocations = _sales_source_allocations(invoice, source_lines, taxes)
+    prepared = []
+    seen = set()
+    for requested in requested_lines:
+        source_line = requested.get("source_line")
+        source_line_id = getattr(source_line, "pk", source_line)
+        quantity = Decimal(requested.get("quantity") or 0)
+        if source_line_id in seen:
+            raise ValidationError("A source line may appear only once in a return document.")
+        seen.add(source_line_id)
+        line = by_id.get(source_line_id)
+        if line is None:
+            raise ValidationError("Every return line must belong to the source invoice.")
+        if quantity <= 0:
+            raise ValidationError("Return quantity must be greater than zero.")
+        prior = line.return_lines.filter(
+            sales_return__status=SalesReturnStatus.POSTED
+        ).aggregate(quantity=Sum("quantity"), amount=Sum("amount"), cost=Sum("cost_amount"))
+        prior_quantity = prior["quantity"] or Decimal("0")
+        prior_amount = prior["amount"] or Decimal("0")
+        prior_cost = prior["cost"] or Decimal("0")
+        cumulative_quantity = prior_quantity + quantity
+        if cumulative_quantity > line.quantity:
+            raise ValidationError(
+                f"Return quantity exceeds the remaining quantity for line {line.line_number}."
+            )
+        allocated_total = allocations[line.pk]
+        if cumulative_quantity == line.quantity:
+            amount = money_round(allocated_total - prior_amount)
+            cost_amount = money_round(line.line_cost_amount - prior_cost)
+        else:
+            amount = money_round(allocated_total * quantity / line.quantity)
+            cost_amount = money_round(line.line_cost_amount * quantity / line.quantity)
+        unit_cost = line.unit_cost
+        short_cost = short_sales.return_cost(line, quantity, prior_quantity, prior_cost)
+        if short_cost is not None:  # HG-065: a short line's units come back at what they cost, settlements included
+            unit_cost, cost_amount = short_cost
+        prepared.append(
+            {
+                "source_line": line,
+                "quantity": quantity,
+                "amount": amount,
+                "unit_cost": unit_cost,
+                "cost_amount": cost_amount,
+                "prior_quantity": prior_quantity,
+                # HG-015: the refund above includes this much tax.
+                "tax_amount": return_tax_share(line, taxes[line.pk], quantity, cumulative_quantity),
+            }
+        )
+    if not prepared:
+        raise ValidationError("A sales return must contain at least one line.")
+    return prepared
+
+
+def _sales_return_payment_split(invoice, return_total):
+    previous = invoice.returns.filter(status=SalesReturnStatus.POSTED).aggregate(
+        total=Sum("total_amount"), cash=Sum("cash_amount")
+    )
+    previous_total = previous["total"] or Decimal("0")
+    previous_cash = previous["cash"] or Decimal("0")
+    cumulative_total = money_round(previous_total + return_total)
+    if cumulative_total > invoice.total_amount:
+        raise ValidationError("Sales returns cannot exceed the source invoice total.")
+    if not invoice.total_amount:
+        cash_amount = Decimal("0")
+    elif cumulative_total == invoice.total_amount:
+        cash_amount = money_round(invoice.paid_now - previous_cash)
+    else:
+        target_cash = money_round(invoice.paid_now * cumulative_total / invoice.total_amount)
+        cash_amount = money_round(target_cash - previous_cash)
+    return cash_amount, money_round(return_total - cash_amount)
+
+
+@transaction.atomic
+def create_sales_return(
+    return_number,
+    return_date,
+    source_invoice_id,
+    lines,
+    reason,
+    user,
+):
+    """Post a partial/full independent sales return document."""
+
+    _require_sales_return_permission(user)
+    _ensure_return_period(return_date)
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Sales return reason is required.")
+    invoice = (
+        SalesInvoice.objects.select_for_update(of=("self",))
+        .select_related("customer", "selling_location", "cashbox")
+        .get(pk=source_invoice_id)
+    )
+    if invoice.status != SalesInvoiceStatus.POSTED:
+        raise ValidationError("Sales returns require a posted source invoice.")
+    from giftcards.guards import before_sales_return
+
+    before_sales_return(invoice)  # HG-071 D7: no return-to-card path yet; a card-paid invoice is not returned here
+    from .tenders import before_sales_return as before_split_return
+
+    before_split_return(invoice)  # R2b (HG-110): a walk-in invoice paid several ways is cancelled whole, not returned
+    source_lines = list(
+        SalesLine.objects.select_for_update()
+        .filter(invoice=invoice)
+        .select_related("item")
+        .order_by("line_number")
+    )
+    prepared = _prepare_sales_return_lines(invoice, source_lines, lines)
+    total_amount = money_round(sum((row["amount"] for row in prepared), Decimal("0")))
+    cost_amount = money_round(sum((row["cost_amount"] for row in prepared), Decimal("0")))
+    cash_amount, due_amount = _sales_return_payment_split(invoice, total_amount)
+    refund_cashbox = None
+    if cash_amount > 0:
+        refund_cashbox = Cashbox.objects.select_for_update().get(pk=invoice.cashbox_id)
+        if get_cashbox_balance(refund_cashbox) < cash_amount:
+            raise ValidationError(
+                "The cashbox cannot become negative for this sales return refund."
+            )
+    sales_return = SalesReturn(
+        return_number=(return_number or "").strip(),
+        return_date=return_date,
+        source_invoice=invoice,
+        total_amount=total_amount,
+        cash_amount=cash_amount,
+        due_amount=due_amount,
+        cost_amount=cost_amount,
+        reason=reason,
+        created_by=user,
+    )
+    sales_return.full_clean()
+    sales_return.save()
+
+    from taxes.services import record_return_taxes
+
+    from . import short_sales
+
+    affected_items = {}
+    returned_taxes = []
+    for row in prepared:
+        row = dict(row)
+        tax_amount = row.pop("tax_amount", Decimal("0"))
+        prior_quantity = row.pop("prior_quantity")
+        return_line = SalesReturnLine(sales_return=sales_return, **row)
+        return_line.full_clean()
+        return_line.save()
+        short_sales.release_for_return(return_line, sales_return, prior_quantity, user)  # HG-065
+        returned_taxes.append((return_line, tax_amount))
+        item = row["source_line"].item
+        if not item.is_stock_tracked:
+            continue
+        movement = StockMovement(
+            movement_date=return_date,
+            movement_type=StockMovementType.SALE_RETURN_IN,
+            item=item,
+            location=invoice.selling_location,
+            quantity=row["quantity"],
+            unit_cost=row["unit_cost"],
+            sales_return=sales_return,
+            sales_return_line=return_line,
+            notes=f"Sales return {sales_return.return_number}",
+            created_by=user,
+        )
+        movement.full_clean()
+        movement.save()
+        affected_items[item.pk] = item
+
+    if due_amount > 0:
+        CustomerLedgerEntry.objects.create(
+            customer=invoice.customer,
+            entry_date=return_date,
+            entry_type=CustomerLedgerEntryType.SALES_RETURN,
+            sales_return=sales_return,
+            due_decrease=due_amount,
+            description=f"Sales return {sales_return.return_number}",
+            created_by=user,
+        )
+    if cash_amount > 0:
+        CashboxMovement.objects.create(
+            cashbox=refund_cashbox,
+            movement_date=return_date,
+            movement_type=CashboxMovementType.SALES_RETURN,
+            direction=CashboxDirection.OUT,
+            amount=cash_amount,
+            sales_return=sales_return,
+            description=f"Sales return {sales_return.return_number}",
+            created_by=user,
+        )
+    record_return_taxes(returned_taxes)
+    for item in affected_items.values():
+        recalculate_item_average_cost(item)
+    short_sales.rebalance_items(affected_items.values(), return_date, user)  # HG-065: the stock back may settle others
+    AuditLog.objects.create(
+        event_type=AuditEventType.CREATE,
+        actor=user,
+        module="sales",
+        action="create_sales_return",
+        object_type="SalesReturn",
+        object_id=str(sales_return.pk),
+        reason=reason,
+        after_data={
+            "return_number": sales_return.return_number,
+            "source_invoice_id": invoice.pk,
+            "total_amount": str(total_amount),
+            "cash_amount": str(cash_amount),
+            "due_amount": str(due_amount),
+            "cost_amount": str(cost_amount),
+            "status": sales_return.status,
+        },
+    )
+    from projects.guards import after_sales_invoice_change
+
+    after_sales_invoice_change(invoice)  # HG-038: a project's contract figures stay possible
+    return sales_return
+
+
+@transaction.atomic
+def cancel_sales_return(return_id, reversal_date, reason, user):
+    _require_sales_return_permission(user)
+    _ensure_return_period(reversal_date)
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Sales return reversal reason is required.")
+    sales_return = (
+        SalesReturn.objects.select_for_update(of=("self",))
+        .select_related(
+            "source_invoice__customer",
+            "source_invoice__selling_location",
+            "source_invoice__cashbox",
+        )
+        .prefetch_related("lines__source_line__item")
+        .get(pk=return_id)
+    )
+    if sales_return.status != SalesReturnStatus.POSTED:
+        raise ValidationError("Only posted sales returns can be reversed.")
+    from einvoice.guards import before_sales_return_cancel
+
+    before_sales_return_cancel(sales_return)  # T7 (HG-059): a return whose credit note the Tax Authority holds stays
+    invoice = sales_return.source_invoice
+    reversal_stock = {}
+    for return_line in sales_return.lines.all():
+        item = return_line.source_line.item
+        if not item.is_stock_tracked:
+            continue
+        key = (item.pk, invoice.selling_location_id)
+        aggregate = reversal_stock.setdefault(
+            key,
+            {
+                "item": item,
+                "location": invoice.selling_location,
+                "quantity": Decimal("0"),
+            },
+        )
+        aggregate["quantity"] += return_line.quantity
+    lock_items_for_stock_check(aggregate["item"].pk for aggregate in reversal_stock.values())
+    for aggregate in reversal_stock.values():
+        available = get_item_location_stock_quantity(
+            aggregate["item"], aggregate["location"]
+        )
+        if available < aggregate["quantity"]:
+            raise ValidationError(
+                f"Not enough returned stock to reverse item {aggregate['item']}. "
+                f"Available: {available}."
+            )
+
+    affected_items = {}
+    original_movements = {
+        movement.sales_return_line_id: movement
+        for movement in sales_return.stock_movements.filter(reversal_of__isnull=True)
+    }
+    for return_line in sales_return.lines.all():
+        item = return_line.source_line.item
+        if not item.is_stock_tracked:
+            continue
+        movement = StockMovement(
+            movement_date=reversal_date,
+            movement_type=StockMovementType.SALE_OUT,
+            item=item,
+            location=invoice.selling_location,
+            quantity=return_line.quantity,
+            unit_cost=return_line.unit_cost,
+            sales_return=sales_return,
+            sales_return_line=return_line,
+            reversal_of=original_movements[return_line.pk],
+            notes=f"Reverse sales return {sales_return.return_number}",
+            created_by=user,
+        )
+        movement.full_clean()
+        movement.save()
+        affected_items[item.pk] = item
+    if sales_return.due_amount > 0:
+        CustomerLedgerEntry.objects.create(
+            customer=invoice.customer,
+            entry_date=reversal_date,
+            entry_type=CustomerLedgerEntryType.SALES_RETURN,
+            sales_return=sales_return,
+            due_increase=sales_return.due_amount,
+            description=f"Reverse sales return {sales_return.return_number}",
+            created_by=user,
+        )
+    if sales_return.cash_amount > 0:
+        original_cash = sales_return.cashbox_movements.get(reversal_of__isnull=True)
+        CashboxMovement.objects.create(
+            cashbox=invoice.cashbox,
+            movement_date=reversal_date,
+            movement_type=CashboxMovementType.SALES_RETURN,
+            direction=CashboxDirection.IN,
+            amount=sales_return.cash_amount,
+            sales_return=sales_return,
+            reversal_of=original_cash,
+            description=f"Reverse sales return {sales_return.return_number}",
+            created_by=user,
+        )
+    for item in affected_items.values():
+        recalculate_item_average_cost(item)
+    from . import short_sales
+
+    short_sales.reopen_for_return_cancel(sales_return, reversal_date, user)  # HG-065: the units are sold again
+    short_sales.rebalance_items(affected_items.values(), reversal_date, user)
+    sales_return.status = SalesReturnStatus.CANCELLED
+    sales_return.cancelled_by = user
+    sales_return.cancelled_at = timezone.now()
+    sales_return.cancellation_reason = reason
+    sales_return.reversal_date = reversal_date
+    sales_return.save(
+        update_fields=[
+            "status", "cancelled_by", "cancelled_at", "cancellation_reason", "reversal_date"
+        ]
+    )
+    AuditLog.objects.create(
+        event_type=AuditEventType.UPDATE,
+        actor=user,
+        module="sales",
+        action="cancel_sales_return",
+        object_type="SalesReturn",
+        object_id=str(sales_return.pk),
+        reason=reason,
+        after_data={"status": sales_return.status, "reversal_date": str(reversal_date)},
+    )
+    from projects.guards import after_sales_invoice_change
+
+    after_sales_invoice_change(sales_return.source_invoice)  # HG-038: a project's contract figures stay possible
+    return sales_return
+
+
 @transaction.atomic
 def cancel_customer_payment(payment_id, user=None, reason=""):
     """Cancel a posted customer payment using reverse rows."""
+
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Customer payment cancellation reason is required.")
 
     payment = (
         CustomerPayment.objects.select_for_update()
@@ -301,6 +851,24 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
 
     if payment.status != CustomerPaymentStatus.POSTED:
         raise ValidationError("Only posted customer payments can be cancelled.")
+    _ensure_posting_period(payment.payment_date)  # HG-011: closed months stay closed.
+    # T4 (HG-056): a cheque's payment is cancelled only from the cheques screen, while the cheque is still in hand.
+    cheque = getattr(payment, "cheque", None)
+    if cheque is not None and cheque.status != "cancelled":
+        raise ValidationError("This payment is a cheque; cancel or bounce it from the cheques screen.")
+    if getattr(payment, "shipment", None) is not None:
+        # T14 (HG-061): money a courier collected is undone from the shipments screen, before the courier settles it.
+        raise ValidationError("This payment was collected by a courier; undo the delivery from the shipments screen.")
+    deposit = getattr(payment, "deposit", None)
+    if deposit is not None and deposit.status in ("applied", "forfeited"):
+        # S5 (HG-069): a deposit that already settles a posted invoice is freed by cancelling that invoice first.
+        raise ValidationError("This payment is a deposit applied to an invoice; cancel that invoice first.")
+    from giftcards.guards import before_customer_payment_cancel
+
+    before_customer_payment_cancel(payment)  # HG-071: a walk-in's card payment goes only with its invoice
+    from .tenders import before_customer_payment_cancel as before_split_payment_cancel
+
+    before_split_payment_cancel(payment)  # R2b (HG-110): so does a walk-in's split payment
 
     CustomerLedgerEntry.objects.create(
         customer=payment.customer,
@@ -344,4 +912,7 @@ def cancel_customer_payment(payment_id, user=None, reason=""):
         },
     )
 
+    from projects.guards import after_customer_payment_change
+
+    after_customer_payment_change(payment)  # HG-038: a project's contract figures stay possible
     return payment

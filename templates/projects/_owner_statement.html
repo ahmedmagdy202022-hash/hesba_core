@@ -1,0 +1,26 @@
+{% load hesba_format %}{# C10 (HG-135): a posted certificate's statement: its lines, this certificate's deductions and the deductions to date #}
+{% with c=s.certificate invoice=s.invoice %}
+<dl class="cl-dl op-facts"><div><dt>{{ pw.date }}</dt><dd>{{ c.certificate_date|day_text:lang }}</dd></div><div><dt>{{ pw.invoice }}</dt><dd><bdi>{{ invoice.invoice_number }}</bdi></dd></div></dl>
+{% if s.lines %}<ul class="op-list op-lines" data-statement-lines>{% for row in s.lines %}<li class="op-line">
+  <div class="op-line__head"><bdi class="op-code">{{ row.boq.code|default:row.boq.line_number }}</bdi> <span>{{ row.boq.description }}</span></div>
+  <dl class="op-line__nums">
+    <div><dt>{{ pw.rate }}</dt><dd><bdi>{{ row.line.rate|money }}</bdi></dd></div>
+    <div><dt>{{ pw.previous }}</dt><dd><bdi>{{ row.line.previous_quantity|qty }}</bdi> <bdi>{{ row.boq.unit }}</bdi></dd></div>
+    <div><dt>{{ pw.current }}</dt><dd><bdi>{{ row.line.quantity|qty }}</bdi> <bdi>{{ row.boq.unit }}</bdi></dd></div>
+    <div><dt>{{ pw.cumulative }}</dt><dd><bdi>{{ row.cumulative|qty }}</bdi> <bdi>{{ row.boq.unit }}</bdi></dd></div>
+    <div><dt>{{ pw.current_value }}</dt><dd><bdi>{{ row.line.amount|money }}</bdi></dd></div>
+    <div><dt>{{ pw.cumulative_value }}</dt><dd><bdi>{{ row.cumulative_value|money }}</bdi></dd></div>
+  </dl>
+</li>{% endfor %}</ul>{% elif c.notes %}<p class="op-text">{{ c.notes }}</p>{% endif %}
+<div class="op-deductions" role="table" aria-label="{{ pw.deductions_h }}" data-deductions>
+  <div class="op-deductions__row op-deductions__row--head" role="row"><span role="columnheader"></span><span role="columnheader">{{ pw.this_cert }}</span><span role="columnheader">{{ pw.to_date }}</span></div>
+  <div class="op-deductions__row" role="row" data-row="gross"><span role="rowheader">{{ pw.gross }}</span><span role="cell"><bdi>{{ c.gross|money }}</bdi></span><span role="cell"><bdi>{{ s.to_date.gross|money }}</bdi></span></div>
+  <div class="op-deductions__row" role="row" data-row="retention"><span role="rowheader">{{ s.ret_label }}</span><span role="cell"><bdi>{{ c.retention_amount|money }}</bdi></span><span role="cell"><bdi>{{ s.to_date.retention|money }}</bdi></span></div>
+  <div class="op-deductions__row" role="row" data-row="recovery"><span role="rowheader">{{ pw.recovery }}</span><span role="cell"><bdi>{{ c.recovery_amount|money }}</bdi></span><span role="cell"><bdi>{{ s.to_date.recovery|money }}</bdi></span></div>
+</div>
+<dl class="op-figures">
+  {% if invoice.tax_amount %}<div><dt>{{ pw.tax }}</dt><dd><bdi>{{ invoice.tax_amount|money }}</bdi></dd></div>
+  <div><dt>{{ pw.invoice_total }}</dt><dd><bdi>{{ invoice.total_amount|money }}</bdi></dd></div>{% endif %}
+  <div class="op-figures__grand"><dt>{{ pw.net }}</dt><dd data-statement-net><bdi>{{ s.net|money }}</bdi> <small>{{ company.currency }}</small></dd></div>
+</dl>
+{% endwith %}

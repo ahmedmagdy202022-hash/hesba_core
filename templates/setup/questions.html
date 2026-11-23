@@ -1,0 +1,89 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+{% include "partials/brand_icons.html" %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ words.page_title }}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=st6-1">
+<link rel="stylesheet" href="{% static 'hesba/css/setup_questions.css' %}?v=st6-1">
+</head>
+<body class="activity-selection-page questions-page" data-lang="{{ lang }}">
+{# SETUP-INTERVIEW (ST6): step 3, the business in its own words (settings_core/setup_interview.py). #}
+<main class="activity-stage" aria-label="Setup questions">
+  <section class="activity-ui-layer">
+    {% include "partials/setup_rail.html" with step=3 %}
+    <header class="activity-header" aria-label="Setup activity header">
+      <div class="activity-controls">
+        <form class="activity-control-form" method="post" action="{% url 'logout' %}">{% csrf_token %}
+          <button class="activity-control activity-logout" type="submit" aria-label="{% if lang == 'en' %}Logout{% else %}تسجيل الخروج{% endif %}"><svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true"><path d="M9 5H5v14h4M13 8l4 4-4 4M17 12H8"></path></svg><span class="activity-logout__text">{% if lang == 'en' %}Logout{% else %}تسجيل الخروج{% endif %}</span></button>
+        </form>
+        <a class="activity-control activity-language" href="?lang={{ other_lang }}&activity={{ activity }}&sub_activity={{ sub_activity }}" data-lang-switch><svg viewBox="0 0 24 24" class="activity-icon" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.35 2.45 3.55 5.45 3.55 9S14.35 18.55 12 21M12 3C9.65 5.45 8.45 8.45 8.45 12S9.65 18.55 12 21"></path></svg><span>{% if lang == 'en' %}العربية{% else %}English{% endif %}</span></a>
+      </div>
+    </header>
+    <section class="activity-panel" aria-labelledby="activity-title">
+      <div class="activity-copy">
+        <h1 class="activity-title" id="activity-title">{{ words.title }}</h1>
+        <p class="activity-subtitle">{{ words.lead }}</p>
+        <p class="iv-for"><span>{{ activity_label }}</span><b>{{ sub_activity_label }}</b></p>
+      </div>
+      <form class="iv-form" method="post" action="{% url 'setup_questions' %}" data-questions-form>{% csrf_token %}
+        <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ activity }}"><input type="hidden" name="sub_activity" value="{{ sub_activity }}">
+        <ol class="iv-list" data-questions>
+        {% for q in questions %}<li class="iv-q{% if q.parent %} iv-q--follow{% endif %}" data-q="{{ q.key }}" data-parent="{{ q.parent }}" data-default="{% if q.default %}yes{% else %}no{% endif %}" data-modules="{{ q.modules }}" data-features="{{ q.features }}" data-labels="{{ q.labels|join:'|' }}">
+            <div class="iv-q__body">
+              <p class="iv-q__ask"><span class="iv-q__num" aria-hidden="true"></span>{{ q.ask }}{% if q.default %} <em class="iv-q__tip">{{ words.suggested }}</em>{% endif %}</p>
+              <p class="iv-q__gives"><b>{{ words.gives }}:</b> {{ q.gives }}</p>
+            </div>
+            <fieldset class="iv-q__answer"><legend class="iv-sr">{{ q.ask }}</legend>
+              <label class="iv-choice"><input type="radio" name="q_{{ q.key }}" value="yes"{% if q.default %} checked{% endif %}><span>{{ words.yes }}</span></label>
+              <label class="iv-choice"><input type="radio" name="q_{{ q.key }}" value="no"{% if not q.default %} checked{% endif %}><span>{{ words.no }}</span></label>
+            </fieldset>
+          </li>
+        {% endfor %}</ol>
+        <section class="iv-summary" aria-live="polite" data-questions-summary>
+          <h2>{{ words.summary }}</h2>
+          <ul class="iv-chips" data-summary-chips></ul>
+          <p class="iv-always"><b>{{ words.always }}:</b> {{ always|join:"، " }}</p>
+          <a class="iv-manual" href="{{ manual_href }}" data-manual-link>{{ words.manual }}</a>
+        </section>
+        <footer class="activity-footer" aria-label="Questions navigation">
+          <button class="activity-action activity-next" type="submit" data-next-button><span>{{ words.finish }}</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
+          <a class="activity-action activity-back" href="{{ back_href }}" data-back-link><span>{{ words.back }}</span><span class="activity-action__plain" aria-hidden="true">‹</span></a>
+        </footer>
+      </form>
+    </section>
+  </section>
+</main>
+<script>
+(function(){
+  // SETUP-INTERVIEW: a follow-up shows only after the answer it hangs on; the summary says what the answers set up.
+  var lang = document.body.dataset.lang;
+  try{localStorage.setItem('hesba_lang', lang);}catch(e){}
+  var items = Array.prototype.slice.call(document.querySelectorAll('[data-q]'));
+  function answer(key){var on = document.querySelector('input[name="q_' + key + '"]:checked');return on ? on.value : 'no';}
+  function refresh(){
+    var n = 0, chips = [];
+    items.forEach(function(item){
+      var parent = item.dataset.parent;
+      var shown = !parent || (answer(parent) === 'yes' && !document.querySelector('[data-q="' + parent + '"]').hidden);
+      item.hidden = !shown;
+      if(!shown){return;}
+      n += 1;
+      item.querySelector('.iv-q__num').textContent = (lang === 'en' ? n : String(n).replace(/\d/g, function(d){return '٠١٢٣٤٥٦٧٨٩'[d];})) + '.';
+      var yes = answer(item.dataset.q) === 'yes';
+      item.classList.toggle('is-yes', yes);
+      if(yes){(item.dataset.labels || '').split('|').forEach(function(label){if(label && chips.indexOf(label) === -1){chips.push(label);}});}
+    });
+    var list = document.querySelector('[data-summary-chips]');
+    list.innerHTML = '';
+    chips.forEach(function(label){var li = document.createElement('li');li.textContent = label;list.appendChild(li);});
+  }
+  items.forEach(function(item){item.querySelectorAll('input[type=radio]').forEach(function(input){input.addEventListener('change', refresh);});});
+  refresh();
+})();
+</script>
+{% include "partials/demo_feedback.html" %}
+</body>
+</html>

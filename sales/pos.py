@@ -1,0 +1,626 @@
+"""POS-001: the cashier screen. Scan, total, take the money, print the receipt.
+
+It is a front end over the existing sales services. A POS sale is created with
+``create_sales_draft`` and posted with ``post_sales_invoice`` inside one
+transaction, so stock, cashbox and customer-ledger effects are exactly those of
+any posted invoice. If posting fails (for example not enough stock), nothing is
+kept.
+"""
+
+import json
+from decimal import Decimal, InvalidOperation
+
+from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Sum
+from django.shortcuts import redirect, render
+from django.utils import timezone
+
+from barcode.services import item_catalog
+from pricing.services import price_book
+from taxes.services import compute_lines, create_sales_draft_with_tax, rates_by_item, vat_enabled
+from serials.services import attach_sale_serials, pos_serial_catalog, prepare_sale_serials
+from shifts.gate import require_open_shift, shift_missing
+from shifts.services import open_shift_for
+from .pos_buttons import card_cashbox
+from .pos_customers import customer_directory
+from units.services import units_catalog
+from cashboxes.models import Cashbox
+from config.money import money_round
+from master_data.models import Customer, Item, Location
+from permissions.decorators import require_permission
+from permissions.services import user_has_permission
+from settings_core.currency import currency_label
+from settings_core.module_gate import closed_module
+from settings_core.templatetags.hesba_format import currency_code
+
+from .models import SalesInvoice
+from .services import create_sales_draft, post_sales_invoice
+from entities import scope as entity_scope
+
+
+WALK_IN_CODE = "WALK-IN"
+MAX_LINES = 200
+
+WORDS = {
+    "ar": {
+        "page_title": "الكاشير",
+        "title": "الكاشير",
+        "scan": "امسح الباركود أو اكتب الكود أو اسم الصنف",
+        "scan_hint": "من الكيبورد: Enter يضيف الصنف · ↑ ↓ تختار من الأسماء · Esc تقفلها · F9 يدفع · F2 يرجعك للمسح",
+        "scan_placeholder": "امسح الباركود أو اكتب اسم الصنف",
+        "search": "أو دوّر بالاسم",
+        "customer": "العميل",
+        "location": "المخزن",
+        "cashbox": "الخزنة",
+        "item": "الصنف",
+        "qty": "الكمية",
+        "price": "السعر",
+        "total": "الإجمالي",
+        "remove": "شيل",
+        "empty_cart": "السلة فاضية. امسح أول صنف.",
+        "subtotal": "المجموع",
+        "discount": "خصم",
+        "grand_total": "المطلوب",
+        "tendered": "المدفوع",
+        "change": "الباقي للعميل",
+        "credit": "آجل على العميل",
+        "pay_print": "دفع وطباعة الإيصال",
+        "pay_only": "دفع بدون طباعة",
+        "clear": "سلة جديدة",
+        "today": "مبيعاتك النهارده",
+        "count": "عدد الفواتير",
+        "cash_in": "نقدي",
+        "credit_total": "آجل",
+        "sold_total": "إجمالي البيع",
+        "done": "تم البيع: فاتورة {number} بمبلغ {total}",
+        "change_msg": "الباقي للعميل {change}",
+        "receipt": "اطبع الإيصال",
+        "walk_in": "عميل نقدي",
+        "err_empty": "السلة فاضية.",
+        "err_promo_changed": "العروض اتغيرت من ساعة ما السلة اتحسبت؛ راجع الإجمالي الجديد وادفع تاني.",
+        "err_points_changed": "قيمة النقطة اتغيرت من ساعة ما الصفحة اتفتحت؛ افتح الكاشير تاني وراجع الإجمالي.",
+        "promo_wait": "لحظة، العرض بيتحسب؛ راجع الإجمالي وادفع تاني.",
+        "err_line": "في سطر فيه كمية أو سعر مش صحيح.",
+        "err_item": "صنف مش موجود أو موقوف.",
+        "err_walk_in_credit": "البيع الآجل محتاج عميل باسمه؛ اختار العميل أو خد المبلغ كامل.",
+        "err_gift_amount": "المبلغ اللي هيتدفع بكارت الهدية مش صحيح أو أكبر من المطلوب.",
+        "err_tender_amount": "كل طريقة دفع لازم يكون مبلغها أكبر من صفر.",
+        "err_tender_cashbox": "خزنة من طرق الدفع مش متاحة للبيع؛ يا موقوفة يا مخصّصة لشاشة تانية.",
+        "err_tender_repeated": "نفس الخزنة متكررة في طرق الدفع؛ حط مبلغها كله في سطر واحد.",
+        "err_tenders_over": "مجموع طرق الدفع أكبر من المطلوب.",
+        "err_tender_card": "الدفع بأكتر من طريقة بيحدد خزنة كل جزء، فمينفعش معاه زرار الفيزا.",
+        "err_discount": "الخصم أكبر من المجموع.",
+        "err_setup": "لازم يكون فيه مخزن بيع وخزنة نشطين قبل البيع.",
+        "scan_serial": "الصنف ده بيتباع بالسيريال؛ امسح سيريال القطعة / IMEI: ",
+        "serial_twice": "السيريال ده في السلة بالفعل: ",
+        "not_found": "مفيش صنف بالكود ده: ",
+        "added": "اتضاف: ",
+        "back": "فواتير البيع",
+    },
+    "en": {
+        "page_title": "Point of sale",
+        "title": "Point of sale",
+        "scan": "Scan a barcode, or type a code or an item name",
+        "scan_hint": "Keyboard: Enter adds the item · ↑ ↓ pick a name · Esc closes the names · F9 pays · F2 back to scanning",
+        "scan_placeholder": "Scan a barcode or type an item name",
+        "search": "or search by name",
+        "customer": "Customer",
+        "location": "Location",
+        "cashbox": "Cashbox",
+        "item": "Item",
+        "qty": "Qty",
+        "price": "Price",
+        "total": "Total",
+        "remove": "Remove",
+        "empty_cart": "The cart is empty. Scan the first item.",
+        "subtotal": "Subtotal",
+        "discount": "Discount",
+        "grand_total": "To pay",
+        "tendered": "Paid",
+        "change": "Change",
+        "credit": "On the customer's account",
+        "pay_print": "Pay and print receipt",
+        "pay_only": "Pay without printing",
+        "clear": "New cart",
+        "today": "Your sales today",
+        "count": "Invoices",
+        "cash_in": "Cash",
+        "credit_total": "Credit",
+        "sold_total": "Sold",
+        "done": "Sold: invoice {number} for {total}",
+        "change_msg": "Change due {change}",
+        "receipt": "Print receipt",
+        "walk_in": "Walk-in customer",
+        "err_empty": "The cart is empty.",
+        "err_promo_changed": "The promotions changed since the cart was totalled; check the new total and pay again.",
+        "err_points_changed": "A point's value changed since the till was opened; open the till again and check the total.",
+        "promo_wait": "One moment, the promotion is being worked out; check the total and pay again.",
+        "err_line": "A line has an invalid quantity or price.",
+        "err_item": "An item is missing or inactive.",
+        "err_walk_in_credit": "A credit sale needs a named customer; pick the customer or take the full amount.",
+        "err_gift_amount": "The amount to pay by gift card is not valid or is more than the total.",
+        "err_tender_amount": "Each way of paying needs an amount above zero.",
+        "err_tender_cashbox": "One of the payment cashboxes cannot take a sale: it is inactive or kept for another screen.",
+        "err_tender_repeated": "The same cashbox appears twice; put its whole amount on one row.",
+        "err_tenders_over": "The ways of paying add up to more than the total.",
+        "err_tender_card": "Paying several ways names each part's cashbox, so it cannot be combined with the card button.",
+        "err_discount": "The discount is larger than the subtotal.",
+        "err_setup": "A selling location and an active cashbox are needed before selling.",
+        "scan_serial": "This item is sold by serial; scan the unit's serial / IMEI: ",
+        "serial_twice": "That serial is already in the cart: ",
+        "not_found": "No item with this code: ",
+        "added": "Added: ",
+        "back": "Sales invoices",
+    },
+}
+
+
+def _lang(request):
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
+
+
+def walk_in_customer():
+    customer, _ = Customer.objects.get_or_create(
+        customer_code=WALK_IN_CODE,
+        defaults={"name": "عميل نقدي", "notes": "Created by the cashier screen for sales without a named customer."},
+    )
+    return customer
+
+
+def _decimal(value, places):
+    try:
+        number = Decimal(str(value).strip().replace(",", "."))
+    except (InvalidOperation, AttributeError):
+        return None
+    if not number.is_finite():
+        return None
+    return number.quantize(Decimal(1).scaleb(-places))
+
+
+def parse_cart(post):
+    """The cart lines from the posted form, validated. Raises ValidationError."""
+
+    try:
+        count = min(int(post.get("line_count", "0")), MAX_LINES)
+    except ValueError:
+        count = 0
+    rows = []
+    for index in range(count):
+        item_id = post.get(f"item_{index}", "")
+        if not item_id:
+            continue
+        quantity = _decimal(post.get(f"qty_{index}"), 3)
+        price = _decimal(post.get(f"price_{index}"), 2)
+        if quantity is None or price is None or quantity <= 0 or price < 0:
+            raise ValidationError("err_line")
+        rows.append((item_id, quantity, price, post.get(f"unit_{index}", ""), post.get(f"serial_{index}", "")))
+    if not rows:
+        raise ValidationError("err_empty")
+    items = {str(item.pk): item for item in Item.objects.filter(pk__in=[row[0] for row in rows if row[0].isdigit()], active=True)}
+    from units.models import ItemUnit
+    from units.services import convert_line, units_enabled
+
+    unit_ids = [row[3] for row in rows if row[3].isdigit()]
+    units = {str(unit.pk): unit for unit in ItemUnit.objects.filter(pk__in=unit_ids, active=True)} if unit_ids and units_enabled() else {}
+    lines = []
+    for item_id, quantity, price, unit_id, serial in rows:
+        item = items.get(item_id)
+        if item is None:
+            raise ValidationError("err_item")
+        line = {"item": item, "quantity": quantity, "unit_sale_price": price, "line_discount_amount": Decimal("0"), "description": ""}
+        unit = units.get(unit_id)
+        if unit_id and unit is None and units_enabled():
+            raise ValidationError("err_item")
+        if unit is not None:
+            if unit.item_id != item.pk:
+                raise ValidationError("err_item")
+            line = convert_line(dict(line, unit=unit), "unit_sale_price")  # UNITS-001: stored in base units
+        if serial:
+            line["serials"] = serial  # SERIAL-001: checked against stock by prepare_sale_serials
+        lines.append(line)
+    return lines
+
+
+def _next_number(today):
+    prefix = f"POS-{today:%Y%m%d}-"
+    last = SalesInvoice.objects.filter(invoice_number__startswith=prefix).order_by("-invoice_number").values_list("invoice_number", flat=True).first()
+    sequence = int(last.rsplit("-", 1)[1]) + 1 if last else 1
+    return f"{prefix}{sequence:04d}"
+
+
+def checkout(*, lines, customer, location, cashbox, discount, tendered, user, sale_date=None, notes="POS", card=False, promotion=None, points=None,
+             allow_short=False, short_source="pos", gift=None, lang="ar", tenders=None):
+    """Create and post the sale. Returns (invoice, change).
+
+    POS-003: an offline sale passes the day it was rung up as ``sale_date``;
+    posting then applies that day's period rules like any other entry.
+    HG-065: ``allow_short`` is the cashier's agreement to sell what is not in
+    stock; it counts only while the owner allows selling without stock.
+    S6 (HG-071): ``gift`` is (card, amount): that part is left as ``remaining_due`` and redeemed from the card in the
+    same transaction (``giftcards.services.redeem``), so the walk-in still owes nothing once the checkout is done.
+    R2b (HG-110): ``tenders`` is [(cashbox, amount), ...]: with two or more, the first is ``paid_now`` into its cashbox (in
+    place of ``cashbox`` and ``tendered``) and each further one a payment into its own cashbox, settled on the invoice in
+    the same transaction (``sales.tenders``). None or one tender is the plain call.
+    """
+
+    # UNITS-001: a line entered in a bigger unit carries a few piastres of discount.
+    subtotal = money_round(sum((money_round(line["quantity"] * line["unit_sale_price"] - (line.get("line_discount_amount") or 0)) for line in lines), Decimal("0")))
+    discount = money_round(discount or 0)
+    if discount < 0 or discount > subtotal:
+        raise ValidationError("err_discount")
+    # TAX-001: VAT per line from item rates; the invoice discount comes after tax.
+    tax = money_round(sum((line_tax for *_, line_tax in compute_lines(lines)), Decimal("0"))) if vat_enabled() else Decimal("0.00")
+    total = money_round(subtotal - discount + tax)
+    gift_card, gift_part = gift if gift is not None else (None, Decimal("0.00"))
+    gift_part = money_round(gift_part or 0)
+    if gift is not None and not Decimal("0") < gift_part <= total:
+        raise ValidationError("err_gift_amount")
+    cash_due = total - gift_part  # S6 (HG-071): what is left for the drawer or the card machine after the gift card
+    others, others_total = [], Decimal("0.00")  # R2b (HG-110): the tenders after the first; none on the plain one-cashbox call
+    if tenders is not None:
+        from .tenders import split
+
+        cashbox, tendered, others = split(tenders, cash_due, card)
+        others_total = sum((amount for _box, amount in others), Decimal("0.00"))
+        cash_due -= others_total  # what is left for the first tender
+    tendered = cash_due if card else money_round(tendered or 0)  # AN8: a card pays the total exactly, no change
+    paid_now = min(tendered, cash_due)
+    if paid_now + gift_part + others_total < total and customer.customer_code == WALK_IN_CODE:  # HG-071: loosened by the card part; R2b: and the other tenders
+        raise ValidationError("err_walk_in_credit")
+    change = money_round(tendered - cash_due) if tendered > cash_due else Decimal("0.00")
+    today = sale_date or timezone.localdate()
+    for _attempt in range(5):
+        try:
+            with transaction.atomic():
+                invoice = create_sales_draft_with_tax(
+                    {
+                        "invoice_number": _next_number(today),
+                        "invoice_date": today,
+                        "customer": customer,
+                        "selling_location": location,
+                        "cashbox": cashbox,
+                        "discount_amount": discount,
+                        "tax_amount": Decimal("0"),
+                        "paid_now": paid_now,
+                        "notes": notes,
+                    },
+                    lines,
+                    user,
+                )
+                attach_sale_serials(invoice, lines)  # SERIAL-001
+                if others:  # R2b (HG-110): before posting, so what follows the posting (the e-receipt) sees every tender
+                    from .tenders import pay_others
+
+                    pay_others(invoice, others, today, user, lang)
+                if promotion is not None:  # T5: (promotion, discount, coupon) the till filled into the lines
+                    from promotions.services import record
+
+                    record(invoice, *promotion)
+                if points:  # T6: (points, amount) spent at the till, booked as spent when the sale is posted below
+                    from loyalty.services import remember
+
+                    remember(invoice, *points, posting=True)  # checked under the customer's lock on posting
+                post_sales_invoice(invoice.pk, user, allow_short=allow_short, short_source=short_source)
+                if gift is not None:  # S6 (HG-071): refused (balance, entity, expiry of the sale) means nothing is kept
+                    from giftcards.services import redeem
+
+                    redeem(gift_card, invoice, gift_part, user, lang)
+            invoice.refresh_from_db()
+            return invoice, change
+        except IntegrityError:
+            continue  # another till took the same number a moment ago
+    raise ValidationError("Could not allocate an invoice number; try again.")
+
+
+@require_permission("sales.create_sales_invoice")
+def promotion_quote(request):
+    """T5 (Codex #268): the promotion the cart would get, so the till and the invoice form show it before the payment is
+    taken. The invoice form also sends each line's typed discount (``discount_N``): such a line takes no promotion."""
+
+    from django.http import JsonResponse
+
+    from promotions import services as promotions
+
+    lang = "en" if request.POST.get("lang") == "en" else "ar"
+    if request.method != "POST" or not promotions.enabled():
+        return JsonResponse({"ok": True, "discount": "0.00", "name": "", "lines": []})
+    try:
+        lines = parse_cart(request.POST)
+        for index, line in enumerate(lines):
+            typed = _decimal(request.POST.get(f"discount_{index}") or "0", 2) or Decimal("0")
+            if typed > 0:
+                line["line_discount_amount"], line["typed_discount"] = line["line_discount_amount"] + typed, typed
+        customer = None  # S6 (HG-071): a members-only promotion is quoted for the chosen customer
+        if (request.POST.get("customer") or "").isdigit():
+            customer = Customer.objects.filter(pk=request.POST["customer"], active=True).first()
+        _lines, promotion, off = promotions.apply(lines, coupon=request.POST.get("coupon", ""), lang=lang, customer=customer)
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "error": _error_text(exc, WORDS[lang])})
+    changed = [str(money_round(new["line_discount_amount"] - old["line_discount_amount"])) for old, new in zip(lines, _lines)]
+    return JsonResponse({"ok": True, "discount": str(money_round(off)), "name": promotion.name if promotion else "", "lines": changed})
+
+
+def _gift_card_part(post, lang, user=None):
+    """S6 (HG-071): (card, amount) from the till's «كارت هدية» row, or None when it is empty."""
+
+    code = (post.get("gift_code") or "").strip()
+    if not code:
+        return None
+    from giftcards import services as giftcards
+
+    words = giftcards.MESSAGES[lang]
+    if not giftcards.enabled():
+        raise ValidationError(words["off"])
+    if not user_has_permission(user, giftcards.SELL):
+        raise ValidationError(words["no_permission"])
+    card = giftcards.find(code)
+    if card is None:
+        raise ValidationError(words["not_found"])
+    amount = _decimal(post.get("gift_amount") or "", 2)
+    if amount is None or amount <= 0:
+        raise ValidationError("err_gift_amount")
+    return card, amount
+
+
+def _gift_cards_on(user=None):
+    from giftcards.services import SELL, enabled
+
+    return enabled() and (user is None or user_has_permission(user, SELL))
+
+
+def _promotions_on():
+    from promotions.services import enabled
+
+    return enabled()
+
+
+def _running_promotions():
+    from promotions.services import enabled, running
+
+    return running() if enabled() else []
+
+
+def _loyalty_rules():
+    from loyalty.services import enabled, rules
+
+    return rules() if enabled() else None
+
+
+def today_summary(user):
+    today = timezone.localdate()
+    rows = SalesInvoice.objects.filter(invoice_date=today, status="posted", created_by=user)
+    totals = rows.aggregate(count=Count("id"), total=Sum("total_amount"), cash=Sum("paid_now"), credit=Sum("remaining_due"))
+    summary = {key: value or 0 for key, value in totals.items()}
+    card = card_cashbox()
+    # AN8: what came by card is not cash in the drawer.
+    summary["card"] = (rows.filter(cashbox=card).aggregate(paid=Sum("paid_now"))["paid"] or 0) if card else 0
+    summary["cash"] -= summary["card"]
+    from settlements.services import applied_total
+
+    # HG-069: a deposit taken on another day (or a link / card) that settles one of today's invoices is not still
+    # owed; it is no cash in the drawer today either, so ``cash`` stays paid_now − card.
+    summary["applied"] = applied_total(rows)
+    summary["credit"] -= summary["applied"]
+    return summary
+
+
+def _clean_cart(raw):
+    """The cart to put back on the screen after a refused sale: ids and numbers only."""
+
+    try:
+        rows = json.loads(raw or "[]")
+    except ValueError:
+        return []
+    clean = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        item_id = str(row.get("id", ""))
+        unit_id = str(row.get("unit", "") or "")
+        qty, price = _decimal(row.get("qty", ""), 3), _decimal(row.get("price", ""), 2)
+        if item_id.isdigit() and qty is not None and price is not None:
+            row_back = {"id": int(item_id), "qty": str(qty), "price": str(price)}
+            if unit_id.isdigit():
+                row_back["unit"] = int(unit_id)
+            serial = str(row.get("serial", "") or "")[:80]
+            if serial:
+                row_back["serial"] = serial
+            clean.append(row_back)
+    return clean[:MAX_LINES]
+
+
+def _short_box(exc, request):
+    """HG-065: when the owner allows selling without stock, a refusal for stock becomes a box naming the short items,
+    with the same sale ready to send again with the cashier's agreement."""
+
+    from . import short_sales
+
+    if not isinstance(exc, short_sales.StockShortage) or not short_sales.enabled():
+        return None
+    fields = [(key, value) for key, values in request.POST.lists() if key not in ("csrfmiddlewaretoken", "allow_short") for value in values]
+    return {"items": exc.shortages, "fields": fields}
+
+
+def _error_text(exc, words):
+    parts = []
+    for message in getattr(exc, "messages", [str(exc)]):
+        parts.append(words.get(message, message))
+    return " ".join(parts)
+
+
+def _alternatives_sheet(lang):
+    """R1: (url, words as JSON, drug item ids) of the pharmacy's «بدائل» sheet on a cart line, or ("", "", []) while the
+    drug database is off. The script asks the sheet about those items only (the ids cost one query).
+
+    The sheet only reads; an alternative goes into the cart through pos.js's own add path."""
+
+    from django.urls import reverse
+
+    from settings_core.capabilities import capability_enabled
+
+    if not capability_enabled("drugs"):
+        return "", "", []
+    from pharmacy.till import WORDS as ALTERNATIVE_WORDS, drug_item_ids
+
+    return reverse("pharmacy:till_alternatives"), json.dumps(ALTERNATIVE_WORDS[lang], ensure_ascii=False), drug_item_ids()
+
+
+QUICK_PICKS = 24
+
+
+def quick_pick_ids(catalog, days=60):
+    """AN6 (Ahmed: "شاشة الكاشير محتاجة تكون أسهل وأسلس"): the items this shop sells most lately,
+    as tap-to-add tiles; topped up from the catalog for a shop that has sold little yet.
+
+    AN7 (G07): the items the shop picked come first, in its order; then what sells without a
+    barcode (bread, vegetables by weight: nothing to scan), then the rest of what sells."""
+
+    from datetime import timedelta
+
+    from django.db.models import Sum
+    from django.utils import timezone
+
+    from .models import SalesLine
+    from .pos_buttons import pinned_ids
+
+    on_sale = [entry["id"] for entry in catalog]
+    no_barcode = {entry["id"] for entry in catalog if not entry.get("barcode")}
+    since = timezone.localdate() - timedelta(days=days)
+    invoices = entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(status="posted", invoice_date__gte=since)
+    sold = list(SalesLine.objects.filter(invoice__in=invoices, item_id__in=on_sale)
+                .values("item_id").annotate(units=Sum("quantity")).order_by("-units", "item_id").values_list("item_id", flat=True)[:QUICK_PICKS * 2])
+    listed = set(on_sale)
+    picks = [item_id for item_id in pinned_ids() if item_id in listed]
+    for group in ([pk for pk in sold if pk in no_barcode], sold, [pk for pk in on_sale if pk in no_barcode], on_sale):
+        picks += [item_id for item_id in group if item_id not in picks][:QUICK_PICKS - len(picks)]
+    names = {item.pk: " · ".join(part for part in (item.item_name, item.size, item.color) if part)
+             for item in Item.objects.filter(pk__in=picks).only("item_name", "size", "color")}
+    return [{"id": item_id, "name": names.get(item_id, "")} for item_id in picks]
+
+
+@require_permission("sales.create_sales_invoice")
+def pos(request):
+    lang = _lang(request)
+    words = WORDS[lang]
+    locations = entity_scope.locations(Location.objects).filter(active=True, is_selling_location=True)
+    all_cashboxes = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    machine = card_cashbox(all_cashboxes)
+    cashboxes = all_cashboxes.exclude(pk=machine.pk) if machine else all_cashboxes  # AN8: the card machine is never the drawer
+    customer_default = walk_in_customer()
+    cart_back = "[]"  # raw JSON from the form; cleaned before it is rendered
+    short_box = None
+    refused = False  # UX Wave 1: a refused sale comes back with «تفاصيل» open (its fix is often inside: customer, coupon, gift card)
+    selected = {
+        "customer": str(customer_default.pk),
+        "location": str((locations.filter(is_default=True).first() or locations.first() or Location()).pk or ""),
+        "cashbox": str((cashboxes.filter(is_default=True).first() or cashboxes.first() or Cashbox()).pk or ""),
+    }
+    if request.method == "POST":
+        selected = {key: request.POST.get(key, "") for key in selected}
+        try:
+            require_open_shift(request.user, lang)  # AN4
+            lines = prepare_sale_serials(parse_cart(request.POST), lang)
+            location = locations.filter(pk=selected["location"]).first() if selected["location"].isdigit() else None
+            cashbox = cashboxes.filter(pk=selected["cashbox"]).first() if selected["cashbox"].isdigit() else None
+            card = request.POST.get("pay_method") == "card"  # AN8: paid by card goes to the card machine's cashbox
+            if card:
+                cashbox = machine
+            if location is None or cashbox is None:
+                raise ValidationError("err_setup")
+            customer = Customer.objects.filter(pk=selected["customer"], active=True).first() if selected["customer"].isdigit() else None
+            customer = customer or customer_default
+            discount = _decimal(request.POST.get("discount") or "0", 2)
+            tendered = _decimal(request.POST.get("tendered") or "0", 2)
+            if discount is None or tendered is None or tendered < 0:
+                raise ValidationError("err_line")
+            from promotions import services as promotions
+
+            coupon = request.POST.get("coupon", "")
+            # T5: the best running promotion; S6 (HG-071): a members-only one counts for this customer's active contract
+            lines, promotion, promotion_off = promotions.apply(lines, coupon=coupon, lang=lang, customer=customer)
+            if "promotion_seen" in request.POST:  # the till shows promotions: the payment needs its confirmed quote (Codex #268)
+                raw_seen = request.POST.get("promotion_seen", "")
+                seen = _decimal(raw_seen, 2) if raw_seen != "" else None
+                if seen is None or abs(seen - promotion_off) > Decimal("0.005"):
+                    raise ValidationError("err_promo_changed")  # the payment was taken for the total the till showed
+            from loyalty import services as loyalty
+
+            points, points_off = loyalty.redeem(customer, request.POST.get("redeem_points"), loyalty.lines_total(lines), lang)  # T6
+            if points and "points_seen" in request.POST:  # Codex #274: the payment was taken for the points discount the till showed
+                raw_seen = request.POST.get("points_seen", "")
+                seen = _decimal(raw_seen, 2) if raw_seen != "" else None
+                if seen is None or abs(seen - points_off) > Decimal("0.005"):
+                    raise ValidationError("err_points_changed")
+            discount += points_off
+            gift = _gift_card_part(request.POST, lang, request.user)  # S6 (HG-071)
+            invoice, change = checkout(lines=lines, customer=customer, location=location, cashbox=cashbox, discount=discount, tendered=tendered,
+                                       user=request.user, card=card, promotion=(promotion, promotion_off, coupon) if promotion else None,
+                                       points=(points, points_off) if points else None, allow_short=request.POST.get("allow_short") == "1",
+                                       gift=gift, lang=lang)
+        except ValidationError as exc:
+            messages.error(request, _error_text(exc, words))
+            refused = True
+            cart_back = request.POST.get("cart_json", "[]")
+            short_box = _short_box(exc, request)
+        else:
+            unit = currency_label(currency_code(), lang)  # UX Wave 1: amounts read "229.50 ج.م"
+            text = words["done"].format(number=invoice.invoice_number, total=f"{invoice.total_amount:,.2f} {unit}".strip())
+            # UX Wave 1: the till shows these two in its after-sale banner (tagged), the change due on its own line.
+            messages.success(request, text, extra_tags="pos-sale")
+            if change:
+                messages.success(request, words["change_msg"].format(change=f"{change:,.2f} {unit}".strip()), extra_tags="pos-change")
+            if request.POST.get("print") == "1" and closed_module("/print/") is None:
+                return redirect(f"/print/sales/{invoice.pk}/?lang={lang}&format=receipt&autoprint=1&next=pos")
+            return redirect(f"/sales/pos/?lang={lang}&last={invoice.pk}")
+    cart_back = _clean_cart(cart_back)
+    from deposits.services import FEE_ITEM_CODE
+
+    # The internal late-cancellation fee item is billed by the deposits service, never rung up at the till.
+    # Manufacturing F7 (HG-138): a custom job's own item (JOB-…) is sold from its sales order's invoice, never rung up at the till.
+    catalog = [row for row in item_catalog(sale_prices=True) if row["code"] != FEE_ITEM_CODE and not row["code"].startswith("JOB-")]
+    last = request.GET.get("last", "")
+    alternatives_url, alternatives_words, alternatives_drugs = _alternatives_sheet(lang)
+    return render(
+        request,
+        "sales/pos.html",
+        {
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": words,
+            "page_title": words["page_title"],
+            "section": "sales",
+            "catalog": catalog,
+            "quick_picks": quick_pick_ids(catalog),
+            "can_pick_buttons": user_has_permission(request.user, "master_data.manage_items"),  # AN7 (G07)
+            "card_cashbox": machine,  # AN8
+            "price_book": price_book(),
+            "promotions_on": _promotions_on(),  # T5
+            "gift_cards_on": _gift_cards_on(request.user),  # S6 (HG-071): only for who may take a card
+            "running_promotions": _running_promotions(),
+            "loyalty_rules": _loyalty_rules(),  # T6: None when loyalty is off
+            "tax_rates": rates_by_item(),
+            "units": units_catalog(),
+            "open_shift": open_shift_for(request.user),
+            "shift_gate_shown": shift_missing(request.user),  # TRACK-ACTS W03: the banner above already opens one
+            "serial_catalog": pos_serial_catalog(),
+            "customers": Customer.objects.filter(active=True).order_by("name"),
+            "customer_directory": customer_directory(),  # POS-002
+            "can_add_customer": user_has_permission(request.user, "master_data.manage_parties"),
+            "can_return": user_has_permission(request.user, "sales.return_sale") and user_has_permission(request.user, "sales.view_sales_invoices"),  # UX Wave 2: «مرتجع» at the till picks the invoice first, on the sales list
+            "walk_in": customer_default,
+            "locations": locations,
+            "cashboxes": cashboxes,
+            "selected": selected,
+            "cart_back": cart_back,
+            "short_box": short_box,  # HG-065
+            "refused": refused,
+            "summary": today_summary(request.user),
+            "last_invoice": entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=last, created_by=request.user).first() if last.isdigit() else None,
+            "alternatives_url": alternatives_url,  # R1: the pharmacy's «بدائل» sheet
+            "alternatives_words": alternatives_words,
+            "alternatives_drugs": alternatives_drugs,
+            "js_words": json.dumps({key: words[key] for key in ("not_found", "added", "remove", "empty_cart", "scan_serial", "serial_twice", "promo_wait")}, ensure_ascii=False),
+        },
+    )

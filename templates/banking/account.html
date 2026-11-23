@@ -1,0 +1,46 @@
+{% extends "operations/base.html" %}
+{% load hesba_format hesba_labels %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{% if lang == 'en' %}{{ cashbox.name_en|default:cashbox.name_ar }}{% else %}{{ cashbox.name_ar }}{% endif %}</h1>
+<p>{{ cashbox.bank_name }}{% if cashbox.account_number %} · <bdi>{{ cashbox.account_number }}</bdi>{% endif %}{% if cashbox.iban %} · <bdi>{{ cashbox.iban }}</bdi>{% endif %}</p>
+<p class="op-muted">{{ words.balance }}: <strong data-book-balance>{{ balance|money }}</strong></p></div>
+<div class="op-form-actions"><a class="op-secondary" href="{% url 'banking:list' %}?lang={{ lang }}">{{ words.title }}</a><a class="op-secondary" href="{% url 'cashboxes:detail' cashbox.pk %}?lang={{ lang }}">{{ words.movements }}</a></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if can_work %}<form class="op-form" method="post" enctype="multipart/form-data" data-upload-statement>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="import">
+<h2>{{ words.upload }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="id_statement_file">{{ words.file }}</label><input id="id_statement_file" type="file" name="file" accept=".csv,.xlsx" required><small class="op-muted">{{ words.file_help }}</small></div>
+<div class="op-field"><label for="id_closing_balance">{{ words.closing }}</label><input id="id_closing_balance" type="text" name="closing_balance" inputmode="decimal" autocomplete="off" dir="ltr"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit">{{ words.send }}</button></div></form>{% endif %}
+{% if statements %}<nav class="op-form-actions wo-tabs" aria-label="{{ words.statements }}" data-statements>{% for row in statements %}<a class="{% if row.pk == statement.pk %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&statement={{ row.pk }}"{% if row.pk == statement.pk %} aria-current="page"{% endif %}><bdi>{{ row.name }}</bdi></a>{% endfor %}</nav>{% endif %}
+{% if report %}
+<section class="op-summary-grid" data-reconciliation>
+<article><small>{{ book_label }}</small><strong data-book>{{ report.book|money }}</strong></article>
+<article><small>{{ words.outstanding }}</small><strong data-outstanding>{{ report.outstanding_total|money }}</strong></article>
+<article><small>{{ words.unrecorded }}</small><strong data-unrecorded>{{ report.unrecorded_total|money }}</strong></article>
+<article><small>{{ words.expected }}</small><strong data-expected>{{ report.expected|money }}</strong></article>
+{% if statement.closing_balance is not None %}<article><small>{{ words.printed }}</small><strong>{{ statement.closing_balance|money }}</strong></article>
+<article><small>{{ words.difference }}</small><strong data-difference="{{ report.difference }}">{% if report.difference == 0 %}{{ words.reconciled }}{% else %}{{ report.difference|money }}{% endif %}</strong></article>{% endif %}
+</section>
+<p class="op-muted"><span data-matched>{{ report.matched }}</span> / {{ report.count }} {{ words.matched }}</p>
+{% if can_work %}<div class="op-form-actions">
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="statement" value="{{ statement.pk }}"><input type="hidden" name="action" value="auto"><button class="op-secondary" type="submit" data-auto>{{ words.auto }}</button></form>
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="statement" value="{{ statement.pk }}"><input type="hidden" name="action" value="delete"><button class="op-danger" type="submit" data-delete-statement>{{ words.delete }}</button></form>
+</div>{% endif %}
+<div class="op-table-wrap"><table class="op-table" data-statement-lines><thead><tr><th>{{ words.date }}</th><th>{{ words.description }}</th><th>{{ words.reference }}</th><th>{{ words.amount }}</th><th>{{ words.state }}</th>{% if can_work %}<th></th>{% endif %}</tr></thead><tbody>
+{% for line in report.lines %}<tr data-line="{{ line.pk }}"{% if not line.movement_id %} data-open-line{% endif %}><td><bdi>{{ line.line_date|date:"Y-m-d" }}</bdi></td><td class="op-cell-text">{{ line.description|default:"—" }}</td><td><bdi>{{ line.reference|default:"—" }}</bdi></td><td>{{ line.amount|money }}</td>
+<td>{% if line.movement_id %}<span data-matched-line>{{ words.matched }}</span> <small class="op-muted"><bdi>{{ line.movement.movement_date|date:"Y-m-d" }}</bdi> · {% choice_label line.movement "movement_type" %}</small>{% else %}<span class="op-muted">{{ words.unmatched }}</span>{% endif %}</td>
+{% if can_work %}<td><div class="op-form-actions">{% if line.movement_id %}
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="statement" value="{{ statement.pk }}"><input type="hidden" name="action" value="unmatch"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit" data-unmatch="{{ line.pk }}">{{ words.unmatch }}</button></form>
+{% else %}{% if line.choices %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="statement" value="{{ statement.pk }}"><input type="hidden" name="action" value="match"><input type="hidden" name="line" value="{{ line.pk }}">
+<select name="movement" aria-label="{{ words.pick }}">{% for movement in line.choices %}<option value="{{ movement.pk }}">{{ movement.movement_date|date:"Y-m-d" }} · {% choice_label movement "movement_type" %} · {{ movement.amount|money }}</option>{% endfor %}</select>
+<button class="op-secondary" type="submit" data-match="{{ line.pk }}">{{ words.match }}</button></form>{% elif line.amount > 0 %}<small class="op-muted">{{ words.no_candidates }}</small>{% endif %}
+{% if line.amount < 0 %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="statement" value="{{ statement.pk }}"><input type="hidden" name="action" value="fee"><input type="hidden" name="line" value="{{ line.pk }}"><button class="op-secondary" type="submit" data-fee="{{ line.pk }}">{{ words.fee }}</button></form>{% endif %}
+{% endif %}</div></td>{% endif %}</tr>{% endfor %}
+</tbody></table></div>
+<h2>{{ words.outstanding_rows }}</h2>
+<div class="op-table-wrap"><table class="op-table" data-outstanding-rows><thead><tr><th>{{ words.date }}</th><th>{{ words.kind }}</th><th>{{ words.description }}</th><th>{{ words.amount }}</th></tr></thead><tbody>
+{% for movement in report.outstanding %}<tr><td><bdi>{{ movement.movement_date|date:"Y-m-d" }}</bdi></td><td>{% choice_label movement "movement_type" %}</td><td class="op-cell-text">{{ movement.description|default:"—" }}</td><td>{% if movement.direction == 'out' %}-{% endif %}{{ movement.amount|money }}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ words.no_outstanding }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<div class="op-notice">{{ words.no_statement }}</div>{% endif %}
+{% endblock %}

@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code
+.claude/
+
+# OPS-001 backups
+backups/
+staticfiles/
+feedback.sqlite3
+feedback.sqlite3-journal
+hesba_sandboxes/

@@ -1,0 +1,43 @@
+{% load static %}{% comment %}
+Video findings: the branded "not allowed" page. Django's permission_denied view renders this file for every PermissionDenied;
+without it the browser got a bare English "403 Forbidden". Same shape as 404.html (standalone, tokens only, one button home).
+The sentence is fixed copy in both languages: the exception's own message is a developer string and is never shown.
+{% endcomment %}{% with en=request.GET.lang|default:''|lower %}<!doctype html>
+<html lang="{% if en == 'en' %}en{% else %}ar{% endif %}" dir="{% if en == 'en' %}ltr{% else %}rtl{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% if en == 'en' %}Not allowed · Hesba{% else %}مش مسموح · حِسبة{% endif %}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=ux3-1">
+<link rel="stylesheet" href="{% static 'hesba/css/errors.css' %}?v=ux3-1">
+</head>
+<body class="hs-error" data-lang="{% if en == 'en' %}en{% else %}ar{% endif %}" data-error-page="403">
+<header class="hs-error__band"><img src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="{% if en == 'en' %}Hesba{% else %}حِسبة{% endif %}" width="642" height="225"></header>
+<main class="hs-error__main">
+  <section class="hs-error__card">
+    <span class="hs-error__code"><bdi dir="ltr">403</bdi></span>
+    {% if en == 'en' %}
+    <h1>This page is not available to your account</h1>
+    <p>Your account does not have permission to open it. If you need it, ask the account owner for access.</p>
+    {% else %}
+    <h1>الصفحة دي مش متاحة لحسابك</h1>
+    <p>حسابك ماعندوش صلاحية يفتحها. لو محتاجها، اطلبها من صاحب الحساب.</p>
+    {% endif %}
+    {% if user.is_authenticated %}<a class="op-primary" href="{% url 'dashboard_snapshot' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the dashboard{% else %}ارجع للرئيسية{% endif %}</a>
+    {% elif demo_mode %}<a class="op-primary" href="{% url 'demo_landing' %}?lang={% if en == 'en' %}en{% else %}ar{% endif %}" data-error-home>{% if en == 'en' %}Back to the demo{% else %}ارجع لصفحة التجربة{% endif %}</a>
+    {% else %}<a class="op-primary" href="{% url 'login' %}" data-error-home>{% if en == 'en' %}Sign in{% else %}ادخل على حسابك{% endif %}</a>{% endif %}
+  </section>
+</main>
+<script>
+(function(){
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (!params.get('lang') && localStorage.getItem('hesba_lang') === 'en') { params.set('lang', 'en'); window.location.replace(window.location.pathname + '?' + params.toString()); }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>{% endwith %}

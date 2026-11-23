@@ -1,0 +1,168 @@
+"""Arabic display labels for model choice fields.
+
+The TextChoices labels on the models are English ("Sale out", "Posted"), and
+templates rendered them through get_FOO_display regardless of the screen's
+language. Changing the model labels would be a schema change (Django records
+choices in migrations) on protected models, so translation happens here, at the
+display layer, keyed by the stored value.
+
+English keeps the model's own label. Arabic comes from AR_LABELS; a value with
+no Arabic entry falls back to the English label rather than to nothing, and
+tests_display_labels.py fails CI the moment a mapped field gains a choice this
+module does not translate.
+"""
+
+from django.apps import apps
+
+
+# UX Wave 2: plain words for the status pill, not accounting jargon: a posted document is «نهائي» (final), not «مُرحّل».
+# Labels only: the stored values and the posting logic are unchanged. An invoice (فاتورة) takes the feminine form.
+DOCUMENT_STATUS = {"draft": "مسودة", "posted": "نهائي", "cancelled": "ملغى"}
+INVOICE_STATUS = {"draft": "مسودة", "posted": "نهائية", "cancelled": "ملغية"}
+PAYMENT_STATUS = {"credit": "آجل", "partial": "مدفوع جزئيًا", "paid": "مدفوع"}
+FREQUENCY = {
+    "monthly": "شهري",
+    "quarterly": "ربع سنوي",
+    "semi_annual": "نصف سنوي",
+    "annual": "سنوي",
+}
+
+AR_LABELS = {
+    # APPT-001
+    ("appointments.appointment", "status"): {
+        "booked": "محجوز", "confirmed": "مؤكَّد", "arrived": "جاري", "done": "خلص", "cancelled": "ملغى", "no_show": "مجاش",
+    },
+    ("appointments.appointment", "kind"): {"appointment": "في المحل", "visit": "زيارة عند العميل", "online": "كشف أونلاين"},
+    ("restaurant.order", "status"): {"open": "مفتوح", "paid": "اتدفع", "cancelled": "ملغي", "merged": "اتدمج"},
+    ("manufacturing.productionrun", "status"): {"posted": "نهائية", "cancelled": "ملغية"},
+    ("manufacturing.productionorder", "status"): {"planned": "لسه مبدأش", "in_progress": "شغال", "done": "خلص", "cancelled": "ملغي"},
+    ("manufacturing.ordermaterialissue", "kind"): {"issue": "صرف البداية", "extra": "صرف إضافي", "return": "رجوع خامات"},
+    ("manufacturing.workcentre", "kind"): {"machine": "ماكينة", "line": "خط إنتاج", "manual": "ترابيزة يدوية"},
+    ("manufacturing.ordercostline", "kind"): {"labour": "عمالة", "overhead": "مصاريف تشغيل", "outside": "تشغيل لدى الغير"},
+    ("einvoice.submission", "status"): {"sending": "بتتبعت دلوقتي", "cancel_requested": "طلب إلغاء — مستني المنظومة", "submitted": "اتبعتت — بتتراجع", "valid": "مقبولة", "invalid": "مرفوضة بعد المراجعة", "rejected": "مرفوضة", "cancelled": "ملغاة"},
+    ("projects.project", "status"): {"planned": "لسه مبدأش", "active": "شغال", "on_hold": "متوقف", "done": "خلص", "cancelled": "ملغي"},
+    # CONTRACT-002: cost headings and project payments.
+    ("projects.budgetline", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
+    ("projects.projectexpense", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
+    ("projects.projectpurchase", "heading"): {"materials": "خامات", "subcontract": "مقاولو باطن", "labour": "عمالة", "equipment": "معدات", "other": "أخرى"},
+    ("projects.projectpayment", "kind"): {"advance": "دفعة مقدمة", "collection": "تحصيل"},
+    ("projects.equipment", "kind"): {"owned": "ملك", "hired": "إيجار"},
+    ("projects.subcontractpayment", "kind"): {"advance": "دفعة مقدمة", "payment": "دفعة من المستخلصات"},
+    ("restaurant.order", "kind"): {"dine_in": "صالة", "takeaway": "تيك أواي", "delivery": "دليفري"},
+    ("sales.salesinvoice", "status"): INVOICE_STATUS,
+    ("sales.salesinvoice", "payment_status"): PAYMENT_STATUS,
+    ("sales.salesreturn", "status"): DOCUMENT_STATUS,
+    ("sales.customerpayment", "status"): DOCUMENT_STATUS,
+    ("sales.customerledgerentry", "entry_type"): {
+        "sales_due": "مستحق مبيعات",
+        "customer_payment": "تحصيل من عميل",
+        "sales_return": "مرتجع مبيعات",
+        "opening_balance": "رصيد افتتاحي",
+        "adjustment": "تسوية",
+    },
+    ("purchases.purchaseinvoice", "status"): INVOICE_STATUS,
+    ("purchases.purchaseinvoice", "payment_status"): PAYMENT_STATUS,
+    ("purchases.purchasereturn", "status"): DOCUMENT_STATUS,
+    ("purchases.supplierpayment", "status"): DOCUMENT_STATUS,
+    ("purchases.supplierledgerentry", "entry_type"): {
+        "purchase_due": "مستحق مشتريات",
+        "supplier_payment": "سداد لمورد",
+        "purchase_return": "مرتجع مشتريات",
+        "opening_balance": "رصيد افتتاحي",
+        "adjustment": "تسوية",
+    },
+    ("inventory.stockmovement", "movement_type"): {
+        "purchase_in": "وارد مشتريات",
+        "sale_out": "صادر مبيعات",
+        "purchase_return_out": "صادر مرتجع مشتريات",
+        "sale_return_in": "وارد مرتجع مبيعات",
+        "transfer_in": "تحويل وارد",
+        "transfer_out": "تحويل صادر",
+        "adjustment_in": "تسوية بالزيادة",
+        "adjustment_out": "تسوية بالنقص",
+        "opening_stock": "رصيد افتتاحي",
+    },
+    ("inventory.stockoperation", "operation_type"): {
+        "transfer": "تحويل",
+        "adjustment": "تسوية",
+    },
+    ("inventory.stockoperation", "adjustment_direction"): {"in": "زيادة", "out": "نقص"},
+    ("inventory.stockoperation", "status"): DOCUMENT_STATUS,
+    ("inventory.transferrequest", "status"): {"requested": "مطلوب", "sent": "في الطريق", "received": "اتستلم", "cancelled": "ملغي"},
+    ("cashboxes.cashboxmovement", "movement_type"): {
+        "purchase_payment": "سداد مشتريات",
+        "sales_receipt": "تحصيل مبيعات",
+        "supplier_payment": "سداد لمورد",
+        "customer_payment": "تحصيل من عميل",
+        "purchase_return": "استرداد مرتجع مشتريات",
+        "sales_return": "رد مرتجع مبيعات",
+        "direct_in": "إيداع مباشر",
+        "direct_out": "صرف مباشر",
+        "transfer_in": "تحويل وارد",
+        "transfer_out": "تحويل صادر",
+        "adjustment": "تسوية",
+        "bank_fee": "مصروفات بنكية",
+        "cheque_bounced": "شيك مرتد",
+        "payroll": "مرتبات",
+    },
+    ("cashboxes.cashboxmovement", "direction"): {"in": "وارد", "out": "صادر"},
+    ("cashboxes.cashboxoperation", "operation_type"): {
+        "direct_in": "إيداع نقدي مباشر",
+        "direct_out": "صرف نقدي مباشر",
+        "transfer": "تحويل بين الخزن",
+        "bank_fee": "مصروفات بنكية",
+        "payroll": "صرف مرتبات",
+    },
+    ("loyalty.pointsentry", "kind"): {"earn": "اتكسبت", "spend": "اتصرفت", "back": "رجعت"},
+    ("promotions.promotion", "kind"): {"percent": "خصم %", "buy_get": "اشتري وخد ببلاش", "amount_over": "خصم مبلغ فوق حد"},
+    ("cheques.cheque", "status"): {"in_hand": "في الإيد", "deposited": "اتودع في البنك", "issued": "صادر ولسه ماتصرفش", "cleared": "اتصرف",
+                                   "bounced": "مرتد", "cancelled": "ملغي"},
+    ("shipping.shipment", "status"): {"with_courier": "مع المندوب", "delivered": "اتسلّمت واتحصّلت", "settled": "اتسوّت", "returned": "رجعت", "lost": "ضاعت"},
+    ("ereceipt.receipt", "status"): {"queued": "مستني الإرسال", "submitted": "اتبعت", "valid": "اتقبل", "invalid": "مرفوض", "not_issued": "متعملش: بيانات ناقصة"},
+    ("cheques.cheque", "direction"): {"in": "وارد", "out": "صادر"},
+    ("onlinestore.storeorder", "source"): {"shopify": "Shopify", "template": "قالب حسبة"},
+    ("cashboxes.cashbox", "kind"): {"cash": "خزنة", "bank": "حساب بنكي", "cheques_in": "شيكات في الإيد", "cheques_out": "شيكات صادرة", "courier": "تحصيلات شركة شحن", "gift_card": "كروت هدايا غير مصروفة"},
+    ("cashboxes.cashboxoperation", "status"): DOCUMENT_STATUS,
+    ("cashboxes.openingbalanceadjustment", "status"): DOCUMENT_STATUS,
+    ("closing.period", "frequency"): FREQUENCY,
+    ("closing.period", "status"): {
+        "open": "مفتوحة",
+        "closed": "مقفلة",
+        "reopened": "أُعيد فتحها",
+    },
+    ("closing.closingrun", "status"): {
+        "draft": "مسودة",
+        "completed": "مكتمل",
+        "cancelled": "ملغى",
+    },
+    ("settings_core.clientprofile", "default_closing_frequency"): FREQUENCY,
+}
+
+
+def _key(model, field_name):
+    if isinstance(model, str):
+        model = apps.get_model(model)
+    return model._meta.label_lower, field_name
+
+
+def choice_label(obj, field_name, lang):
+    """The label for obj.<field_name> in the screen's language."""
+
+    if lang != "en":
+        value = getattr(obj, field_name)
+        label = AR_LABELS.get(_key(type(obj), field_name), {}).get(value)
+        if label:
+            return label
+    return getattr(obj, f"get_{field_name}_display")()
+
+
+def localized_choices(model, field_name, lang):
+    """A field's (value, label) pairs in the screen's language, model order."""
+
+    if isinstance(model, str):
+        model = apps.get_model(model)
+    choices = model._meta.get_field(field_name).choices
+    if lang == "en":
+        return list(choices)
+    arabic = AR_LABELS.get(_key(model, field_name), {})
+    return [(value, arabic.get(value, label)) for value, label in choices]

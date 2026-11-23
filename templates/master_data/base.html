@@ -1,0 +1,25 @@
+{% extends "base_app.html" %}
+{% load hesba_labels %}
+{% load static %}
+{% block styles %}
+<link rel="stylesheet" href="{% static 'hesba/css/master_data.css' %}?v=w4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}?v=w4-1">
+{% endblock %}
+{% block body_class %}master-data-page{% endblock %}
+{% block content %}
+<div class="hs-app">
+{% include "partials/app_shell.html" %}
+<div class="hs-main">
+<main class="md-shell" id="hs-main" tabindex="-1">
+{% include "partials/entity_bar.html" %}
+  {% if messages %}
+    <div class="md-messages">
+      {% for message in messages %}{% if message.extra_tags == 'hs-saved' %}{% include "partials/saved_toast.html" %}{% else %}<div class="md-message">{{ message|ui:lang }}</div>{% endif %}{% endfor %}
+    </div>
+  {% endif %}
+  {% block master_content %}{% endblock %}
+</main>
+</div>
+</div>
+<script src="{% static 'hesba/js/shell.js' %}" defer></script>
+{% endblock %}

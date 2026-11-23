@@ -1,0 +1,36 @@
+{% load static hesba_format %}{# R1 step 2: «اختار من القايمة» on a pharmacy's new item. Without JavaScript every part stays hidden and the form works as before; ?ref= fills it on the server. #}
+<link rel="stylesheet" href="{% static 'hesba/css/drug_picker.css' %}?v=r1-3">
+{% with words=drug.words row=drug.reference_row %}
+<div class="hs-drug-banner" role="status" data-drug-banner{% if not row %} hidden{% endif %}>
+  <svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+  <div><b>{{ words.banner_title }}</b><span>{{ words.banner_body }}</span>
+    <span class="hs-drug-banner__price" data-drug-banner-price>{% if row and row.public_price is not None %}{{ words.suggested }} {{ row.public_price|floatformat:2|ltr }} {{ words.currency }} · {% if row.price_date %}{{ row.price_date|date:"m/Y"|ltr }}{% else %}{{ words.no_date }}{% endif %}{% endif %}</span>
+    <button class="hs-drug-link" type="button" data-drug-picker-open hidden><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4z"/><path d="M5 17a3 3 0 013-3h11"/></svg> {{ words.again }}</button>
+  </div>
+</div>
+<button class="hs-drug-open" type="button" data-drug-picker-open data-drug-open-main hidden aria-haspopup="dialog" aria-controls="drug-picker" aria-label="{{ words.open_label }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3V4z"/><path d="M5 17a3 3 0 013-3h11"/></svg><span>{{ words.open }}</span></button>
+<small class="hs-help hs-drug-hint" data-drug-hint hidden>{{ words.hint }}</small>
+<dialog class="hs-drug-sheet" id="drug-picker" aria-labelledby="drug-picker-title" data-drug-picker data-url="{% url 'pharmacy:reference_search' %}" data-lang="{{ lang }}">
+  <div class="hs-drug-sheet__grab" aria-hidden="true"></div>
+  <header class="hs-drug-sheet__head"><h2 id="drug-picker-title">{{ words.title }}</h2>
+    <button class="hs-drug-sheet__x" type="button" data-drug-picker-close aria-label="{{ words.close }}" title="{{ words.close }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+  <div class="hs-drug-sheet__search">
+    <svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <label class="hs-drug-sr" for="drug-picker-q">{{ words.search }}</label>
+    <input id="drug-picker-q" type="search" form="drug-picker-detached" maxlength="100" autocomplete="off" enterkeyhint="search" dir="auto" placeholder="{{ words.placeholder }}" aria-describedby="drug-picker-status" aria-controls="drug-picker-list" data-drug-q>
+  </div>
+  <div class="hs-drug-sheet__meta"><span id="drug-picker-status" role="status" aria-live="polite" data-drug-status></span><span data-drug-cap hidden></span></div>
+  <div class="hs-drug-sheet__body">
+    <div class="hs-drug-state" data-drug-state="short"><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><b>{{ words.short_title }}</b><p>{{ words.short_body }}</p></div>
+    <div class="hs-drug-skel" data-drug-state="loading" aria-hidden="true" hidden>{% for _ in "123" %}<div class="hs-drug-skel__row"><div><i></i><i></i></div><i></i></div>{% endfor %}</div>
+    <ul class="hs-drug-list" id="drug-picker-list" aria-label="{{ words.title }}" data-drug-list hidden></ul>
+    <div class="hs-drug-state" data-drug-state="empty" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><b>{{ words.empty_title }}</b><p>{{ words.empty_body }}</p></div>
+    <div class="hs-drug-state hs-drug-state--error" data-drug-state="error" hidden><span class="hs-drug-state__badge" aria-hidden="true"><svg class="hs-drug-ico" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0M12 19.5h.01"/><path d="M4 4l16 16"/></svg></span><b>{{ words.error_title }}</b><p>{{ words.error_body }}</p><button class="hs-drug-retry" type="button" data-drug-retry>{{ words.retry }}</button></div>
+  </div>
+  <footer class="hs-drug-sheet__foot"><span data-drug-source>{{ words.source }}</span><span>{{ words.disclaimer }}</span>
+    <button class="hs-drug-link" type="button" data-drug-manual>{{ words.manual }}</button></footer>
+</dialog>
+{% endwith %}
+{{ drug.prefill|json_script:"drug-prefill" }}
+{{ drug.words|json_script:"drug-words" }}
+<script src="{% static 'hesba/js/drug_picker.js' %}?v=r1-4" defer></script>

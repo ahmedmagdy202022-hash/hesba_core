@@ -1,0 +1,16 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+<p class="op-muted">{{ cwords.budget_intro }}</p>
+<div class="op-table-wrap"><table class="op-table" data-budget><thead><tr><th>{{ cwords.heading }}</th><th>{{ cwords.budget }}</th><th>{{ cwords.actual }}</th><th>{{ cwords.variance }}</th><th>{{ cwords.used }}</th></tr></thead><tbody>
+{% for row in table.rows %}<tr data-budget-row="{{ row.heading }}"{% if row.variance < 0 %} class="op-row-warn"{% endif %}><td>{{ row.label }}</td><td>{{ row.budget|money }}</td><td>{{ row.actual|money }}</td><td>{{ row.variance|money }}</td><td>{% if row.used is not None %}{{ row.used }}%{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if table.rows %}<section class="op-summary-grid op-summary-grid--compact" data-budget-total><article><small>{{ cwords.total }} — {{ cwords.budget }}</small><strong>{{ table.budget|money }}</strong></article><article><small>{{ cwords.actual }}</small><strong>{{ table.actual|money }}</strong>{% if table.used is not None %}<small>{{ cwords.used }} {{ table.used }}%</small>{% endif %}</article><article><small>{{ cwords.variance }}</small><strong>{{ table.variance|money }}</strong></article></section>{% endif %}
+{% if can_manage %}
+<form class="op-form" method="post" data-budget-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><h2>{{ cwords.budget }}</h2>
+<div class="op-form-grid">{% for field in fields %}<div class="op-field"><label for="bd-{{ field.heading }}">{{ field.label }}</label><input id="bd-{{ field.heading }}" name="b_{{ field.heading }}" value="{{ field.amount|stringformat:'s' }}" inputmode="decimal" dir="ltr"></div>{% endfor %}</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.save_budget }}</button></div></form>
+{% endif %}
+{% endblock %}

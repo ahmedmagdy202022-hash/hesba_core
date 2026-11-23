@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.import_title }}</h1><p>{{ words.import_intro }}</p></div></section>
+{% include "attendance/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+{% if result %}<div class="op-message" role="status" data-import-result><p>{{ result.text }}</p>{% if result.unmatched_text %}<p data-unmatched>{{ result.unmatched_text }}</p>{% endif %}{% if result.bad_text %}<p>{{ result.bad_text }}</p>{% endif %}</div>{% endif %}
+<form class="op-form" method="post" enctype="multipart/form-data" data-import-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<p class="op-muted">{{ words.import_columns }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="im-file">{{ words.file }}</label><input id="im-file" type="file" name="file" accept=".csv,.txt" required></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.upload }}</button></div></form>
+{% endblock %}

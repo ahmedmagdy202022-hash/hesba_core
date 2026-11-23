@@ -1,0 +1,272 @@
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db.models import Q
+from django.shortcuts import get_object_or_404, redirect, render
+
+from approvals.gate import held
+from permissions.decorators import require_permission
+from permissions.services import user_has_permission
+from reports.selectors import cashbox_report
+from settings_core.display_labels import localized_choices
+
+from .forms import CashboxOperationForm, CashboxOperationReversalForm
+from .models import Cashbox, CashboxMovement, CashboxOperation
+from .services import cancel_cashbox_operation, create_cashbox_operation
+from entities import scope as entity_scope
+from config.form_errors import add_form_error
+from config.paging import page_of
+
+
+STRINGS = {
+    "ar": {
+        "page_title": "الخزن",
+        "cashboxes": "الخزن",
+        "movements": "سجل حركات الخزن",
+        "search": "بحث",
+        "all": "الكل",
+        "empty": "مفيش نتايج بالفلاتر دي.",
+        "dashboard": "لوحة القيادة",
+        "language": "English",
+        "back": "العودة للخزن",
+        "finance_hidden": "التفاصيل المالية وحركات الخزنة تحتاج صلاحية عرض مالية مستقلة.",
+        "blocked": "الإدخال النقدي المباشر والتحويل بين الخزن غير متاحين حتى اعتماد خدمة الحركة المحمية.",
+        "operations": "حركات النقد المباشرة والتحويلات",
+        "new_operation": "تسجيل حركة نقدية",
+        "saved": "تم ترحيل حركة النقد.",
+        "reversed": "تم عكس حركة النقد.",
+    },
+    "en": {
+        "page_title": "Cashboxes",
+        "cashboxes": "Cashboxes",
+        "movements": "Cashbox movement history",
+        "search": "Search",
+        "all": "All",
+        "empty": "No matching results.",
+        "dashboard": "Dashboard",
+        "language": "العربية",
+        "back": "Back to cashboxes",
+        "finance_hidden": "Financial details and cashbox movements require separate finance-view permission.",
+        "blocked": "Direct cash movements and transfers remain unavailable until a protected movement service is approved.",
+        "operations": "Direct cash and transfers",
+        "new_operation": "Record cash operation",
+        "saved": "Cash operation posted.",
+        "reversed": "Cash operation reversed.",
+    },
+}
+
+
+def _lang(request):
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
+
+
+def _context(request, **extra):
+    lang = _lang(request)
+    context = {
+        "lang": lang,
+        "dir": "ltr" if lang == "en" else "rtl",
+        "words": STRINGS[lang],
+        "section": "cashboxes",
+        "page_title": STRINGS[lang]["page_title"],
+    }
+    context.update(extra)
+    return context
+
+
+@require_permission("cashboxes.view_cashboxes")
+def cashbox_list(request):
+    query = request.GET.get("q", "").strip()
+    queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+    if query:
+        queryset = queryset.filter(
+            Q(cashbox_code__icontains=query)
+            | Q(name_ar__icontains=query)
+            | Q(name_en__icontains=query)
+        )
+    page = page_of(request, queryset)
+    can_view_finance = user_has_permission(request.user, "cashboxes.view_finance")
+    finance_by_id = {}
+    if can_view_finance:
+        finance_by_id = {row["cashbox_id"]: row for row in cashbox_report()}
+    rows = [
+        {"cashbox": cashbox, "finance": finance_by_id.get(cashbox.id)}
+        for cashbox in page.object_list
+    ]
+    return render(
+        request,
+        "cashboxes/list.html",
+        _context(
+            request,
+            page=page,
+            rows=rows,
+            query=query,
+            can_view_finance=can_view_finance,
+            can_move_cash=user_has_permission(request.user, "cashboxes.move_cash"),
+            # FB2-CASHBOX: a new cashbox from the cashboxes page itself (HG-001: managing them is its own permission).
+            can_manage=user_has_permission(request.user, "cashboxes.manage_cashboxes"),
+        ),
+    )
+
+
+@require_permission("cashboxes.view_cashboxes")
+def cashbox_detail(request, pk):
+    cashbox = get_object_or_404(entity_scope.cashboxes(Cashbox.objects), pk=pk, active=True)
+    can_view_finance = user_has_permission(request.user, "cashboxes.view_finance")
+    finance = None
+    movements = None
+    movements_page = None
+    if can_view_finance:
+        rows = cashbox_report(cashbox=cashbox)
+        finance = rows[0] if rows else None
+        # UX Wave 2: a page at a time (20 by default, the shared pager) instead of the latest 100 in one long table.
+        movements_page = page_of(request, cashbox.movements.select_related(
+            "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
+            "cashbox_operation", "purchase_return", "sales_return",
+        ).order_by("-movement_date", "-id"))
+        movements = movements_page.object_list
+    return render(
+        request,
+        "cashboxes/detail.html",
+        _context(
+            request,
+            cashbox=cashbox,
+            finance=finance,
+            movements=movements,
+            movements_page=movements_page,
+            can_view_finance=can_view_finance,
+            can_move_cash=user_has_permission(request.user, "cashboxes.move_cash"),
+            can_adjust_opening=(
+                cashbox.movements.exists()
+                and user_has_permission(request.user, "master_data.adjust_opening_balances")
+            ),
+        ),
+    )
+
+
+@require_permission("cashboxes.view_finance")
+def movement_list(request):
+    queryset = entity_scope.scope(CashboxMovement.objects.select_related(
+        "cashbox", "purchase_invoice", "sales_invoice", "supplier_payment", "customer_payment",
+        "cashbox_operation", "purchase_return", "sales_return", "created_by"
+    ), entity_scope.CASHBOX_MOVEMENT)
+    query = request.GET.get("q", "").strip()
+    cashbox_id = request.GET.get("cashbox", "").strip()
+    movement_type = request.GET.get("type", "").strip()
+    if query:
+        queryset = queryset.filter(
+            Q(description__icontains=query)
+            | Q(purchase_invoice__invoice_number__icontains=query)
+            | Q(sales_invoice__invoice_number__icontains=query)
+            | Q(supplier_payment__payment_number__icontains=query)
+            | Q(customer_payment__payment_number__icontains=query)
+            | Q(cashbox_operation__reference_number__icontains=query)
+            | Q(purchase_return__return_number__icontains=query)
+            | Q(sales_return__return_number__icontains=query)
+        )
+    if cashbox_id.isdigit():
+        queryset = queryset.filter(cashbox_id=cashbox_id)
+    else:
+        cashbox_id = ""
+    valid_types = {value for value, _ in CashboxMovement._meta.get_field("movement_type").choices}
+    if movement_type in valid_types:
+        queryset = queryset.filter(movement_type=movement_type)
+    else:
+        movement_type = ""
+    page = page_of(request, queryset)
+    return render(
+        request,
+        "cashboxes/movements.html",
+        _context(
+            request,
+            page=page,
+            query=query,
+            cashbox_id=cashbox_id,
+            movement_type=movement_type,
+            cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True),
+            movement_choices=localized_choices(CashboxMovement, "movement_type", _lang(request)),
+        ),
+    )
+
+
+@require_permission("cashboxes.move_cash")
+def operation_list(request):
+    page = page_of(
+        request,
+        entity_scope.scope(CashboxOperation.objects.select_related(
+            "source_cashbox", "destination_cashbox", "created_by", "cancelled_by", "expense"
+        ), entity_scope.CASHBOX_OPERATION).distinct(),
+    )
+    return render(
+        request,
+        "cashboxes/operations.html",
+        _context(
+            request,
+            page=page,
+            reversal_form=CashboxOperationReversalForm(lang=_lang(request)),
+        ),
+    )
+
+
+@require_permission("cashboxes.move_cash")
+def operation_create(request):
+    lang = _lang(request)
+    form = CashboxOperationForm(request.POST or None, lang=lang)
+    if request.method == "POST" and form.is_valid():
+        try:
+            create_cashbox_operation(user=request.user, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as exc:
+            add_form_error(form, exc)
+        else:
+            messages.success(request, STRINGS[lang]["saved"])
+            return redirect(f"/cashboxes/operations/?lang={lang}")
+    return render(
+        request,
+        "cashboxes/operation_form.html",
+        _context(request, form=form, title=STRINGS[lang]["new_operation"]),
+    )
+
+
+@require_permission("cashboxes.move_cash")
+def operation_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("cashboxes:operations")
+    lang = _lang(request)
+    form = CashboxOperationReversalForm(request.POST, lang=lang)
+    if hasattr(entity_scope.get_or_404(CashboxOperation, entity_scope.CASHBOX_OPERATION, pk=pk), "expense"):
+        # EXP-001: an expense's cash-out is cancelled from the expenses screen,
+        # so the expense and its cash movement can never disagree.
+        messages.error(request, "هذه الحركة تابعة لمصروف؛ ألغِها من شاشة المصروفات." if lang == "ar" else "This operation belongs to an expense; cancel it from the expenses screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    from cheques.services import owns_operation
+
+    if CashboxOperation.objects.filter(pk=pk, courier_settlement__isnull=False).exists():
+        # T14 (HG-061): a courier's settlement moves with the parcels it settled.
+        messages.error(request, "الحركة دي تسوية شركة شحن؛ مينفعش تتلغي من هنا." if lang == "ar" else "This operation is a courier settlement; it cannot be cancelled here.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    if CashboxOperation.objects.filter(pk=pk, payroll_payment__isnull=False).exists():
+        # T12 (HG-060): a payroll payment is cancelled from its payroll run, so the run's debts stay right.
+        messages.error(request, "الحركة دي تابعة للمرتبات؛ ألغيها من شاشة المرتبات." if lang == "ar" else "This operation belongs to payroll; cancel it from the payroll screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    from cashboxes.models import CashboxKind
+    from django.db.models import Q
+
+    if CashboxOperation.objects.filter(Q(source_cashbox__kind=CashboxKind.GIFT_CARD) | Q(destination_cashbox__kind=CashboxKind.GIFT_CARD), pk=pk).exists():
+        # S6 (HG-071): a card's sale or write-off is reversed from the card's page, which keeps the card's balance right.
+        messages.error(request, "الحركة دي تابعة لكارت هدية؛ اعكسها من صفحة الكارت." if lang == "ar" else "This operation belongs to a gift card; reverse it from the card's page.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    if owns_operation(pk):
+        # T4 (HG-056): a cheque's deposit, payment or return moves with the cheque, so the two never disagree.
+        messages.error(request, "الحركة دي تابعة لشيك؛ اتعامل معاها من شاشة الشيكات." if lang == "ar" else "This operation belongs to a cheque; handle it from the cheques screen.")
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    if form.is_valid() and held(request, "cashboxes.reverse_operation", pk, form.cleaned_data,
+                                CashboxOperation.objects.filter(pk=pk).values_list("reference_number", flat=True).first() or ""):  # FB-27
+        return redirect(f"/cashboxes/operations/?lang={lang}")
+    if form.is_valid():
+        try:
+            cancel_cashbox_operation(pk, user=request.user, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(request, STRINGS[lang]["reversed"])
+    else:
+        messages.error(request, "; ".join(error for errors in form.errors.values() for error in errors))
+    return redirect(f"/cashboxes/operations/?lang={lang}")

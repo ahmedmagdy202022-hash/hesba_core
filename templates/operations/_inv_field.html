@@ -1,0 +1,1 @@
+{% load hesba_labels %}<div class="op-field{% if field.errors %} has-error{% endif %}{% if wide %} inv-wide{% endif %}" data-field="{{ field.name }}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<div class="op-field-error">{{ error|ui:lang }}</div>{% endfor %}</div>

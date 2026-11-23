@@ -1,0 +1,17 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+{% include "ledger/_subnav.html" %}
+<section class="op-title-row"><div><h1>{{ words.tab_cash }}{% if entity %} — {% if lang == 'en' and entity.name_en %}{{ entity.name_en }}{% else %}{{ entity.name_ar }}{% endif %}{% endif %}</h1><p>{{ words.cash_intro }}</p></div></section>
+{% include "ledger/_filters.html" %}
+{% include "ledger/_statement_actions.html" %}
+<p data-reconciles="{{ data.reconciles|yesno:'1,0' }}"><span class="op-status {% if data.reconciles %}op-status-posted{% else %}op-status-cancelled{% endif %}">{% if data.reconciles %}✓ {{ words.flow_ok }}{% else %}⚠ {{ words.flow_bad }}{% endif %}</span></p>
+<div class="op-table-wrap"><table class="op-table" data-cash-flow><tbody>
+{% for block in blocks %}<tr class="op-section-row"><td colspan="2">{{ block.label }}</td></tr>
+{% for line in block.lines %}<tr><td class="op-indent">{{ line.name }}</td><td class="op-num">{{ line.amount|money }}</td></tr>{% endfor %}
+<tr><td>{{ block.label }}</td><td class="op-num"><strong>{{ block.total|money }}</strong></td></tr>{% endfor %}
+<tr class="op-total-row"><td>{{ words.net_change }}</td><td class="op-num">{{ data.net_change|money }}</td></tr>
+<tr><td>{{ words.cash_opening }}</td><td class="op-num">{{ data.cash_opening|money }}</td></tr>
+<tr class="op-total-row"><td>{{ words.cash_closing }}</td><td class="op-num" data-cash-closing>{{ data.cash_closing|money }}</td></tr>
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ words.kitchen }} · {{ order.number }} · {{ ticket.sequence }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<style>
+@page{size:80mm auto;margin:3mm}
+body{margin:0;background:var(--hs-ground);color:#000;font-family:var(--hs-font-body)}
+.kt-bar{display:flex;gap:8px;justify-content:center;padding:10px}
+.kt-bar a{display:inline-flex;align-items:center}
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:8px}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}
+.kt-bar a,.kt-bar button{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--hs-line);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;cursor:pointer}
+.kt{width:72mm;margin:0 auto 20px;background:#fff;padding:4mm;box-sizing:border-box}
+.kt h1{font-size:20px;margin:0;text-align:center}
+.kt .kt-where{font-size:26px;font-weight:800;text-align:center;margin:4px 0}
+.kt .kt-meta{display:flex;justify-content:space-between;font-size:12px;border-bottom:1px dashed #000;padding-bottom:4px}
+.kt ul{list-style:none;margin:6px 0;padding:0}
+.kt li{padding:6px 0;border-bottom:1px dashed #999;font-size:17px}
+.kt li b{font-size:20px}
+.kt li small{display:block;font-size:14px;font-weight:700}
+.kt li .kt-sub{padding-inline-start:18px;font-size:16px}
+.kt li.kt-combo{font-size:15px;font-weight:800;border-bottom:0;padding-bottom:0}
+.kt li.kt-in-combo{padding-inline-start:12px}
+.kt .kt-notes{font-size:14px;font-weight:700}
+.kt .kt-brand{font-size:18px;font-weight:800;text-align:center;margin:2px 0}
+.kt .kt-station{font-size:18px;font-weight:800;text-align:center;margin:2px 0;border:2px solid #000;border-radius:6px;padding:2px 0}
+@media print{.kt-bar{display:none}body{background:#fff}.kt{margin:0;width:auto;padding:0;break-after:page;page-break-after:always}.kt:last-of-type{break-after:auto;page-break-after:auto}}
+</style>
+</head>
+<body>
+<nav class="kt-bar"><a href="{% url 'restaurant:order' order.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ order.number }}</a><button type="button" data-print>{{ words.reprint }}</button></nav>
+{% for card in cards %}<article class="kt" data-kitchen-ticket="{{ order.number }}-{{ card.ticket.sequence }}">
+  <h1>{{ words.kitchen }} · {{ words.ticket }} {{ card.ticket.sequence }}</h1>
+  {% if brand_name %}<p class="kt-brand" data-ticket-brand>{{ brand_name }}</p>{% endif %}
+  {% if card.station %}<p class="kt-station" data-ticket-station>{{ card.station }}</p>{% endif %}
+  <p class="kt-where">{% if order.home_table %}{{ words.table }} {{ order.home_table.name }}{% else %}{{ kind_label }}{% endif %}</p>
+  <p class="kt-meta"><span dir="ltr">{{ order.number }}</span><span dir="ltr">{{ card.sent_at|date:"H:i" }}</span></p>
+  <p class="kt-meta"><span>{{ card.ticket.sent_by|person }}</span><span>{% if order.waiter %}{{ order.waiter.name }}{% endif %}{% if order.guests > 1 %} · {{ order.guests }} {{ words.guests }}{% endif %}</span></p>
+  <ul>{% for dish in card.dishes %}{% with line=dish.line %}{% if dish.combo %}<li class="kt-combo" data-ticket-combo="{{ line.bundle }}">{{ dish.combo }}</li>{% endif %}<li data-ticket-line="{{ line.item.item_code }}"{% if line.bundle %} class="kt-in-combo"{% endif %}{% if line.voided %} style="text-decoration:line-through"{% endif %}><b>{{ line.quantity|qty }} ×</b> {{ line.item.item_name }}{% if line.voided %} ({{ words.voided }}){% endif %}{% if line.options %}<small class="kt-sub" data-ticket-options>{{ line.options }}</small>{% endif %}{% for addon in dish.addons %}<small class="kt-sub" data-ticket-addon="{{ addon.line.item.item_code }}">{{ addon.label }}</small>{% endfor %}{% if line.note %}<small>{{ line.note }}</small>{% endif %}{% if line.void_reason %}<small>{{ line.void_reason }}</small>{% endif %}</li>{% endwith %}{% endfor %}</ul>
+  {% if order.notes %}<p class="kt-notes">{{ order.notes }}</p>{% endif %}
+</article>{% endfor %}
+<script>document.querySelector("[data-print]").addEventListener("click", function(){ window.print(); });
+if (new URLSearchParams(window.location.search).get('autoprint') === '1') { window.addEventListener('load', function(){ window.print(); }); }</script>
+</body>
+</html>

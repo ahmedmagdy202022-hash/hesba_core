@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div>{% if can_add %}<div class="op-form-actions"><a class="op-primary" href="{% url 'master_data:create' entity='cashboxes' %}?lang={{ lang }}&kind=bank" data-new-bank>{{ words.new }}</a></div>{% endif %}</section>
+<div class="op-table-wrap"><table class="op-table" data-banks><thead><tr><th>{{ words.account }}</th><th>{{ words.bank }}</th><th>{{ words.number }}</th><th>{{ words.balance }}</th><th>{{ words.last }}</th><th>{{ words.open }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-bank="{{ row.cashbox.pk }}"><td class="op-cell-text"><a href="{% url 'banking:account' row.cashbox.pk %}?lang={{ lang }}">{% if lang == 'en' %}{{ row.cashbox.name_en|default:row.cashbox.name_ar }}{% else %}{{ row.cashbox.name_ar }}{% endif %}</a></td>
+<td>{{ row.cashbox.bank_name|default:"—" }}</td><td><bdi>{{ row.cashbox.account_number|default:"—" }}</bdi></td><td>{{ row.balance|money }}</td>
+<td>{% if row.last %}<bdi>{{ row.last.name }}</bdi>{% else %}—{% endif %}</td><td>{% if row.open %}<strong data-open>{{ row.open }}</strong>{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

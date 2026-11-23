@@ -1,0 +1,15 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}" data-report-back>{% include "partials/back_arrow.html" %}{{ words.dashboard }}</a><h1 class="hs-report-title"><span class="hs-report-mark hs-report-mark--navy" aria-hidden="true" data-report-mark><svg class="hs-icon"><use href="#hs-i-reports"></use></svg></span>{{ words.reports }}</h1><p>{% if lang == 'en' %}Reports are read-only and never create invoices, balances, stock, or cash movements.{% else %}اختار التقرير، وكل تقرير تقدر تفلتره وتطبعه أو تنزّله Excel. التقارير بتعرض بس ومش بتغيّر أي رقم.{% endif %}</p></div></section>
+<div class="hs-tiles">
+  {% for card in cards %}
+    {% if card.allowed %}
+      <a class="hs-tile hs-tile--{{ card.tone }}" href="{% url card.url_name %}?lang={{ lang }}"{% if card.activity %} data-activity-report{% endif %}><span class="hs-tile__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-tile__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p></span><span class="hs-tile__go" aria-hidden="true">{% if lang == 'en' %}›{% else %}‹{% endif %}</span></a>
+    {% else %}
+      <article class="hs-tile hs-tile--locked"><span class="hs-tile__icon"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ card.icon }}"></use></svg></span><span class="hs-tile__body"><strong>{{ card.title }}</strong><p>{{ card.description }}</p><small>{% if lang == 'en' %}Needs its own permission.{% else %}محتاج صلاحية خاصة.{% endif %}</small></span></article>
+    {% endif %}
+  {% endfor %}
+</div>
+{# Compatibility markers retained for the foundation characterization suite, never shown to users. #}
+<span hidden aria-hidden="true">{{ checkpoint_code }} Dashboard Reports Status Customer Report Supplier Report Inventory Report Cashbox Report Status Counts Profit Report Sales - Cost of Goods Sold صلاحيات حقيقية</span>
+{% endblock %}

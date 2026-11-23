@@ -1,0 +1,33 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_certificate.css' %}?v=e6-1">{% endblock %}
+{% block operation_content %}
+{# E6: issue a certificate. Without ?enrollment: the finished students with no live certificate. With it: what will be printed, the warnings, the grade, and Issue. #}
+<section class="op-title-row hs-head"><div><a class="op-back" href="{% url 'education:certificates' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ cw.title }}</a><h1>{{ cw.issue }}</h1>
+{% if enrollment %}<p>{{ enrollment.student.name }} · {{ course }}{% if level %} · {{ cw.level }} <bdi>{{ level }}</bdi>{% endif %} · {{ enrollment.group.name }}</p>{% else %}<p>{{ cw.ready_intro }}</p>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+{% if not enrollment %}
+<form class="op-form" method="get" data-ready-filter><input type="hidden" name="lang" value="{{ lang }}"><div class="op-form-grid"><div class="op-field"><label for="ci-group">{{ cw.group }}</label><select id="ci-group" name="group"><option value="">{{ cw.all_groups }}</option>{% for g in groups %}<option value="{{ g.pk }}"{% if chosen and chosen.pk == g.pk %} selected{% endif %}>{{ g.course.name }} — {{ g.name }}</option>{% endfor %}</select></div></div>
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ cw.show }}</button></div></form>
+<div class="op-table-wrap"><table class="op-table" data-list-rows data-ready><thead><tr><th>{{ cw.student }}</th><th>{{ cw.group }}</th><th>{{ cw.period }}</th><th></th></tr></thead><tbody>
+{% for e in queue %}<tr data-ready-enrollment="{{ e.pk }}"><td data-row="title" class="op-cell-text">{{ e.student.name }}</td><td data-row="sub">{{ e.group.course.name }} — {{ e.group.name }}</td><td data-row="meta"><bdi>{{ e.start_date|day_text:lang }}</bdi>{% if e.finished_on %} — <bdi>{{ e.finished_on|day_text:lang }}</bdi>{% endif %}</td><td data-row="action"><a href="?enrollment={{ e.pk }}&amp;lang={{ lang }}" data-issue-for>{{ cw.issue_row }}</a></td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty" data-row="empty" data-no-ready>{{ cw.no_ready }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}
+{% if info.live %}<section class="op-detail-meta" data-live><h2>{{ cw.live_h }}</h2><p><a href="{% url 'education:certificate' info.live.pk %}?lang={{ lang }}"><bdi dir="ltr">{{ info.live.number }}</bdi></a></p></section>
+{% else %}
+<section class="op-detail-meta" data-preview><h2>{{ cw.preview }}</h2>
+<dl class="cr-facts-list"><div><dt>{{ cw.student }}</dt><dd>{{ enrollment.student.name }}</dd></div><div><dt>{{ cw.course }}</dt><dd>{{ course }}{% if level %} · {{ cw.level }} <bdi>{{ level }}</bdi>{% endif %}</dd></div>
+<div><dt>{{ cw.period }}</dt><dd><bdi>{{ info.measure.first|day_text:lang }}</bdi> — <bdi>{{ info.measure.last|day_text:lang }}</bdi></dd></div>
+<div><dt>{{ cw.held }}</dt><dd data-held>{{ info.measure.held }}</dd></div><div><dt>{{ cw.hours }}</dt><dd data-hours><bdi dir="ltr">{{ info.measure.hours|floatformat:"-2" }}</bdi></dd></div>
+<div><dt>{{ cw.attendance }}</dt><dd data-rate>{% if info.measure.rate is not None %}<bdi dir="ltr">{{ info.measure.rate }}%</bdi>{% else %}—{% endif %}</dd></div></dl></section>
+{% if info.refusal %}<div class="op-message op-message-error" role="alert" data-refusal>{{ info.refusal }}</div>
+{% else %}
+<form class="op-form" method="post" data-issue-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="enrollment" value="{{ enrollment.pk }}">
+{% if info.warnings %}<div class="op-message" role="status" data-warnings><strong>{{ cw.warn_h }}</strong><ul>{% for w in info.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+<label class="op-check"><input type="checkbox" name="confirm" value="1" data-confirm> {{ cw.anyway }}</label></div>{% endif %}
+<div class="op-form-grid"><div class="op-field"><label for="ci-grade">{{ cw.grade_label }}</label><input id="ci-grade" name="grade_text" maxlength="40" value="{{ grade }}" data-grade><small class="op-muted">{{ cw.grade_hint }}{% if info.grade %} {{ cw.grade_from }}{% endif %}</small></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-issue>{{ cw.issue_btn }}</button></div></form>
+{% endif %}{% endif %}
+{% endif %}
+{% endblock %}

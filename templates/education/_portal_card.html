@@ -1,0 +1,17 @@
+{# E3 (HG-101): the guardian portal card on the student file. Drawn only for whoever manages parties. The live link's address is never kept, so it is not shown here: «ابعت» makes a new one. #}
+{% load hesba_format %}
+<section class="op-detail-meta" data-portal-card><h2>{{ gp.h }}</h2><p class="op-muted">{{ gp.intro }}</p>
+{% if portal_link %}<div data-portal-live><p><span class="op-status op-status-open">{{ gp.live }}</span></p>
+<p>{{ gp.made }}: <bdi>{{ portal_link.created_at|date:"Y-m-d" }}</bdi></p><p>{{ gp.until }}: <bdi>{{ portal_until|date:"Y-m-d" }}</bdi></p>
+<p>{{ gp.opened }}: {% if portal_link.last_opened_at %}<bdi>{{ portal_link.last_opened_at|date:"Y-m-d H:i" }}</bdi>{% else %}{{ gp.never_opened }}{% endif %}</p></div>
+{% elif portal_spent %}<div class="op-message op-message-error" role="note" data-portal-spent>{{ gp.spent }}</div>
+{% else %}<p class="op-muted" data-portal-none>{{ gp.none }}</p>{% endif %}
+{% if portal_kind == 'date' %}<p data-portal-kind="date">{{ gp.kind_date }} · {{ gp.children }}: <bdi>{{ portal_children }}</bdi></p>
+{% elif portal_kind == 'phone' %}<p data-portal-kind="phone">{{ gp.kind_phone }} · {{ gp.children }}: <bdi>{{ portal_children }}</bdi></p>
+<div class="op-message op-message-error" role="note" data-portal-phone-only><strong>{{ gp.warn_h }}:</strong> {{ portal_warning }}</div>
+{% else %}<div class="op-message op-message-error" role="note" data-portal-blocked>{{ gp.kind_none }}</div>{% endif %}
+<div class="op-form-actions">
+{% if portal_kind %}<form method="post" action="{% url 'education:portal_make' student.pk %}" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-primary" type="submit" data-portal-make>{% if portal_link or portal_spent %}{{ gp.send_again }}{% else %}{{ gp.send }}{% endif %}</button></form>{% endif %}
+{% if portal_link %}<form method="post" action="{% url 'education:portal_revoke' student.pk %}" class="edu-inline">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="link" value="{{ portal_link.pk }}"><button class="op-secondary" type="submit" data-portal-revoke>{{ gp.revoke }}</button></form>{% endif %}
+</div>
+{% if portal_link %}<p class="op-muted">{{ gp.again_hint }}</p>{% endif %}</section>

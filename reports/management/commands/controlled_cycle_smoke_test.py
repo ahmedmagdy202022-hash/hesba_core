@@ -2,7 +2,7 @@ from decimal import Decimal
 from datetime import date
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from cashboxes.models import Cashbox, CashboxMovement
 from inventory.models import StockMovement
@@ -17,8 +17,28 @@ from sales.services import post_sales_invoice
 class Command(BaseCommand):
     help = "Run the controlled dev business cycle smoke test."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--username",
+            default=None,
+            help="Actor for the posted invoices. Defaults to the first superuser.",
+        )
+
+    def _resolve_user(self, username):
+        users = get_user_model().objects
+        if username:
+            try:
+                return users.get(username=username)
+            except users.model.DoesNotExist:
+                raise CommandError(f"No user named {username!r}. Run bootstrap_client first.")
+
+        user = users.filter(is_superuser=True).order_by("pk").first()
+        if user is None:
+            raise CommandError("No superuser exists. Run bootstrap_client first, or pass --username.")
+        return user
+
     def handle(self, *args, **options):
-        user = get_user_model().objects.get(username="admin")
+        user = self._resolve_user(options["username"])
         supplier = Supplier.objects.get(supplier_code="SUP-001")
         customer = Customer.objects.get(customer_code="CUST-001")
         item = Item.objects.get(item_code="ITEM-001")

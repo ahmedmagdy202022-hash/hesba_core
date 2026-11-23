@@ -1,0 +1,9 @@
+{% load hesba_format %}{# Manufacturing F4 (HG-137): the stage that is at an outside supplier is closed by its return (in place of the factory's stage form). #}
+<form method="post" action="{{ outside_url }}?lang={{ lang }}" class="mfg-advance" data-receive-back novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="receive"><input type="hidden" name="job" value="{{ outside.current.job.pk }}"><h2>{{ current_label }}</h2>
+<p class="op-message" data-at-supplier>{{ ow.at_supplier }} <strong>{{ outside.current.job.supplier.name }}</strong> · {{ ow.sent }} <bdi dir="ltr">{{ outside.current.job.quantity_sent|qty }}</bdi> · {{ ow.since }} <bdi>{{ outside.current.job.sent_on|date:"Y-m-d" }}</bdi></p>
+<h3>{{ ow.receive_title }}</h3><div class="op-form-grid">
+<div class="op-field"><label for="back-good">{{ ow.good }}</label><input id="back-good" name="good" inputmode="decimal" dir="ltr" placeholder="{{ outside.current.job.quantity_sent|qty }}"></div>
+<div class="op-field"><label for="back-defect">{{ ow.defect }}</label><input id="back-defect" name="defect" inputmode="decimal" dir="ltr" placeholder="0"></div>
+<div class="op-field"><label for="back-date">{{ ow.returned_on }}</label><input id="back-date" type="date" name="returned_on" value="{{ outside.today }}" max="{{ outside.today }}"></div>
+<div class="op-field"><label for="back-note">{{ ow.note }}</label><input id="back-note" name="note" maxlength="255"></div></div>
+<p class="op-muted">{{ ow.receive_hint }}</p><div class="op-form-actions"><button class="op-primary" type="submit">{{ ow.receive_save }}</button></div></form>

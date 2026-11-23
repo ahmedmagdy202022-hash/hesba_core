@@ -3,15 +3,18 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+{% include "partials/brand_icons.html" %}
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>اختيار النشاط العام - حِسْبَة</title>
-<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=117a-screen-pack">
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/activity_selection.css' %}?v=st5-frame">
 <link rel="stylesheet" href="{% static 'hesba/css/activity_selection_final_overrides.css' %}?v=117a-final-panel-back-arrow">
 </head>
 <body class="activity-selection-page" data-lang="ar">
 <main class="activity-stage" aria-label="General Activity Selection">
   <div class="activity-bg-frame" aria-hidden="true"></div>
   <section class="activity-ui-layer">
+    {% include "partials/setup_rail.html" with step=1 %}
     <header class="activity-header" aria-label="Setup activity header">
       <div class="activity-brand"><img class="activity-logo" src="{% static 'hesba/setup_gate/assets/setup_gate_logo_approved.png' %}" alt="Hesba"></div>
       <div class="activity-controls" aria-label="Header controls">
@@ -28,28 +31,23 @@
       </div>
     </header>
     <section class="activity-panel" aria-labelledby="activity-title">
-      <nav class="activity-stepper" aria-label="Setup steps">
-        <div class="activity-step is-current"><span class="activity-step__number">1</span><span data-i18n="stepGeneral">النشاط العام</span></div>
-        <div class="activity-step"><span class="activity-step__number">2</span><span data-i18n="stepSub">النشاط الفرعي</span></div>
-        <div class="activity-step"><span class="activity-step__number">3</span><span data-i18n="stepModules">الموديولات</span></div>
-        <div class="activity-step"><span class="activity-step__number">4</span><span data-i18n="stepReview">المراجعة</span></div>
-      </nav>
+      {% include "partials/setup_stepper.html" with step=1 %}
       <div class="activity-copy">
         <h1 class="activity-title" id="activity-title" data-i18n="title">اختر النشاط العام</h1>
-        <p class="activity-subtitle" data-i18n="subtitle">ابدأ بتحديد نوع نشاطك العام، ثم سنعرض الأنشطة الفرعية المناسبة لك.</p>
+        <p class="activity-subtitle" data-i18n="subtitle">ابدأ بنوع شغلك، وبعدها نعرضلك الأنواع اللي تحته.</p>
       </div>
       <div class="activity-grid" role="list" aria-label="General activities">
-        <button class="activity-card is-active" type="button" role="listitem" data-activity="commercial" data-next="/setup/activity/commercial/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_commercial_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="commercial">تجاري</span></button>
-        <button class="activity-card is-active" type="button" role="listitem" data-activity="services" data-next="/setup/activity/services/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_service_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="services">خدمي</span></button>
-        <button class="activity-card is-disabled" type="button" role="listitem" data-activity="manufacturing" disabled aria-disabled="true"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_manufacturing_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="manufacturing">تصنيعي</span><span class="activity-card__soon" data-i18n="soon">قريبًا</span></button>
-        <button class="activity-card is-disabled" type="button" role="listitem" data-activity="contracting" disabled aria-disabled="true"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_contracting_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="contracting">مقاولات</span><span class="activity-card__soon" data-i18n="soon">قريبًا</span></button>
-        <button class="activity-card is-disabled" type="button" role="listitem" data-activity="restaurants" disabled aria-disabled="true"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_restaurant_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="restaurants">مطاعم</span><span class="activity-card__soon" data-i18n="soon">قريبًا</span></button>
-        <button class="activity-card is-disabled" type="button" role="listitem" data-activity="medical" disabled aria-disabled="true"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_medical_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="medical">طبي</span><span class="activity-card__soon" data-i18n="soon">قريبًا</span></button>
-        <button class="activity-card is-disabled" type="button" role="listitem" data-activity="education" disabled aria-disabled="true"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_education_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="education">تعليمي</span><span class="activity-card__soon" data-i18n="soon">قريبًا</span></button>
-        <button class="activity-card is-disabled" type="button" role="listitem" data-activity="other" disabled aria-disabled="true"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_other_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="other">أخرى</span><span class="activity-card__soon" data-i18n="soon">قريبًا</span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="commercial" data-next="/setup/activity/commercial/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_commercial_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="commercial">تجاري</span><span class="activity-card__hint"><span class="t-ar">محلات، سوبر ماركت، صيدليات وجملة</span><span class="t-en">Shops, supermarkets, pharmacies, wholesale</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="services" data-next="/setup/activity/services/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_service_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="services">خدمي</span><span class="activity-card__hint"><span class="t-ar">صيانة، صالونات ومكاتب مهنية</span><span class="t-en">Maintenance, salons, professional offices</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="manufacturing" data-next="/setup/activity/manufacturing/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_manufacturing_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="manufacturing">تصنيعي</span><span class="activity-card__hint"><span class="t-ar">ملابس، أغذية، أثاث وتصنيع حسب الطلب</span><span class="t-en">Garments, food, furniture, workshops</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="contracting" data-next="/setup/activity/contracting/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_contracting_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="contracting">مقاولات</span><span class="activity-card__hint"><span class="t-ar">مباني، تشطيبات ومشاريع</span><span class="t-en">Building, finishing, projects</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="restaurants" data-next="/setup/activity/restaurants/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_restaurant_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="restaurants">مطاعم وكافيهات</span><span class="activity-card__hint"><span class="t-ar">مطاعم، كافيهات وتوصيل</span><span class="t-en">Restaurants, cafés, delivery</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="medical" data-next="/setup/activity/medical/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_medical_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="medical">طبي</span><span class="activity-card__hint"><span class="t-ar">عيادات، مراكز طبية ومعامل</span><span class="t-en">Clinics, medical centres, labs</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="education" data-next="/setup/activity/education/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_education_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="education">تعليمي</span><span class="activity-card__hint"><span class="t-ar">سناتر، كورسات وتدريب</span><span class="t-en">Tutoring centres, courses, training</span></span></button>
+        <button class="activity-card is-active" type="button" role="listitem" data-activity="other" data-next="/setup/activity/other/" aria-pressed="false"><img class="activity-card__icon" src="{% static 'hesba/setup_gate/icons/activity_other_icon.png' %}" alt="" aria-hidden="true"><span class="activity-card__title" data-i18n="other">أخرى</span><span class="activity-card__hint"><span class="t-ar">نشاط مختلط أو مش موجود هنا</span><span class="t-en">Mixed, or not listed here</span></span></button>
       </div>
       <footer class="activity-footer" aria-label="Activity navigation">
-        <button class="activity-action activity-next" type="button" disabled data-next-button><span data-i18n="next">التالي: اختيار النشاط الفرعي</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
+        <button class="activity-action activity-next" type="button" disabled data-next-button><span data-i18n="next">التالي</span><span class="activity-action__circle" aria-hidden="true">←</span></button>
         <a class="activity-action activity-back" href="/setup/?lang=ar" data-back-link><span data-i18n="back">الرجوع</span><span class="activity-action__plain" aria-hidden="true">‹</span></a>
       </footer>
     </section>
@@ -58,7 +56,7 @@
 <script>
 (function(){
   var params=new URLSearchParams(window.location.search);var saved=localStorage.getItem('hesba_lang');var lang=params.get('lang')==='en'?'en':(params.get('lang')==='ar'?'ar':(saved==='en'?'en':'ar'));var selectedRoute='';
-  var dict={ar:{pageTitle:'اختيار النشاط العام - حِسْبَة',logout:'تسجيل الخروج',language:'العربية',stepGeneral:'النشاط العام',stepSub:'النشاط الفرعي',stepModules:'الموديولات',stepReview:'المراجعة',title:'اختر النشاط العام',subtitle:'ابدأ بتحديد نوع نشاطك العام، ثم سنعرض الأنشطة الفرعية المناسبة لك.',commercial:'تجاري',services:'خدمي',manufacturing:'تصنيعي',contracting:'مقاولات',restaurants:'مطاعم',medical:'طبي',education:'تعليمي',other:'أخرى',soon:'قريبًا',next:'التالي: اختيار النشاط الفرعي',back:'الرجوع',changeLanguage:'تغيير اللغة'},en:{pageTitle:'Choose general activity - Hesba',logout:'Logout',language:'English',stepGeneral:'General activity',stepSub:'Sub activity',stepModules:'Modules',stepReview:'Review',title:'Choose general activity',subtitle:'Start by choosing your general activity type, then we will show the suitable sub-activities.',commercial:'Commercial',services:'Services',manufacturing:'Manufacturing',contracting:'Contracting',restaurants:'Restaurants',medical:'Medical',education:'Education',other:'Other',soon:'Soon',next:'Next: choose sub-activity',back:'Back',changeLanguage:'Change language'}};
+  var dict={ar:{pageTitle:'اختيار النشاط العام - حِسْبَة',logout:'تسجيل الخروج',language:'العربية',stepGeneral:'النشاط العام',stepSub:'النشاط الفرعي',stepModules:'الأقسام',stepReview:'المراجعة',title:'اختر النشاط العام',subtitle:'ابدأ بنوع شغلك، وبعدها نعرضلك الأنواع اللي تحته.',commercial:'تجاري',services:'خدمي',manufacturing:'تصنيعي',contracting:'مقاولات',restaurants:'مطاعم وكافيهات',medical:'طبي',education:'تعليمي',other:'أخرى',soon:'قريبًا',next:'التالي',back:'الرجوع',changeLanguage:'تغيير اللغة'},en:{pageTitle:'Choose general activity - Hesba',logout:'Logout',language:'English',stepGeneral:'General activity',stepSub:'Sub activity',stepModules:'Modules',stepReview:'Review',title:'Choose general activity',subtitle:'Start by choosing your general activity type, then we will show the suitable sub-activities.',commercial:'Commercial',services:'Services',manufacturing:'Manufacturing',contracting:'Contracting',restaurants:'Restaurants & cafés',medical:'Medical',education:'Education',other:'Other',soon:'Soon',next:'Next',back:'Back',changeLanguage:'Change language'}};
   function withLang(path){var url=new URL(path,window.location.origin);url.searchParams.set('lang',lang);return url.pathname+url.search;}
   function refreshLinks(){var back=document.querySelector('[data-back-link]');var next=document.querySelector('[data-next-button]');if(back)back.href=withLang('/setup/');if(next&&selectedRoute)next.dataset.href=withLang(selectedRoute);}
   function applyLanguage(nextLang){lang=nextLang==='en'?'en':'ar';localStorage.setItem('hesba_lang',lang);document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';document.body.dataset.lang=lang;document.title=dict[lang].pageTitle;document.querySelectorAll('[data-i18n]').forEach(function(el){var key=el.dataset.i18n;if(dict[lang][key])el.textContent=dict[lang][key];});document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){btn.setAttribute('aria-label',dict[lang].changeLanguage);});document.querySelectorAll('[data-logout-button]').forEach(function(btn){btn.setAttribute('aria-label',dict[lang].logout);});var url=new URL(window.location.href);url.searchParams.set('lang',lang);window.history.replaceState({},'',url.pathname+url.search+url.hash);refreshLinks();}
@@ -69,5 +67,6 @@
   document.querySelectorAll('[data-lang-toggle]').forEach(function(btn){btn.addEventListener('click',function(){applyLanguage(lang==='ar'?'en':'ar');});});applyLanguage(lang);
 })();
 </script>
+{% include "partials/demo_feedback.html" %}
 </body>
 </html>

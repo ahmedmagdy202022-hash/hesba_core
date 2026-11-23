@@ -1,0 +1,9 @@
+{# E8 (HG-105): the guests of one class (makeup seats), under the register's own form and never inside it. ``guests``: seats with status_label; ``guests_open``: false when the class was cancelled (no buttons); ``back``: where a tap returns to. A guest is not a roster row and not a mark. #}
+{% if guests %}<section class="mk-guests" data-makeup-guests><h2>{{ mw.guests_h }}</h2>
+<ul class="mk-list">{% for seat in guests %}<li class="mk-row" data-guest="{{ seat.pk }}" data-guest-status="{{ seat.status }}"><div class="mk-text"><strong><bdi>{{ seat.student.name }}</bdi></strong>
+<span class="mk-sub">{{ mw.from_group }} <bdi>{{ seat.home_group.name }}</bdi></span>{% if seat.note %}<span class="mk-sub" data-guest-note><bdi>{{ seat.note }}</bdi></span>{% endif %}</div>
+<span class="mk-chip mk-chip--{{ seat.status }}" data-guest-label>{{ seat.status_label }}</span>
+{% if guests_open %}<div class="mk-actions">
+<form method="post" class="edu-inline" action="{% url 'education:makeup_attended' seat.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="back" value="{{ back }}"><button class="op-primary mk-btn" type="submit" data-guest-attended{% if seat.status == 'attended' %} aria-pressed="true"{% endif %}>{{ mw.attended }}</button></form>
+<form method="post" class="edu-inline" action="{% url 'education:makeup_missed' seat.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="back" value="{{ back }}"><button class="op-secondary mk-btn" type="submit" data-guest-missed{% if seat.status == 'missed' %} aria-pressed="true"{% endif %}>{{ mw.missed }}</button></form>
+</div>{% else %}<span class="mk-sub" data-guest-cancelled-class>{{ mw.class_cancelled }}</span>{% endif %}</li>{% endfor %}</ul></section>{% endif %}

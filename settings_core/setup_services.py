@@ -1,0 +1,266 @@
+"""Turning the setup wizard's answers into rows.
+
+Until now the wizard carried its answers in the query string and threw them away
+at the end. These services write them down: the activity and sub-activity land on
+the client profile, and each module becomes a feature flag so it can be switched
+later from Settings without touching data.
+"""
+
+from django.db import transaction
+from django.utils import timezone
+
+from audit.models import AuditEventType, AuditLog
+
+from . import setup_catalog as catalog
+from .models import FeatureFlag
+
+
+MODULE_FLAG_PREFIX = "module."
+
+
+def module_flag_code(slug):
+    return f"{MODULE_FLAG_PREFIX}{slug}"
+
+
+def enabled_modules():
+    """Slugs switched on for this installation, in the wizard's own order."""
+
+    enabled = set(
+        FeatureFlag.objects.filter(
+            code__startswith=MODULE_FLAG_PREFIX, enabled=True
+        ).values_list("code", flat=True)
+    )
+    return tuple(
+        slug for slug in catalog.MODULE_SLUGS if module_flag_code(slug) in enabled
+    )
+
+
+def module_is_enabled(slug):
+    return FeatureFlag.objects.filter(code=module_flag_code(slug), enabled=True).exists()
+
+
+#: SETTINGS-TRACK: a module that cannot work without another one. A purchase invoice is made out to a supplier, a
+#: production run takes its materials from the store, an appointment is booked for a customer. Switching one on
+#: switches on what it needs; what another switched-on module needs cannot be switched off.
+MODULE_NEEDS = {
+    "purchases": ("suppliers",),
+    "manufacturing": ("inventory",),
+    "appointments_visits": ("customers",),
+}
+
+
+def module_needs(slug):
+    return MODULE_NEEDS.get(slug, ())
+
+
+def needed_by(slug, enabled=None):
+    """The switched-on modules that need ``slug``."""
+
+    on = set(enabled_modules() if enabled is None else enabled)
+    return tuple(other for other in catalog.MODULE_SLUGS if other in on and slug in module_needs(other))
+
+
+def with_needs(modules):
+    """``modules`` and everything they need, in the catalog's order."""
+
+    chosen = set(modules)
+    changed = True
+    while changed:
+        changed = False
+        for slug in list(chosen):
+            for need in module_needs(slug):
+                if need not in chosen:
+                    chosen.add(need)
+                    changed = True
+    return tuple(slug for slug in catalog.MODULE_SLUGS if slug in chosen)
+
+
+def usable_modules():
+    """Enabled modules that Hesba can actually serve today.
+
+    A module can be switched on in setup and still have no model behind it —
+    expenses and appointments are offered but unimplemented. Screens should ask
+    for this list so they never advertise a section that cannot show anything.
+    """
+
+    return tuple(
+        slug for slug in enabled_modules() if slug not in catalog.MODULES_WITHOUT_BACKEND
+    )
+
+
+def _write_module_flags(chosen):
+    chosen = set(chosen)
+    for slug in catalog.MODULE_SLUGS:
+        FeatureFlag.objects.update_or_create(
+            code=module_flag_code(slug),
+            defaults={
+                "name": catalog.module_label(slug, "en"),
+                "description": catalog.module_label(slug, "ar"),
+                "enabled": slug in chosen,
+            },
+        )
+
+
+@transaction.atomic
+def complete_setup(profile, activity, sub_activity, modules_raw, user=None, capabilities_raw=None):
+    """Record the setup decision and mark the installation ready.
+
+    ``capabilities_raw`` is the review step's comma-separated capability list
+    (CAP-001); ``None`` applies the sub-activity's suggestions.
+
+    ``modules_raw`` is the wizard's comma-separated list. It is normalised through
+    the catalog, so unknown slugs are dropped and required modules are added back
+    even if the request left them out.
+
+    Safe to call more than once: a resubmitted wizard overwrites the same rows and
+    keeps the original completion time.
+    """
+
+    if not catalog.is_valid_activity(activity):
+        raise ValueError(f"Unknown activity: {activity!r}")
+    if not catalog.is_valid_sub_activity(activity, sub_activity):
+        raise ValueError(f"Unknown sub-activity for {activity}: {sub_activity!r}")
+
+    chosen = catalog.clean_module_slugs(catalog.closest(activity, sub_activity)[0], modules_raw)  # OTHER-001: the closest activity's required ones
+    chosen = with_needs(chosen)  # SETTINGS-TRACK: purchases bring suppliers, manufacturing brings the store
+
+    before = {
+        "activity_slug": profile.activity_slug,
+        "sub_activity_slug": profile.sub_activity_slug,
+        "modules": list(enabled_modules()),
+        "setup_completed_at": profile.setup_completed_at.isoformat()
+        if profile.setup_completed_at
+        else None,
+    }
+
+    profile.activity_slug = activity
+    profile.sub_activity_slug = sub_activity
+    profile.activity_type = catalog.ACTIVITY_TYPE_BY_SLUG[activity]
+    profile.setup_completed_at = profile.setup_completed_at or timezone.now()
+    profile.save()
+
+    _write_module_flags(chosen)
+    from .capabilities import apply_setup_choice
+
+    chosen_capabilities = apply_setup_choice(activity, sub_activity, capabilities_raw)
+    from .capabilities import needs as capability_needs
+
+    # SETTINGS-TRACK: a chosen capability brings the module it rides on (expiry dates need the store).
+    grown = with_needs(set(chosen) | {module for slug in chosen_capabilities for module in capability_needs(slug)})
+    if grown != tuple(chosen):
+        chosen = tuple(slug for slug in grown if slug not in catalog.MODULES_WITHOUT_BACKEND)
+        _write_module_flags(chosen)
+
+    # HG-010: the installation is ready to record from today, so its first
+    # accounting period is open before the first entry.
+    from closing.services import provision_period_for
+
+    provision_period_for(timezone.localdate(), user=user if user is not None and user.is_authenticated else None)
+
+    AuditLog.objects.create(
+        event_type=AuditEventType.UPDATE,
+        actor=user if user is not None and user.is_authenticated else None,
+        module="settings",
+        action="complete_setup",
+        object_type="settings_core.ClientProfile",
+        object_id=str(profile.pk),
+        before_data=before,
+        after_data={
+            "activity_slug": activity,
+            "sub_activity_slug": sub_activity,
+            "activity_type": profile.activity_type,
+            "modules": list(chosen),
+            "capabilities": list(chosen_capabilities),
+            "setup_completed_at": profile.setup_completed_at.isoformat(),
+        },
+        reason="Initial setup completed from the setup wizard.",
+    )
+
+    return profile
+
+
+class ModuleChangeRefused(ValueError):
+    """A module switch that the catalog does not allow."""
+
+
+class ModuleNeeded(ModuleChangeRefused):
+    """SETTINGS-TRACK: switching off a module another switched-on module needs."""
+
+    def __init__(self, slug, needed_by):
+        super().__init__(f"{slug} is needed by {', '.join(needed_by)}.")
+        self.slug = slug
+        self.needed_by = needed_by
+
+
+def module_settings_rows(profile, lang="ar"):
+    """Every catalog module with the state the settings screen shows for it."""
+
+    from . import activity_fit
+
+    enabled = set(enabled_modules())
+    required = set(catalog.required_modules(catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0])) if profile else set()
+    rows = []
+    # ACT-FIT: only what is offered to the activity (and anything already on), in its own words, most needed first.
+    for fit in activity_fit.module_rows(profile.activity_slug if profile else "", profile.sub_activity_slug if profile else "", lang, enabled=enabled):
+        slug = fit["slug"]
+        if slug in catalog.MODULES_WITHOUT_BACKEND:
+            state = "soon"
+        elif slug in required:
+            state = "required"
+        else:
+            state = "on" if slug in enabled else "off"
+        rows.append({"slug": slug, "label": fit["label"], "about": fit["about"], "group": fit["preset"] or "extra", "features": fit["features"],
+                     "state": state, "enabled": slug in enabled})
+    return rows
+
+
+@transaction.atomic
+def set_module_enabled(profile, slug, enabled, user=None, switched_modules=None):
+    """Switch one module on or off after setup (SETTINGS-001).
+
+    Switching off never deletes data: it only flips the module's feature flag,
+    which hides the module and closes its screens (see module_gate). Switching it
+    back on brings everything back as it was.
+    """
+
+    if profile is None or not profile.setup_is_complete:
+        raise ModuleChangeRefused("Finish setup before changing modules.")
+    if slug not in catalog.MODULE_SLUGS:
+        raise ModuleChangeRefused(f"Unknown module: {slug!r}")
+    if slug in catalog.MODULES_WITHOUT_BACKEND:
+        raise ModuleChangeRefused(f"{slug} is not available yet.")
+    if not enabled and slug in catalog.required_modules(catalog.closest(profile.activity_slug, profile.sub_activity_slug)[0]):
+        raise ModuleChangeRefused(f"{slug} is required for this activity.")
+    if not enabled and needed_by(slug):
+        raise ModuleNeeded(slug, needed_by(slug))
+    if enabled:
+        for need in module_needs(slug):  # SETTINGS-TRACK: what it cannot work without comes on with it
+            if not module_is_enabled(need):
+                set_module_enabled(profile, need, True, user)
+                if switched_modules is not None:
+                    switched_modules.append(need)
+
+    code = module_flag_code(slug)
+    was_enabled = module_is_enabled(slug)
+    if was_enabled == enabled:
+        return False
+    FeatureFlag.objects.update_or_create(
+        code=code,
+        defaults={
+            "name": catalog.module_label(slug, "en"),
+            "description": catalog.module_label(slug, "ar"),
+            "enabled": enabled,
+        },
+    )
+    AuditLog.objects.create(
+        event_type=AuditEventType.UPDATE,
+        actor=user if user is not None and user.is_authenticated else None,
+        module="settings",
+        action="enable_module" if enabled else "disable_module",
+        object_type="settings_core.FeatureFlag",
+        object_id=code,
+        before_data={"enabled": was_enabled},
+        after_data={"enabled": enabled},
+        reason="Module switched from the settings screen.",
+    )
+    return True

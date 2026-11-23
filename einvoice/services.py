@@ -1,0 +1,693 @@
+"""EINV-001: build the ETA e-invoice (document type "i", version 1.0) from a posted sales invoice.
+
+Mapping (checked against the ETA SDK, sdk.invoicing.eta.gov.eg, Sept 2026):
+- line.salesTotal   = quantity x unit price
+- line.discount     = the line discount (before tax)
+- line.netTotal     = salesTotal - discount
+- T1 (VAT) amount   = netTotal x rate / 100            (SDK rule 42 with no other fees)
+- line.total        = netTotal + T1
+- extraDiscountAmount = Hesba's invoice discount, which is taken after tax
+- totalSalesAmount / totalDiscountAmount / netAmount / taxTotals are the sums
+- totalAmount       = sum(line.total) - extraDiscountAmount  == SalesInvoice.total_amount
+
+Nothing is signed or sent here (phase 3). ``build_document`` returns the
+document plus the list of problems that would make the authority reject it,
+worded for the shop owner, so the data can be completed before sending.
+"""
+
+import json
+from datetime import datetime, time, timedelta, timezone as dt_timezone
+from decimal import Decimal
+
+from django.db import transaction
+from django.utils import timezone
+
+from audit.models import AuditEventType, AuditLog
+from config.money import money_round
+from printing.company import company_details
+from settings_core.models import SystemSetting
+
+from .models import ItemCode, ReceiverProfile, ReceiverType
+
+
+ZERO = Decimal("0")
+ISSUER_FIELDS = (
+    # key, arabic label, english label
+    ("einvoice.activity_code", "كود النشاط (4 أرقام من دليل الأنشطة)", "Activity code (4 digits, ETA activity list)"),
+    ("einvoice.branch_id", "كود الفرع في المنظومة", "Branch code on the ETA portal"),
+    ("einvoice.governate", "المحافظة", "Governorate"),
+    ("einvoice.region_city", "المدينة / المنطقة", "City / region"),
+    ("einvoice.street", "الشارع", "Street"),
+    ("einvoice.building_number", "رقم المبنى", "Building number"),
+    ("einvoice.person_id_threshold", "الحد اللي بعده بيانات الشخص الطبيعي إجبارية (جنيه)", "Amount from which a person buyer's ID is required (EGP)"),
+)
+ISSUER_KEYS = tuple(field[0] for field in ISSUER_FIELDS)
+DEFAULT_THRESHOLD = Decimal("50000")  # confirm with the authority's current rule
+
+
+def issuer_settings():
+    values = dict(SystemSetting.objects.filter(key__in=ISSUER_KEYS, active=True).values_list("key", "value"))
+    values.setdefault("einvoice.branch_id", "0")
+    values.setdefault("einvoice.person_id_threshold", str(DEFAULT_THRESHOLD))
+    return {key: values.get(key, "") for key in ISSUER_KEYS}
+
+
+@transaction.atomic
+def save_issuer_settings(values, user):
+    before, after = {}, {}
+    current = issuer_settings()
+    for key in ISSUER_KEYS:
+        new = (values.get(key) or "").strip()
+        if new == current.get(key, ""):
+            continue
+        before[key], after[key] = current.get(key, ""), new
+        SystemSetting.objects.update_or_create(key=key, defaults={"value": new, "active": True, "description": "E-invoice issuer details"})
+    if after:
+        AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=user, module="einvoice", action="update_issuer", object_type="SystemSetting", object_id="einvoice", before_data=before, after_data=after)
+    return bool(after)
+
+
+def _num(value):
+    """ETA amounts: numbers with at most 5 decimals."""
+
+    return float(Decimal(value).quantize(Decimal("0.00001")))
+
+
+def _issued_at(invoice, day=None):
+    """The issue moment in UTC, never in the future (an ETA rule). ``day``: a return's date, for its credit note."""
+
+    day = day or invoice.invoice_date
+    local = timezone.localtime(invoice.created_at) if invoice.created_at else timezone.localtime()
+    at = local.time() if local.date() == day else time(12, 0)
+    moment = min(timezone.make_aware(datetime.combine(day, at)), timezone.now())
+    return moment.astimezone(dt_timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def build_document(invoice, lang="ar"):
+    """(document dict, problems list) for a sales invoice."""
+
+    from taxes.models import SalesLineTax
+
+    ar = lang != "en"
+    problems = []
+
+    def need(condition, text_ar, text_en):
+        if not condition:
+            problems.append(text_ar if ar else text_en)
+
+    need(invoice.status == "posted", "الفاتورة لازم تكون نهائية.", "The invoice must be posted.")
+    company = company_details()
+    issuer = issuer_settings()
+    need(company["currency"] == "EGP", "عملة الشركة لازم تكون جنيه مصري (الفاتورة بعملة تانية محتاجة سعر صرف، ومش مدعومة لسه).", "The company currency must be EGP (other currencies need an exchange rate and are not supported yet).")
+    tax_number = "".join(ch for ch in company["tax_number"] if ch.isdigit())
+    need(len(tax_number) == 9, "الرقم الضريبي للشركة (9 أرقام) ناقص أو غلط — من بيانات الشركة.", "The company's 9-digit tax registration number is missing or wrong (Company details).")
+    need(len(issuer["einvoice.activity_code"]) == 4 and issuer["einvoice.activity_code"].isdigit(), "كود النشاط (4 أرقام) ناقص — من إعدادات الفاتورة الإلكترونية.", "The 4-digit activity code is missing (E-invoice settings).")
+    for key, label_ar, label_en in ISSUER_FIELDS[2:6]:
+        need(bool(issuer[key]), f"عنوان الفرع ناقص: {label_ar}.", f"Branch address missing: {label_en}.")
+
+    receiver_profile = ReceiverProfile.objects.filter(customer=invoice.customer).first()
+    receiver_type = receiver_profile.receiver_type if receiver_profile else ReceiverType.PERSON
+    threshold = Decimal(issuer["einvoice.person_id_threshold"] or DEFAULT_THRESHOLD)
+    receiver = {"type": receiver_type, "name": invoice.customer.name}
+    needs_details = receiver_type in (ReceiverType.BUSINESS, ReceiverType.FOREIGNER) or invoice.total_amount >= threshold
+    if receiver_profile and receiver_profile.tax_id:
+        receiver["id"] = receiver_profile.tax_id
+    if receiver_profile and receiver_profile.street:
+        receiver["address"] = {
+            "country": receiver_profile.country or "EG", "governate": receiver_profile.governate, "regionCity": receiver_profile.region_city,
+            "street": receiver_profile.street, "buildingNumber": receiver_profile.building_number,
+        }
+    if needs_details:
+        need(bool(receiver.get("id")), f"رقم العميل «{invoice.customer.name}» ناقص (الرقم الضريبي للشركة أو الرقم القومي للشخص).", f"Customer “{invoice.customer.name}” has no ID (tax number for a business, national ID for a person).")
+        need("address" in receiver and receiver_profile.governate and receiver_profile.region_city and receiver_profile.building_number, f"عنوان العميل «{invoice.customer.name}» ناقص.", f"Customer “{invoice.customer.name}” has no complete address.")
+    if receiver_type == ReceiverType.BUSINESS and receiver.get("id"):
+        need(len(receiver["id"]) == 9 and receiver["id"].isdigit(), "الرقم الضريبي للعميل لازم يكون 9 أرقام.", "The customer's tax registration number must be 9 digits.")
+    if receiver.get("id") == tax_number and tax_number:
+        need(False, "العميل ومُصدِر الفاتورة مينفعش يكونوا نفس الرقم.", "The receiver and the issuer cannot be the same.")
+
+    lines = list(invoice.lines.select_related("item").order_by("line_number"))
+    taxes = {row.line_id: row for row in SalesLineTax.objects.filter(line__in=lines).select_related("tax_rate")}
+    codes = {row.item_id: row for row in ItemCode.objects.filter(item__in=[line.item_id for line in lines])}
+    doc_lines, sums = [], {"sales": ZERO, "discount": ZERO, "net": ZERO, "tax": ZERO, "total": ZERO}
+    for line in lines:
+        code = codes.get(line.item_id)
+        need(code is not None, f"الصنف «{line.item.item_code}» مالوش كود EGS/GS1 مسجّل.", f"Item “{line.item.item_code}” has no registered EGS/GS1 code.")
+        sales_total = money_round(line.quantity * line.unit_sale_price)
+        discount = money_round(line.line_discount_amount or ZERO)
+        net = money_round(sales_total - discount)
+        tax_row = taxes.get(line.pk)
+        tax = tax_row.tax_amount if tax_row else ZERO
+        if tax_row is None:
+            need(not invoice.tax_amount, f"السطر {line.line_number} مالوش ضريبة متسجّلة؛ الفاتورة اتعملت قبل تفعيل الضريبة على الأصناف.", f"Line {line.line_number} has no recorded tax; the invoice predates item-level VAT.")
+        subtype = (tax_row.tax_rate.eta_subtype if tax_row and tax_row.tax_rate else "") or ("V009" if tax else "V003")
+        doc_lines.append({
+            "description": line.description or line.item.item_name,
+            "itemType": code.code_type if code else "EGS",
+            "itemCode": code.code if code else "",
+            "unitType": code.unit_type if code else "EA",
+            "quantity": _num(line.quantity),
+            "internalCode": line.item.item_code,
+            "salesTotal": _num(sales_total),
+            "total": _num(net + tax),
+            "valueDifference": 0,
+            "totalTaxableFees": 0,
+            "netTotal": _num(net),
+            "itemsDiscount": 0,
+            "unitValue": {"currencySold": "EGP", "amountEGP": _num(line.unit_sale_price)},
+            "discount": {"rate": 0, "amount": _num(discount)},
+            "taxableItems": [{"taxType": "T1", "amount": _num(tax), "subType": subtype, "rate": _num(tax_row.rate if tax_row else ZERO)}],
+        })
+        sums["sales"] += sales_total
+        sums["discount"] += discount
+        sums["net"] += net
+        sums["tax"] += tax
+        sums["total"] += net + tax
+
+    extra = money_round(invoice.discount_amount or ZERO)
+    total_amount = money_round(sums["total"] - extra)
+    need(total_amount == invoice.total_amount, f"إجمالي ملف الفاتورة ({total_amount}) مش مطابق لإجمالي الفاتورة ({invoice.total_amount}).", f"The document total ({total_amount}) does not match the invoice total ({invoice.total_amount}).")
+
+    document = {
+        "issuer": {
+            "type": "B", "id": tax_number, "name": company["legal_name"] or company["name"],
+            "address": {
+                "branchId": issuer["einvoice.branch_id"] or "0", "country": "EG", "governate": issuer["einvoice.governate"],
+                "regionCity": issuer["einvoice.region_city"], "street": issuer["einvoice.street"], "buildingNumber": issuer["einvoice.building_number"],
+            },
+        },
+        "receiver": receiver,
+        "documentType": "i",
+        "documentTypeVersion": "1.0",
+        "dateTimeIssued": _issued_at(invoice),
+        "taxpayerActivityCode": issuer["einvoice.activity_code"],
+        "internalID": invoice.invoice_number,
+        "invoiceLines": doc_lines,
+        "totalSalesAmount": _num(sums["sales"]),
+        "totalDiscountAmount": _num(sums["discount"]),
+        "netAmount": _num(sums["net"]),
+        "taxTotals": [{"taxType": "T1", "amount": _num(sums["tax"])}],
+        "extraDiscountAmount": _num(extra),
+        "totalItemsDiscountAmount": 0,
+        "totalAmount": _num(total_amount),
+    }
+    return document, problems
+
+
+CREDIT_WORDS = {
+    "ar": {"not_posted": "المرتجع لازم يكون مترحّل.", "original": "الفاتورة الأصلية لازم تكون اتبعتت للمنظومة واتقبلت الأول (الإشعار الدائن بيشاور على رقمها).",
+           "original_issue": "الفاتورة الأصلية فيها بيانات ناقصة: {reason}", "total": "إجمالي الإشعار ({total}) مش مطابق للمرتجع ({amount}).",
+           "already": "الإشعار الدائن للمرتجع ده اتبعت واتقبل بالفعل.", "pending": "الإشعار الدائن اتبعت ولسه المنظومة بتراجعه."},
+    "en": {"not_posted": "The return must be posted.", "original": "The original invoice must be sent to the portal and accepted first (the credit note points to it).",
+           "original_issue": "The original invoice has missing data: {reason}", "total": "The credit note total ({total}) does not match the return ({amount}).",
+           "already": "This return's credit note was already sent and accepted.", "pending": "This return's credit note was sent and the portal is still checking it."},
+}
+
+
+def build_credit_note(sales_return, lang="ar"):
+    """T7 (HG-059): (document dict, problems list) for a posted sales return — an ETA credit note pointing to the
+    original invoice's accepted document, laid out like the invoice: each line is the price × quantity returned less
+    its own discount share (the VAT base), plus the tax given back (HG-015); the lines' share of the invoice discount,
+    taken after tax as on the invoice, is the extraDiscountAmount, so totalAmount is the refund."""
+
+    from .models import SubmissionStatus
+
+    ar = lang != "en"
+    words = CREDIT_WORDS["ar" if ar else "en"]
+    problems = []
+    invoice = sales_return.source_invoice
+    if sales_return.status != "posted":
+        problems.append(words["not_posted"])
+    original = current_submission(invoice)
+    if not (original and original.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED) and original.uuid):
+        problems.append(words["original"])
+    base, base_problems = build_document(invoice, lang)
+    problems += [words["original_issue"].format(reason=text) for text in base_problems]
+    codes = {row.item_id: row for row in ItemCode.objects.filter(item__in=[line.source_line.item_id for line in sales_return.lines.select_related("source_line")])}
+    doc_lines, sums = [], {"sales": ZERO, "discount": ZERO, "net": ZERO, "tax": ZERO, "total": ZERO}
+    for row in sales_return.lines.select_related("source_line__item", "tax").order_by("source_line__line_number"):
+        line = row.source_line
+        code = codes.get(line.item_id)
+        tax = row.tax.tax_amount if hasattr(row, "tax") else ZERO
+        sales_total = money_round(row.quantity * line.unit_sale_price)
+        # Codex #270: the line's own discount stays before tax, as on the invoice; its share of the invoice discount is
+        # taken after tax (extraDiscountAmount below), so netTotal is the VAT base the given-back tax was charged on.
+        discount = money_round(line.line_discount_amount * row.quantity / line.quantity) if line.quantity else ZERO
+        net = money_round(sales_total - discount)
+        if net + tax < row.amount:  # a rounding cent the other way: kept on the line, so no extra discount is negative
+            net = money_round(row.amount - tax)
+            discount = money_round(sales_total - net)
+        line_total = money_round(net + tax)
+        rate = getattr(getattr(line, "tax", None), "rate", ZERO) or ZERO
+        subtype = (line.tax.tax_rate.eta_subtype if getattr(line, "tax", None) and line.tax.tax_rate else "") or ("V009" if tax else "V003")
+        doc_lines.append({
+            "description": line.description or line.item.item_name, "itemType": code.code_type if code else "EGS", "itemCode": code.code if code else "",
+            "unitType": code.unit_type if code else "EA", "quantity": _num(row.quantity), "internalCode": line.item.item_code,
+            "salesTotal": _num(sales_total), "total": _num(line_total), "valueDifference": 0, "totalTaxableFees": 0, "netTotal": _num(net),
+            "itemsDiscount": 0, "unitValue": {"currencySold": "EGP", "amountEGP": _num(line.unit_sale_price)},
+            "discount": {"rate": 0, "amount": _num(discount)},
+            "taxableItems": [{"taxType": "T1", "amount": _num(tax), "subType": subtype, "rate": _num(rate)}],
+        })
+        sums["sales"] += sales_total
+        sums["discount"] += discount
+        sums["net"] += net
+        sums["tax"] += tax
+        sums["lines"] = sums.get("lines", ZERO) + line_total
+        sums["total"] += row.amount
+    extra = money_round(sums.get("lines", ZERO) - sums["total"])  # the returned lines' share of the invoice discount
+    if money_round(sums["total"]) != money_round(sales_return.total_amount):
+        problems.append(words["total"].format(total=money_round(sums["total"]), amount=sales_return.total_amount))
+    document = {
+        "issuer": base["issuer"], "receiver": base["receiver"], "documentType": "c", "documentTypeVersion": "1.0",
+        "dateTimeIssued": _issued_at(invoice, sales_return.return_date), "taxpayerActivityCode": base["taxpayerActivityCode"],
+        "internalID": sales_return.return_number, "references": [original.uuid] if original and original.uuid else [],
+        "invoiceLines": doc_lines, "totalSalesAmount": _num(sums["sales"]), "totalDiscountAmount": _num(sums["discount"]),
+        "netAmount": _num(sums["net"]), "taxTotals": [{"taxType": "T1", "amount": _num(sums["tax"])}], "extraDiscountAmount": _num(extra),
+        "totalItemsDiscountAmount": 0, "totalAmount": _num(sums["total"]),
+    }
+    return document, problems
+
+
+def send_credit_note(sales_return, user, lang="ar"):
+    """T7 (HG-059): sign and send a return's credit note, claimed first like an invoice (``send_invoice``). The return
+    itself is never changed and never waits for the authority."""
+
+    from django.core.exceptions import ValidationError
+
+    from sales.models import SalesReturn
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = {**SEND_WORDS[lang], **CREDIT_WORDS[lang]}
+    names = portal.missing()
+    if names:
+        raise ValidationError(words["setup"].format(names=", ".join(names)))
+    document, problems = build_credit_note(sales_return, lang)
+    if problems:
+        raise ValidationError(problems)
+    environment = portal.settings()["environment"]
+    latest = current_credit_note(sales_return)
+    if latest and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING:
+        reconcile_claim(latest, user, lang)
+    with transaction.atomic():
+        if SalesReturn.objects.select_for_update().get(pk=sales_return.pk).status != "posted":
+            raise ValidationError(words["not_posted"])
+        latest = current_credit_note(sales_return)
+        if latest and latest.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED):
+            raise ValidationError(words["already"])
+        elif latest and latest.status in (SubmissionStatus.SUBMITTED, SubmissionStatus.SENDING):
+            raise ValidationError(words["pending"])
+        claim = Submission.objects.create(invoice=sales_return.source_invoice, sales_return=sales_return, environment=environment, submitted_by=user,
+                                          status=SubmissionStatus.SENDING)
+    return _deliver(claim, document, sales_return.return_number, user, words)
+
+
+#: The message of a cut-off sending the authority never received (``reconcile_claim``): closed, not rejected by it.
+NEVER_RECEIVED = "not found on the portal: never received"
+
+
+def credit_notes_due():
+    """The queue: posted returns of accepted invoices whose credit note has not been sent, or whose sending was cut
+    off long enough ago to be checked again. A rejected one waits for its data to be corrected and a manual send."""
+
+    from sales.models import SalesReturn
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    environment = portal.settings()["environment"]
+    accepted = Submission.objects.filter(sales_return__isnull=True, environment=environment,
+                                         status__in=(SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED)).values("invoice")
+    rows = []
+    for sales_return in SalesReturn.objects.filter(status="posted", source_invoice__in=accepted).select_related("source_invoice").order_by("return_date", "pk"):
+        latest = current_credit_note(sales_return)
+        stale = latest is not None and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING
+        # Codex #270: one the authority never received was not rejected by it, so it is sent again on the next run
+        never_received = latest is not None and latest.status == SubmissionStatus.REJECTED and latest.message == NEVER_RECEIVED
+        if latest is None or stale or never_received:
+            rows.append(sales_return)
+    return rows
+
+
+def send_due_credit_notes(user, lang="ar"):
+    """Send every credit note in the queue; one that fails stays in it for the next run. Returns (sent, failed)."""
+
+    from django.core.exceptions import ValidationError
+
+    sent, failed = [], []
+    for sales_return in credit_notes_due():
+        try:
+            sent.append(send_credit_note(sales_return, user, lang))
+        except ValidationError as exc:
+            failed.append((sales_return, " ".join(exc.messages)))
+    return sent, failed
+
+
+def document_json(document):
+    return json.dumps({"documents": [document]}, ensure_ascii=False, indent=2)
+
+
+# ---- ETA-002: signing and sending (portal.py does the talking) ----
+
+STATUS_FROM_PORTAL = {"valid": "valid", "invalid": "invalid", "rejected": "rejected", "cancelled": "cancelled", "submitted": "submitted"}
+SEND_WORDS = {
+    "ar": {"problems": "البيانات لسه ناقصة؛ كمّلها الأول.", "already": "الفاتورة دي اتبعتت واتقبلت بالفعل.", "pending": "الفاتورة دي اتبعتت ولسه المنظومة بتراجعها.",
+           "setup": "الربط مع المنظومة لسه متظبطش على السيرفر ({names}).", "signer": "جهاز التوقيع مش بيرد أو رفض التوقيع؛ اتأكد إن التوكن متركّب والبرنامج شغال.",
+           "login": "المنظومة رفضت الدخول؛ راجع Client ID و Client Secret.", "unreachable": "مش قادرين نوصل للمنظومة دلوقتي؛ جرّب كمان شوية.",
+           "refused": "المنظومة رفضت الفاتورة: {reason}", "unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة، وممكن تكون الفاتورة وصلت. مش هنبعتها تاني قبل ما نسأل المنظومة؛ جرّب الإرسال بعد 10 دقايق وهنتأكد الأول.", "cancel_unknown": "الاتصال اتقطع قبل ما نعرف رد المنظومة على طلب الإلغاء، وممكن يكون وصل. الطلب متسجل؛ اضغط تحديث الحالة بعد شوية عشان نعرف النتيجة.", "reason": "اكتب سبب الإلغاء.", "not_valid": "الإلغاء للفواتير المقبولة بس.", "not_posted": "الفاتورة دي مش نهائية أو اتلغت؛ مينفعش تتبعت."},
+    "en": {"problems": "The data is still incomplete; complete it first.", "already": "This invoice was already sent and accepted.", "pending": "This invoice was sent and the portal is still checking it.",
+           "setup": "The portal connection is not set up on the server yet ({names}).", "signer": "The signer did not answer or refused; check the token is plugged in and the signer is running.",
+           "login": "The portal refused the login; check the client ID and secret.", "unreachable": "The portal cannot be reached right now; try again shortly.",
+           "refused": "The portal rejected the invoice: {reason}", "unknown": "The connection dropped before the portal answered, so the invoice may have arrived. It will not be sent again before the portal is asked: try again in 10 minutes and it will be checked first.", "cancel_unknown": "The connection dropped before the portal answered the cancellation, so it may have arrived. The request is kept: refresh the status shortly to see the outcome.", "reason": "Enter a cancellation reason.", "not_valid": "Only accepted invoices can be cancelled.", "not_posted": "This invoice is not posted or was cancelled; it cannot be sent."},
+}
+
+
+def current_submission(invoice):
+    """The latest sending in the environment the server now talks to (moving
+    from preprod to prod starts a fresh history)."""
+
+    from . import portal
+    from .models import Submission
+
+    return Submission.objects.filter(invoice=invoice, sales_return__isnull=True, environment=portal.settings()["environment"]).first()
+
+
+def current_credit_note(sales_return):
+    """T7: the latest sending of a return's credit note, in the environment the server now talks to."""
+
+    from . import portal
+    from .models import Submission
+
+    return Submission.objects.filter(sales_return=sales_return, environment=portal.settings()["environment"]).first()
+
+
+def _internal_id(submission):
+    return submission.sales_return.return_number if submission.sales_return_id else submission.invoice.invoice_number
+
+
+def _portal_error(exc, words):
+    from . import portal
+
+    text = exc.message or ""
+    if text.startswith("unreachable"):
+        return words["unreachable"]
+    if text in ("no signer", "signer refused"):
+        return words["signer"]
+    if text == "login refused":
+        return words["login"]
+    return words["refused"].format(reason=portal.error_text(exc.payload) or exc.status or text)
+
+
+def _audit_send(submission, user, action):
+    AuditLog.objects.create(event_type=AuditEventType.CREATE if action == "eta_send" else AuditEventType.UPDATE, actor=user, module="einvoice",
+                            action=action, object_type="einvoice.Submission", object_id=str(submission.pk),
+                            after_data={"invoice": submission.invoice.invoice_number, "status": submission.status, "uuid": submission.uuid,
+                                        "environment": submission.environment,
+                                        **({"credit_note_for": submission.sales_return.return_number} if submission.sales_return_id else {})})
+
+
+STALE_SENDING = timedelta(minutes=10)
+# A cancellation's PUT (with its login retry) is over well within this: only after it can a refresh
+# that finds no request on the authority's side conclude the request never arrived.
+CANCEL_IN_FLIGHT = timedelta(minutes=5)
+
+
+def send_invoice(invoice, user, lang="ar"):
+    """Sign and send one posted sales invoice. Returns the Submission (rejected ones too).
+
+    The invoice is claimed first: under its row lock a ``sending`` row is
+    written and committed, so a second click (or a second user) while the
+    signer or the portal is slow is refused instead of sending it twice. The
+    portal is called outside any transaction, and the claim then becomes the
+    sending's record. A claim left by a server that died mid-call stops
+    blocking after ``STALE_SENDING``; the authority itself refuses a document
+    it already holds, so sending again cannot make a duplicate.
+    """
+
+    from django.core.exceptions import ValidationError
+
+    from sales.models import SalesInvoice, SalesInvoiceStatus
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    names = portal.missing()
+    if names:
+        raise ValidationError(words["setup"].format(names=", ".join(names)))
+    document, problems = build_document(invoice, lang)
+    if problems:
+        raise ValidationError(words["problems"])
+    environment = portal.settings()["environment"]
+    latest = current_submission(invoice)
+    if latest and latest.status == SubmissionStatus.SENDING and latest.submitted_at < timezone.now() - STALE_SENDING:
+        reconcile_claim(latest, user, lang)  # ask the authority what became of it before anything is sent again
+    with transaction.atomic():
+        # Re-read under the lock the local cancellation also takes (einvoice.guards): an invoice
+        # cancelled here meanwhile is never sent.
+        if SalesInvoice.objects.select_for_update().get(pk=invoice.pk).status != SalesInvoiceStatus.POSTED:
+            raise ValidationError(words["not_posted"])
+        latest = current_submission(invoice)
+        if latest and latest.status in (SubmissionStatus.VALID, SubmissionStatus.CANCEL_REQUESTED):
+            raise ValidationError(words["already"])
+        elif latest and latest.status in (SubmissionStatus.SUBMITTED, SubmissionStatus.SENDING):
+            raise ValidationError(words["pending"])
+        claim = Submission.objects.create(invoice=invoice, environment=environment, submitted_by=user, status=SubmissionStatus.SENDING)
+    return _deliver(claim, document, invoice.invoice_number, user, words)
+
+
+def _deliver(claim, document, internal_id, user, words):
+    """Sign and submit the document of a ``sending`` claim, and record what the authority answered."""
+
+    from django.core.exceptions import ValidationError
+
+    from . import portal
+    from .models import SubmissionStatus
+
+    try:
+        signed = portal.sign(document)
+        portal.token()  # log in first: a refused or unreachable login is known to have sent nothing
+    except portal.PortalError as exc:
+        claim.delete()  # nothing reached the authority
+        raise ValidationError(_portal_error(exc, words))
+    try:
+        answer = portal.submit([signed])
+    except portal.PortalError as exc:
+        if exc.message == "submission refused" and exc.status and exc.status < 500:
+            # A definite refusal (400, 403, 422…): kept, with the authority's exact answer, like any sending.
+            claim.status, claim.message = SubmissionStatus.REJECTED, portal.error_text(exc.payload) or f"HTTP {exc.status}"
+            claim.response = {"http_status": exc.status, "body": exc.payload}
+            with transaction.atomic():  # the state and its audit row together
+                claim.save(update_fields=["status", "message", "response"])
+                _audit_send(claim, user, "eta_send")
+            return claim
+        # Cut off mid-answer, or a 5xx: the authority may hold the invoice. The claim stays, so no
+        # second send goes before it is reconciled with the authority (reconcile_claim, after STALE_SENDING).
+        _keep_unknown(claim, user, exc)
+        raise ValidationError(words["unknown"])
+    except Exception as exc:
+        _keep_unknown(claim, user, portal.PortalError(f"error: {exc.__class__.__name__}"))
+        raise
+    accepted = next((row for row in answer.get("acceptedDocuments") or [] if row.get("internalId") == internal_id), None)
+    rejected = next((row for row in answer.get("rejectedDocuments") or [] if row.get("internalId") == internal_id), None)
+    claim.submission_id = str(answer.get("submissionUUID") or "")
+    claim.status = SubmissionStatus.SUBMITTED if accepted else SubmissionStatus.REJECTED
+    claim.uuid, claim.long_id = (accepted or {}).get("uuid", ""), (accepted or {}).get("longId", "")
+    claim.message, claim.response = ("" if accepted else portal.error_text(rejected or answer)), answer
+    with transaction.atomic():  # the state and its audit row together
+        claim.save(update_fields=["submission_id", "status", "uuid", "long_id", "message", "response"])
+        _audit_send(claim, user, "eta_send")
+    return claim
+
+
+def _keep_unknown(claim, user, exc):
+    claim.message = f"outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
+    claim.response = {"http_status": exc.status, "body": exc.payload} if exc.status else {}
+    with transaction.atomic():
+        claim.save(update_fields=["message", "response"])
+        _audit_send(claim, user, "eta_send_unknown")
+
+
+def reconcile_claim(claim, user, lang="ar"):
+    """A ``sending`` claim whose server died mid-call: look the invoice up on the
+    authority by its internal ID over the claim's time. Found: the claim takes
+    that document (uuid, long ID, status), so it is never sent twice. Not
+    found: the claim is closed as rejected and the invoice may be sent again.
+    Either way the outcome is in the audit log. If the authority cannot be
+    asked, nothing changes and nothing is sent."""
+
+    from django.core.exceptions import ValidationError
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    # The sending happened right after the claim (one request's time): a short window around it,
+    # well inside the authority's 30-day search limit however old the claim is.
+    since = claim.submitted_at - timedelta(minutes=5)
+    until = min(claim.submitted_at + timedelta(hours=1), timezone.now() + timedelta(minutes=5))
+    try:
+        found = portal.search(_internal_id(claim), since, until)
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    # Codex #270: an invoice and a return may share a number; only a document of the claim's own type is taken.
+    wanted = "c" if claim.sales_return_id else "i"
+    found = [row for row in found if str(row.get("typeName") or row.get("documentType") or wanted).strip().lower() == wanted]
+    with transaction.atomic():
+        claim = Submission.objects.select_for_update().get(pk=claim.pk)
+        if claim.status != SubmissionStatus.SENDING:
+            return claim  # someone else settled it meanwhile
+        if found:
+            row = sorted(found, key=lambda item: str(item.get("dateTimeReceived") or ""))[-1]
+            claim.status = _portal_status(row, SubmissionStatus.SUBMITTED)
+            claim.uuid, claim.long_id = row.get("uuid") or "", row.get("longId") or ""
+            claim.submission_id = str(row.get("submissionUUID") or "")
+            claim.message, claim.response = "", row
+        else:
+            claim.status, claim.message = SubmissionStatus.REJECTED, NEVER_RECEIVED
+        claim.save(update_fields=["status", "uuid", "long_id", "submission_id", "message", "response"])
+        _audit_send(claim, user, "eta_send_recovered")
+    return claim
+
+
+def _portal_status(answer, current):
+    """The local status for the authority's answer about a document. A valid
+    document with a cancellation request the receiver has not declined (or a
+    newer one since) is a pending cancellation, whatever the row said before."""
+
+    from .models import SubmissionStatus
+
+    status = STATUS_FROM_PORTAL.get(str(answer.get("status", "")).lower(), current)
+    if status == SubmissionStatus.VALID:
+        requested, declined = answer.get("cancelRequestDate"), answer.get("declineCancelRequestDate")
+        if requested and (not declined or str(requested) > str(declined)):
+            status = SubmissionStatus.CANCEL_REQUESTED
+    return status
+
+
+def refresh_submission(submission, user, lang="ar"):
+    """Read the document's status from the authority (it validates after accepting the submission)."""
+
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    if not submission.uuid:
+        return submission
+    asked_at = timezone.now()
+    try:
+        answer = portal.details(submission.uuid)
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    with transaction.atomic():
+        # Reloaded under its lock: a cancellation saved while the authority was being asked is not lost.
+        fresh = Submission.objects.select_for_update().get(pk=submission.pk)
+        status = _portal_status(answer, fresh.status)
+        never_arrived = False
+        if fresh.status == SubmissionStatus.CANCEL_REQUESTED and status == SubmissionStatus.VALID and not answer.get("declineCancelRequestDate"):
+            if fresh.cancel_requested_at and asked_at < fresh.cancel_requested_at + CANCEL_IN_FLIGHT:
+                # Read before our request was made, or while it may still be on its way: not a "no".
+                status = SubmissionStatus.CANCEL_REQUESTED
+            else:
+                never_arrived = True  # asked after our request, and the authority has none: it never arrived
+        steps = ((answer.get("validationResults") or {}).get("validationSteps") or [])
+        reasons = [portal.error_text(step.get("error") or {}) for step in steps if str(step.get("status", "")).lower() == "invalid"]
+        fresh.status = status
+        if status == SubmissionStatus.CANCELLED and not fresh.cancelled_at:
+            fresh.cancelled_at = timezone.now()
+        fresh.long_id = answer.get("longId") or fresh.long_id
+        fresh.message = " · ".join(r for r in reasons if r)[:1000]
+        if never_arrived:
+            fresh.cancel_requested_at, fresh.message = None, "the cancellation request never reached the portal: request it again"
+        fresh.response = answer
+        fresh.checked_at = timezone.now()
+        fresh.save(update_fields=["status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_requested_at"])
+        _audit_send(fresh, user, "eta_refresh")
+    _sync(submission, fresh)
+    return submission
+
+
+def cancel_submission(submission, user, reason, lang="ar"):
+    """Ask the authority to cancel a valid document.
+
+    Like a sending, the request is claimed first: the row becomes
+    ``cancel_requested`` (with its time) before the authority is called, so a
+    request whose answer is lost is never asked twice and stays refreshable.
+    Only a definite refusal (4xx) puts it back to valid."""
+
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+
+    from . import portal
+    from .models import Submission, SubmissionStatus
+
+    words = SEND_WORDS[lang]
+    reason = (reason or "").strip()[:255]
+    if not reason:
+        raise ValidationError(words["reason"])
+    if submission.status != SubmissionStatus.VALID:
+        raise ValidationError(words["not_valid"])
+    try:
+        portal.token()  # a refused or unreachable login sends nothing
+    except portal.PortalError as exc:
+        raise ValidationError(_portal_error(exc, words))
+    with transaction.atomic():
+        fresh = Submission.objects.select_for_update().get(pk=submission.pk)
+        if fresh.status != SubmissionStatus.VALID:
+            raise ValidationError(words["not_valid"])
+        requested_at = timezone.now()
+        fresh.status, fresh.cancel_reason, fresh.cancel_requested_at = SubmissionStatus.CANCEL_REQUESTED, reason, requested_at
+        fresh.save(update_fields=["status", "cancel_reason", "cancel_requested_at"])
+        _audit_send(fresh, user, "eta_cancel")  # the request is recorded with its claim, before it goes out
+
+    def settle(change, action):
+        """Apply ``change`` only while the row is still this request's claim (a refresh may have moved it on)."""
+
+        with transaction.atomic():
+            row = Submission.objects.select_for_update().get(pk=submission.pk)
+            if row.status == SubmissionStatus.CANCEL_REQUESTED and row.cancel_requested_at == requested_at:
+                change(row)
+            _audit_send(row, user, action)
+        _sync(submission, row)
+
+    try:
+        portal.cancel(fresh.uuid, reason)
+    except portal.PortalError as exc:
+        if exc.message == "cancel refused" and exc.status and exc.status < 500:
+            def refused(row):
+                row.status, row.cancel_requested_at = SubmissionStatus.VALID, None
+                row.message = portal.error_text(exc.payload) or f"HTTP {exc.status}"
+                row.save(update_fields=["status", "cancel_requested_at", "message"])
+
+            settle(refused, "eta_cancel_refused")
+            raise ValidationError(_portal_error(exc, words))
+
+        # Cut off, or a 5xx: the authority may hold the request. It stays requested; "refresh" settles it.
+        def unknown(row):
+            row.message = f"cancellation outcome unknown: {exc.message}" + (f" (HTTP {exc.status})" if exc.status else "")
+            row.save(update_fields=["message"])
+
+        settle(unknown, "eta_cancel_unknown")
+        raise ValidationError(words["cancel_unknown"])
+    _sync(submission, fresh)
+    return submission
+
+
+def _sync(submission, fresh):
+    for field in ("status", "long_id", "message", "response", "checked_at", "cancelled_at", "cancel_reason", "cancel_requested_at"):
+        setattr(submission, field, getattr(fresh, field))
+
+
+def public_url(submission):
+    """The authority's public page for an accepted document (also what its QR code points to)."""
+
+    if not (submission and submission.uuid and submission.long_id):
+        return ""
+    given = (submission.response or {}).get("publicUrl") if isinstance(submission.response, dict) else ""
+    if given:
+        return given  # the authority's own link, when its answer carries one
+    base = "https://preprod.invoicing.eta.gov.eg" if submission.environment == "preprod" else "https://invoicing.eta.gov.eg"
+    return f"{base}/documents/{submission.uuid}/share/{submission.long_id}"

@@ -1,225 +1,184 @@
-from urllib.parse import quote
-
+from django.conf import settings
 from django.contrib import admin as django_admin
-from django.contrib.auth.views import LoginView, LogoutView
-from django.shortcuts import render
-from django.urls import path
+from django.contrib.auth.decorators import login_not_required
+from django.contrib.auth.views import LogoutView
+from django.urls import include, path
+
+from config import demo as demo_views
+from config import demo_first_run as first_run
 from django.views.generic import RedirectView, TemplateView
 
+from config.health import healthz
+from config.nightly import digest, messages_run, nightly
+
+from reports.dashboard_views import dashboard
 from reports.status_views import status_counts_report
-from reports.views import dashboard_snapshot, home, report_hub
-
-
-MODULE_LABELS = {
-    "customers": {"ar": "العملاء", "en": "Customers"},
-    "suppliers": {"ar": "الموردون", "en": "Suppliers"},
-    "items_services": {"ar": "الأصناف والخدمات", "en": "Items & services"},
-    "sales_operations": {"ar": "عمليات البيع", "en": "Sales operations"},
-    "purchases": {"ar": "المشتريات", "en": "Purchases"},
-    "inventory": {"ar": "المخزون", "en": "Inventory"},
-    "cashboxes": {"ar": "الخزن", "en": "Cashboxes"},
-    "expenses": {"ar": "المصروفات", "en": "Expenses"},
-    "reports": {"ar": "التقارير", "en": "Reports"},
-    "pdf_printing": {"ar": "طباعة PDF", "en": "PDF printing"},
-    "appointments_visits": {"ar": "المواعيد والزيارات", "en": "Appointments & visits"},
-    "employees_technicians": {"ar": "الموظفون والفنيون", "en": "Employees & technicians"},
-}
-
-ACTIVITY_LABELS = {
-    "commercial": {"ar": "نشاط تجاري", "en": "Commercial"},
-    "services": {"ar": "نشاط خدمي", "en": "Services"},
-}
-
-SUB_ACTIVITY_LABELS = {
-    "commercial": {
-        "retail": {"ar": "محل تجزئة", "en": "Retail store"},
-        "grocery": {"ar": "سوبر ماركت / بقالة", "en": "Supermarket / Grocery"},
-        "fashion": {"ar": "ملابس وأحذية", "en": "Clothing & Shoes"},
-        "electronics": {"ar": "موبايلات وإلكترونيات", "en": "Mobiles & Electronics"},
-        "pharmacy": {"ar": "صيدلية", "en": "Pharmacy"},
-        "wholesale": {"ar": "جملة / مخزن", "en": "Wholesale / Warehouse"},
-        "online": {"ar": "بيع أونلاين", "en": "Online selling"},
-        "other": {"ar": "نشاط تجاري آخر", "en": "Other commercial"},
-    },
-    "services": {
-        "general": {"ar": "خدمات عامة", "en": "General services"},
-        "maintenance": {"ar": "صيانة وإصلاح", "en": "Maintenance & Repair"},
-        "clinic": {"ar": "عيادة / مركز طبي", "en": "Clinic / Medical center"},
-        "beauty": {"ar": "صالون / مركز تجميل", "en": "Salon / Beauty center"},
-        "education": {"ar": "مركز تعليمي / كورسات", "en": "Education / Courses Center"},
-        "professional": {"ar": "مكتب مهني", "en": "Professional Office"},
-        "digital_marketing": {"ar": "تسويق وتصميم وخدمات رقمية", "en": "Marketing, Design & Digital Services"},
-        "other": {"ar": "نشاط خدمي آخر", "en": "Other Service Activity"},
-    },
-}
-
-
-def _lang(request):
-    return "en" if request.GET.get("lang") == "en" else "ar"
-
-
-def _query_value(value):
-    return quote(value or "", safe=",")
-
-
-def _setup_review_href(lang, activity, sub_activity, modules):
-    return (
-        f"/setup/modules/?lang={_query_value(lang)}"
-        f"&activity={_query_value(activity)}"
-        f"&sub_activity={_query_value(sub_activity)}"
-        f"&modules={_query_value(modules)}"
-    )
-
-
-def _setup_complete_href(lang):
-    return f"/setup/complete/?lang={_query_value(lang)}"
-
-
-def _fallback_label(slug):
-    return (slug or "—").replace("_", " ").strip() or "—"
-
-
-def _label(mapping, lang, fallback_slug):
-    value = mapping.get(lang) if mapping else None
-    return value or _fallback_label(fallback_slug)
-
-
-def setup_review(request):
-    lang = _lang(request)
-    activity = request.GET.get("activity", "")
-    sub_activity = request.GET.get("sub_activity", "")
-    modules_param = request.GET.get("modules", "")
-    module_slugs = [slug.strip() for slug in modules_param.split(",") if slug.strip()]
-    selected_modules = [
-        {
-            "slug": slug,
-            "label_ar": _label(MODULE_LABELS.get(slug, {}), "ar", slug),
-            "label_en": _label(MODULE_LABELS.get(slug, {}), "en", slug),
-            "label": _label(MODULE_LABELS.get(slug, {}), lang, slug),
-        }
-        for slug in module_slugs
-    ]
-
-    strings = {
-        "ar": {
-            "page_title": "راجع إعدادات نشاطك - حِسْبَة",
-            "logout": "تسجيل الخروج",
-            "language": "العربية",
-            "step_general": "النشاط العام",
-            "step_sub": "النشاط الفرعي",
-            "step_modules": "الموديولات",
-            "step_review": "المراجعة",
-            "title": "راجع إعدادات نشاطك",
-            "subtitle": "تأكد من الاختيارات التالية قبل إنهاء إعداد حِسْبَة لنشاطك.",
-            "activity_summary": "ملخص النشاط",
-            "general_activity": "النشاط العام",
-            "sub_activity_title": "النشاط الفرعي",
-            "selected_modules_title": "الموديولات المختارة",
-            "settings_note": "ملاحظة الإعدادات",
-            "important_note": "يمكنك تعديل الموديولات لاحقًا من الإعدادات، ولن يتم حذف أي بيانات عند تعطيل موديول.",
-            "empty_modules": "لم يتم اختيار موديولات بعد.",
-            "back": "الرجوع إلى اختيار الموديولات",
-            "next": "إنهاء الإعداد",
-        },
-        "en": {
-            "page_title": "Review your setup - Hesba",
-            "logout": "Logout",
-            "language": "English",
-            "step_general": "General activity",
-            "step_sub": "Sub activity",
-            "step_modules": "Modules",
-            "step_review": "Review",
-            "title": "Review your setup",
-            "subtitle": "Confirm the following choices before finishing your Hesba setup.",
-            "activity_summary": "Activity summary",
-            "general_activity": "General activity",
-            "sub_activity_title": "Sub-activity",
-            "selected_modules_title": "Selected modules",
-            "settings_note": "Settings note",
-            "important_note": "You can adjust modules later from Settings. Disabling a module will not delete any existing data.",
-            "empty_modules": "No modules selected yet.",
-            "back": "Back to modules selection",
-            "next": "Finish setup",
-        },
-    }
-
-    activity_label = _label(ACTIVITY_LABELS.get(activity, {}), lang, activity)
-    sub_activity_label = _label(SUB_ACTIVITY_LABELS.get(activity, {}).get(sub_activity, {}), lang, sub_activity)
-
-    context = {
-        "lang": lang,
-        "dir": "ltr" if lang == "en" else "rtl",
-        "activity": activity,
-        "sub_activity_slug": sub_activity,
-        "modules_param": modules_param,
-        "selected_modules": selected_modules,
-        "activity_label": activity_label,
-        "sub_activity_label": sub_activity_label,
-        "activity_label_ar": _label(ACTIVITY_LABELS.get(activity, {}), "ar", activity),
-        "activity_label_en": _label(ACTIVITY_LABELS.get(activity, {}), "en", activity),
-        "sub_activity_label_ar": _label(SUB_ACTIVITY_LABELS.get(activity, {}).get(sub_activity, {}), "ar", sub_activity),
-        "sub_activity_label_en": _label(SUB_ACTIVITY_LABELS.get(activity, {}).get(sub_activity, {}), "en", sub_activity),
-        "back_href": _setup_review_href(lang, activity, sub_activity, modules_param),
-        "complete_href": _setup_complete_href(lang),
-        **strings[lang],
-    }
-    return render(request, "setup/review_setup.html", context)
-
-
-def setup_complete_placeholder(request):
-    lang = _lang(request)
-    strings = {
-        "ar": {
-            "page_title": "اكتمال الإعداد - حِسْبَة",
-            "logout": "تسجيل الخروج",
-            "language": "العربية",
-            "step_general": "النشاط العام",
-            "step_sub": "النشاط الفرعي",
-            "step_modules": "الموديولات",
-            "step_review": "المراجعة",
-            "title": "تم إنهاء الإعداد",
-            "subtitle": "هذه صفحة مؤقتة آمنة فقط لمسار إنهاء الإعداد.",
-            "message": "لم يتم تفعيل أي إعدادات إنتاجية أو حفظ أي قرار نهائي في قاعدة البيانات.",
-            "back": "الرجوع إلى المراجعة",
-        },
-        "en": {
-            "page_title": "Setup complete - Hesba",
-            "logout": "Logout",
-            "language": "English",
-            "step_general": "General activity",
-            "step_sub": "Sub activity",
-            "step_modules": "Modules",
-            "step_review": "Review",
-            "title": "Setup complete",
-            "subtitle": "This is a safe placeholder only for the setup completion route.",
-            "message": "No production setup activation or final database decision has been saved.",
-            "back": "Back to review",
-        },
-    }
-    context = {
-        "lang": lang,
-        "dir": "ltr" if lang == "en" else "rtl",
-        "review_href": f"/setup/review/?lang={_query_value(lang)}",
-        **strings[lang],
-    }
-    return render(request, "setup/setup_complete_placeholder.html", context)
+from reports.functional_views import report_hub
+from accounts.login_guard import GuardedLoginView, login_verify
+from printing import views as printing_views
+from workorders import public as workorders_public
+from medical import public as medical_public
+from education import public as education_public
+from education import views_portal as education_portal
+from payments import views as payments_views
+from appointments import public as appointments_public
+from projects import public as projects_public
+from appointments import views_booking as booking_views
+from restaurant import views_qr as table_menu_views
+from restaurant import views_reservations as table_booking_views
+from settings_core.setup_views import after_login, root_redirect, setup_complete, setup_modules, setup_questions, setup_review, sub_activity_step
 
 
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="login", permanent=False), name="root_redirect"),
-    path("login/", LoginView.as_view(template_name="registration/login.html", next_page="/setup/"), name="login"),
-    path("logout/", LogoutView.as_view(next_page="login"), name="logout"),
+    path("", root_redirect, name="root_redirect"),
+    path("healthz/", healthz, name="healthz"),
+    # BACKUP-003: token-guarded daily backup trigger for hosts without cron.
+    path("ops/nightly/", nightly, name="ops_nightly"),
+    path("ops/digest/", digest, name="ops_digest"),
+    path("ops/messages/", messages_run, name="ops_messages"),  # M3: hourly; gathers the customer messages and sends the approved ones
+    path("login/", GuardedLoginView.as_view(template_name="registration/login.html", next_page="/start/"), name="login"),
+    # SEC-002: the authenticator-app code after the password, for users who switched it on.
+    path("login/verify/", login_verify, name="login_verify"),
+    # Logout must not itself require a login: a signed-out user posting from a
+    # stale page was bounced to /login/?next=/logout/ and, after signing back
+    # in, landed on a GET of this POST-only view (405).
+    path("logout/", login_not_required(LogoutView.as_view(next_page="login")), name="logout"),
+    # SHARE-001: signed, expiring, read-only document links for customers (no account).
+    path("share/<str:token>/", login_not_required(printing_views.shared_document), name="share_document"),
+    # S2: the customer approves or refuses a work order's quote from the same signed link (public, CSRF-protected).
+    path("share/<str:token>/approve/", login_not_required(workorders_public.decide), {"action": "approve"}, name="share_work_order_approve"),
+    path("share/<str:token>/refuse/", login_not_required(workorders_public.decide), {"action": "refuse"}, name="share_work_order_refuse"),
+    # M3: the patient confirms an appointment, or asks to cancel it (a request for reception; nothing is cancelled here), from the same signed link.
+    path("share/<str:token>/confirm/", login_not_required(appointments_public.confirm), name="share_appointment_confirm"),
+    path("share/<str:token>/cancel-request/", login_not_required(appointments_public.cancel_request), name="share_appointment_cancel_request"),
+    # C10 (HG-135): the project owner approves a draft variation order from the project's signed link (public, CSRF-protected, throttled).
+    path("share/<str:token>/variation/<int:oid>/approve/", login_not_required(projects_public.approve), name="share_project_variation_approve"),
+    # M6 (HG-085): a lab patient's results of one day, from a signed link plus a second factor (public, CSRF-protected, throttled).
+    path("results/<str:token>/", login_not_required(medical_public.page), name="lab_result_link"),
+    # E6 (HG-099): is this completion certificate genuine? The sheet's QR opens it. Signed token with its own salt, GET only, throttled, no-store.
+    path("verify/c/<str:token>/", login_not_required(education_public.page), name="certificate_verify"),
+    # E3 (HG-101): the guardian portal. Signed token with its own salt and a row that can be revoked, a second factor, throttles, no-store.
+    path("p/edu/<str:token>/", login_not_required(education_portal.page), name="guardian_portal"),
+    # S4 (HG-070): the online payment link. Public, gated by a signed token; only the webhook is CSRF-exempt (HMAC-verified).
+    path("pay/webhook/paymob/", login_not_required(payments_views.webhook), name="pay_webhook_paymob"),
+    path("pay/return/paymob/", login_not_required(payments_views.pay_return), name="pay_return_paymob"),
+    path("pay/mock/<str:reference>/", login_not_required(payments_views.mock_checkout), name="pay_mock_checkout"),
+    path("pay/<str:token>/", login_not_required(payments_views.pay_page), name="pay_page"),
+    path("pay/<str:token>/go/", login_not_required(payments_views.pay_go), name="pay_go"),
+    path("pay/<str:token>/done/", login_not_required(payments_views.pay_done), name="pay_done"),
+    # S3 (HG-077): the public online booking page of one entity (random key), and its signed confirmation. CSRF-protected,
+    # throttled, 404 unless the «الحجز أونلاين» capability is on and the entity takes bookings.
+    path("book/<str:key>/", login_not_required(booking_views.page), name="book_page"),
+    path("book/<str:key>/done/<str:token>/", login_not_required(booking_views.done), name="book_done"),
+    # R5a (HG-115): a table's QR menu (random key). No account; CSRF-protected, throttled, a guest's request waits for staff to accept it,
+    # and every invalid key answers one dead 404 page.
+    path("t/<str:key>/", login_not_required(table_menu_views.page), name="table_menu"),
+    # R8 (HG-118): a branch's public table-booking request page (random key, off until the owner switches it on). No account;
+    # CSRF-protected, throttled, no-store; it makes a «booked» request with no table for staff to confirm, and shows nothing back.
+    path("book-table/<str:key>/", login_not_required(table_booking_views.book_table), name="book_table"),
+    path("start/", after_login, name="after_login"),
     path("setup/", TemplateView.as_view(template_name="setup/setup_gate.html"), name="setup_gate"),
     path("setup/activity/", TemplateView.as_view(template_name="setup/activity_selection.html"), name="setup_activity"),
     path("setup/activity/commercial/", TemplateView.as_view(template_name="setup/activity_commercial_subactivity.html"), name="setup_activity_commercial"),
+    path("setup/activity/restaurants/", TemplateView.as_view(template_name="setup/activity_restaurants_subactivity.html"), name="setup_activity_restaurants"),
+    # ACT-002: these share one catalog-driven sub-activity step.
+    path("setup/activity/medical/", sub_activity_step, {"activity": "medical"}, name="setup_activity_medical"),
+    path("setup/activity/education/", sub_activity_step, {"activity": "education"}, name="setup_activity_education"),
+    path("setup/activity/other/", sub_activity_step, {"activity": "other"}, name="setup_activity_other"),
+    path("setup/activity/contracting/", sub_activity_step, {"activity": "contracting"}, name="setup_activity_contracting"),
+    path("setup/activity/manufacturing/", sub_activity_step, {"activity": "manufacturing"}, name="setup_activity_manufacturing"),
     path("setup/activity/services/", TemplateView.as_view(template_name="setup/activity_services_subactivity.html"), name="setup_activity_services"),
     path("setup/activity/service/", TemplateView.as_view(template_name="setup/activity_subactivity_placeholder.html"), name="setup_activity_service"),
-    path("setup/modules/", TemplateView.as_view(template_name="setup/modules_selection.html"), name="setup_modules"),
+    path("setup/questions/", setup_questions, name="setup_questions"),
+    path("setup/modules/", setup_modules, name="setup_modules"),
     path("setup/review/", setup_review, name="setup_review"),
-    path("setup/complete/", setup_complete_placeholder, name="setup_complete"),
-    path("home/", home, name="home"),
-    path("dashboard/", dashboard_snapshot, name="dashboard_snapshot"),
+    path("setup/complete/", setup_complete, name="setup_complete"),
+    # UX Wave 3: the old navigation map is gone; an old bookmark lands on the dashboard (signed out: login, then back here).
+    path("home/", RedirectView.as_view(pattern_name="dashboard_snapshot", permanent=True, query_string=True), name="home"),
+    path("dashboard/", dashboard, name="dashboard_snapshot"),
+    path("demo/activity/", demo_views.switch_activity, name="demo_activity"),
+    path("demo/sample/", demo_views.sample, name="demo_sample"),
+    path("demo/restart/", login_not_required(demo_views.restart), name="demo_restart"),
+    # DEMO-FIRST-RUN: one tap on the kind of business opens a ready shop (config/demo_first_run.py).
+    path("demo/", first_run.landing, name="demo_landing"),
+    path("demo/start/", first_run.start, name="demo_start"),
+    path("demo/preparing/", first_run.preparing, name="demo_preparing"),
+    path("demo/begin/", first_run.begin, name="demo_begin"),
+    path("demo/login-as/", first_run.login_as, name="demo_login_as"),
+    path("demo/<slug:activity>/", first_run.sub_activities, name="demo_sub_activities"),
+    path("demo/feedback/", include("feedback.urls")),
+    path("master-data/", include("master_data.urls")),
+    path("purchases/", include("purchases.urls")),
+    path("inventory/", include("inventory.urls")),
+    path("sales/", include("sales.urls")),
+    path("cashboxes/", include("cashboxes.urls")),
+    path("promotions/", include("promotions.urls")),
+    path("loyalty/", include("loyalty.urls")),
+    path("banks/", include("banking.urls")),
+    path("cheques/", include("cheques.urls")),
+    path("store/", include("onlinestore.urls")),
+    path("shipping/", include("shipping.urls")),
+    path("payments/", include("payments.urls")),  # S4 (HG-070): the staff side of payment links
+    path("giftcards/", include("giftcards.urls")),  # S6 (HG-071): gift cards
+    path("guarantees/", include("guarantees.urls")),  # C4 (HG-123): letters of guarantee (memo only, no money moves)
+    path("tenders/", include("tenders.urls")),  # C8 (HG-126): tender study and price analysis (no money moves)
+    path("approvals/", include("approvals.urls")),  # FB-27
+    path("ereceipt/", include("ereceipt.urls")),
+    path("expenses/", include("expenses.urls")),
+    path("print/", include("printing.urls")),
+    path("barcode/", include("barcode.urls")),
+    path("pricing/", include("pricing.urls")),
+    path("taxes/", include("taxes.urls")),
+    path("einvoice/", include("einvoice.urls")),
+    path("units/", include("units.urls")),
+    path("batches/", include("batches.urls")),
+    path("variants/", include("variants.urls")),
+    path("serials/", include("serials.urls")),
+    path("instalments/", include("installments.urls")),
+    path("assets/", include("fixed_assets.urls")),
+    path("shifts/", include("shifts.urls")),
+    path("parties/", include("parties.urls")),
+    path("medical/", include("medical.urls")),
+    path("education/", include("education.urls")),
+    path("search/", include("search.urls")),
+    path("imports/", include("imports.urls")),
+    path("closing/", include("closing.urls")),
+    path("entities/", include("entities.urls")),
+    path("accounting/", include("ledger.urls")),
+    # STAFF-001: employees & technicians.
+    path("staff/", include("staff.urls")),
+    # APPT-001: appointments & visits.
+    path("appointments/", include("appointments.urls")),
+    path("contracts/", include("agreements.urls")),
+    # RESTO-001: tables, orders and the kitchen ticket.
+    path("restaurant/", include("restaurant.urls")),
+    path("work-orders/", include("workorders.urls")),
+    path("attachments/", include("attachments.urls")),  # S1: photos, signature and files on a record
+    path("orders/", include("orders.urls")),
+    path("purchases/orders/", include("orders.purchase_urls")),  # T2
+    path("pharmacy/", include("pharmacy.urls")),
+    path("staff/attendance/", include("attendance.urls")),
+    path("staff/payroll/", include("payroll.urls")),
+    path("messages/", include("messaging.urls")),  # T9: the daily outbox of customer messages  # T11: under /staff/, so the employees module opens and closes it
+    # CONTRACT-001: projects for contractors.
+    path("projects/", include("projects.urls")),
+    # MFG-001: recipes and production runs.
+    path("manufacturing/", include("manufacturing.urls")),
+    path("profile/", include("accounts.urls")),
+    path("settings/", include("settings_core.urls")),
     path("reports/", report_hub, name="report_hub"),
+    path("reports/", include("reports.urls")),
     path("status/", status_counts_report, name="status_counts_report"),
-    path("admin/", django_admin.site.urls),
+    path("ai/", include("ai.urls")),  # A1 (HG-079): the dashboard's voice summary
+    path(settings.ADMIN_URL, django_admin.site.urls),
 ]
+
+
+def _superuser_only(request):
+    """ADMIN-001: shop owners and staff never reach Django Admin; only a superuser does.
+    TRACK-START S04: and never on a showcase, where every tester's owner is a superuser of their own copy."""
+
+    return request.user.is_active and request.user.is_superuser and not getattr(settings, "DEMO_MODE", False)
+
+
+django_admin.site.has_permission = _superuser_only

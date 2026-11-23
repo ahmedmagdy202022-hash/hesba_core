@@ -1,0 +1,53 @@
+{% load static hesba_shell %}{% comment %}
+The signed-in shell: sidebar on desktop and tablet landscape, a top bar with a
+drawer below 1024px, and a tab bar on phones. Sections come from
+reports.navigation, so this shows exactly what the dashboard offers the same
+user. Styles: hesba/css/shell.css. Behaviour: hesba/js/shell.js.
+{% endcomment %}{% app_shell as shell %}{% include "partials/shell_icons.html" %}
+<a class="hs-skip" href="#hs-main">{{ shell.words.skip }}</a>
+<header class="hs-topbar">
+  <button class="hs-icon-button" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false" aria-label="{{ shell.words.menu }}"><span class="hs-burger" aria-hidden="true"></span></button>
+  <a class="hs-topbar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img src="{% static 'hesba/brand/hesba-mark.png' %}" alt="{{ shell.words.home }}" width="34" height="36"></a>
+  <a class="hs-icon-button hs-topbar__search" href="{% url 'search:results' %}?lang={{ lang }}" aria-label="{{ shell.words.search }}" data-search-link><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-search"></use></svg></a>
+  <button class="hs-chip" type="button" data-lang-toggle>{{ shell.words.language }}</button>
+</header>
+<aside class="hs-sidebar" id="hs-sidebar" data-shell-nav>
+  <script>
+    /* Decide rail or full sidebar before first paint (SHELL-003): the saved
+       choice wins; otherwise the rail is the default on 1024-1279px. */
+    (function(){var s=null;try{s=localStorage.getItem('hesba_sidebar');}catch(e){}
+    var w=window.innerWidth,rail=s?s==='rail':(w>=1024&&w<1280);document.body.classList.toggle('hs-rail',rail);})();
+  </script>
+  <div class="hs-sidebar__head">
+    <a class="hs-sidebar__brand" href="{% url 'dashboard_snapshot' %}?lang={{ lang }}"><img class="hs-sidebar__lockup" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="{{ shell.words.home }}" width="160" height="56"><img class="hs-sidebar__mark" src="{% static 'hesba/brand/hesba-mark.png' %}" alt="{{ shell.words.home }}" width="38" height="40"></a>
+    <button class="hs-rail-toggle" type="button" data-rail-toggle aria-controls="hs-sidebar" aria-expanded="true" aria-label="{{ shell.words.collapse }}" title="{{ shell.words.collapse }}" data-label-collapse="{{ shell.words.collapse }}" data-label-expand="{{ shell.words.expand }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-rail"></use></svg></button>
+    <button class="hs-icon-button hs-sidebar__close" type="button" data-shell-close aria-label="{{ shell.words.close_menu }}"><span aria-hidden="true">&times;</span></button>
+  </div>
+  <form class="hs-search" method="get" action="{% url 'search:results' %}" role="search"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="go" value="1"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-search"></use></svg><input type="search" name="q" placeholder="{{ shell.words.search_placeholder }}" aria-label="{{ shell.words.search }}" data-shell-search></form>
+  {% if shell.shortcuts %}<div class="hs-quick" role="group" aria-labelledby="hs-quick-title" data-shell-shortcuts><p class="hs-quick__title" id="hs-quick-title">{{ shell.words.shortcuts }}</p><div class="hs-quick__row">{% for s in shell.shortcuts %}<a class="hs-quick__link" href="{{ s.url }}?lang={{ lang }}" data-shortcut="{{ s.key }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ s.icon }}"></use></svg><span>{{ s.label }}</span></a>{% endfor %}</div></div>{% endif %}
+  <nav class="hs-nav" aria-label="{{ shell.words.main_nav }}">
+    {% for group in shell.groups %}
+    <div class="hs-nav__group hs-nav__group--{{ group.key }}" data-nav-group="{{ group.key }}">
+      {% if group.label and group.items|length > 1 %}<p class="hs-nav__heading" id="hs-nav-{{ group.key }}">{{ group.label }}</p>{% endif %}
+      <ul{% if group.label and group.items|length > 1 %} aria-labelledby="hs-nav-{{ group.key }}"{% endif %}>
+        {% for item in group.items %}
+          <li><a class="hs-nav__link{% if item.current %} is-current{% endif %}" href="{{ item.url }}?lang={{ lang }}" title="{{ item.label }}"{% if item.current %} aria-current="page"{% endif %}><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ item.key }}"></use></svg><span class="hs-nav__label">{{ item.label }}</span></a></li>
+        {% endfor %}
+      </ul>
+    </div>{% endfor %}
+  </nav>
+  <div class="hs-sidebar__foot">
+    <span class="hs-sidebar__user">{{ shell.user_name }}</span>
+    <div class="hs-sidebar__actions">
+      <button class="hs-chip hs-chip--on-navy" type="button" data-lang-toggle title="{{ shell.words.language }}"><span class="hs-chip__long">{{ shell.words.language }}</span><span class="hs-chip__short" aria-hidden="true">{{ shell.words.language_short }}</span></button>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="hs-chip hs-chip--on-navy" type="submit" title="{{ shell.words.logout }}"><svg class="hs-icon hs-chip__short" aria-hidden="true"><use href="#hs-i-logout"></use></svg><span class="hs-chip__long">{{ shell.words.logout }}</span></button></form>
+    </div>
+  </div>
+</aside>
+<div class="hs-backdrop" data-shell-close hidden></div>
+<nav class="hs-tabbar" aria-label="{{ shell.words.main_nav }}">
+  {% for tab in shell.tab_bar %}
+    {% if tab.raised %}<a class="hs-tab hs-tab--sell{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %} data-tab="{{ tab.key }}"><span class="hs-tab__orb" aria-hidden="true"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ tab.key }}"></use></svg></span><span class="hs-tab__label">{{ tab.label }}</span></a>{% else %}<a class="hs-tab{% if tab.current %} is-current{% endif %}" href="{{ tab.url }}?lang={{ lang }}"{% if tab.current %} aria-current="page"{% endif %} data-tab="{{ tab.key }}"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-{{ tab.key }}"></use></svg><span class="hs-tab__label">{{ tab.label }}</span></a>{% endif %}
+  {% endfor %}
+  <button class="hs-tab{% if shell.more_current %} is-current{% endif %}" type="button" data-shell-open aria-controls="hs-sidebar" aria-expanded="false"><svg class="hs-icon" aria-hidden="true"><use href="#hs-i-more"></use></svg><span class="hs-tab__label">{{ shell.words.more }}</span></button>
+</nav>

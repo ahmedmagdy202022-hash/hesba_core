@@ -1,0 +1,53 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ lw.print_title }} {{ sheet.number }} — {{ project.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{# Contracting C5 (HG-130): a daily-labour pay sheet as it was paid, at the overtime divisor it was paid with. #}
+<nav class="pr-toolbar" aria-label="{{ lw.print_btn }}">
+  <a class="pr-button pr-button--ghost" href="{% url 'projects:labour' project.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ lw.back_tab }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ lw.print_btn }}</button>
+  <p class="pr-toolbar__hint">{{ lw.print_hint }}</p>
+</nav>
+<article class="pr-sheet" data-kind="labour_pay_sheet">
+  {% if not paid %}<div class="pr-watermark pr-watermark--status" aria-hidden="true" data-print-cancelled>{{ lw.sheet_cancelled }}</div>{% endif %}
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title">{{ lw.print_title }} #{{ sheet.number }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ lw.project }}</dt><dd><bdi>{{ project.code }}</bdi> — {{ project.name }}</dd></div>
+        <div><dt>{{ lw.period }}</dt><dd><bdi>{{ sheet.period_from|date:"Y-m-d" }} → {{ sheet.period_to|date:"Y-m-d" }}</bdi></dd></div>
+        {% if sheet.expense %}<div><dt>{{ lw.paid_on }}</dt><dd><bdi>{{ sheet.expense.expense_date|date:"Y-m-d" }}</bdi></dd></div>
+        <div><dt>{{ lw.expense }}</dt><dd><bdi>{{ sheet.expense.expense_number }}</bdi></dd></div>
+        <div><dt>{{ lw.cashbox }}</dt><dd>{{ sheet.expense.cashbox.name_ar }}</dd></div>{% endif %}
+      </dl>
+    </div>
+  </header>
+  <table class="pr-lines" data-print-lines>
+    <thead><tr><th>#</th><th>{{ lw.worker }}</th><th>{{ lw.trade }}</th><th class="pr-num">{{ lw.days }}</th><th class="pr-num">{{ lw.overtime }}</th><th class="pr-num">{{ lw.rate }}</th><th class="pr-num">{{ lw.amount }}</th></tr></thead>
+    <tbody>{% for row in rows %}<tr data-print-worker="{{ row.worker.pk }}"><td>{{ forloop.counter }}</td><td class="pr-item">{{ row.worker.name }}</td><td>{{ row.worker.trade|default:"—" }}</td><td class="pr-num">{{ row.days|qty }}</td><td class="pr-num">{{ row.overtime|qty }}</td><td class="pr-num">{% if row.rate is not None %}{{ row.rate|money }}{% else %}{{ lw.rate_varies }}{% endif %}</td><td class="pr-num">{{ row.amount|money }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <section class="pr-totals">
+    <dl>
+      <div><dt>{{ lw.workers_count }}</dt><dd>{{ rows|length }}</dd></div>
+      <div class="pr-totals__grand"><dt>{{ lw.total }}</dt><dd data-print-total>{{ sheet.total|money }} <small>{{ company.currency }}</small></dd></div>
+    </dl>
+  </section>
+  {% if total_words %}<p class="pr-words"><span>{{ lw.in_words }}:</span> {{ total_words }}</p>{% endif %}
+  <section class="pr-signatures pr-signatures--3" data-print-signatures><div>{{ lw.sign_engineer }}</div><div>{{ lw.sign_accountant }}</div><div>{{ lw.sign_received }}</div></section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{% now "Y-m-d H:i" %}</p>{% if company.show_hesba_brand %}<p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}</footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

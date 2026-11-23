@@ -1,0 +1,43 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+{% include "partials/brand_icons.html" %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ title }} - {% if lang == 'en' %}Hesba{% else %}حِسْبَة{% endif %}</title>
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-2">
+<script>(function(){try{localStorage.setItem('hesba_lang',document.documentElement.lang);}catch(e){}})();</script>
+</head>
+<body class="fr-body" data-lang="{{ lang }}">
+{# DEMO-FIRST-RUN (D2): the sub-activities of one activity, each a one-tap start; «مش متأكد؟» opens the usual one. #}
+<div class="fr-page fr-sheet-page">
+  <header class="fr-head">
+    <div class="fr-head__row">
+      <img class="fr-head__brand" src="{% static 'hesba/brand/hesba-logo-reversed.png' %}" alt="حِسبة — Hesba" width="642" height="225">
+      <a class="fr-head__lang" href="?lang={{ other_lang }}">{{ words.language }}</a>
+    </div>
+  </header>
+  <section class="fr-sheet" aria-labelledby="sub-title">
+    <div class="fr-sheet__grip" aria-hidden="true"></div>
+    <div class="fr-sheet__head">
+      <h2 id="sub-title">{{ title }}</h2>
+      <a class="fr-sheet__close" href="{{ landing_url }}" aria-label="{{ words.back }}" data-demo-back>&times;</a>
+    </div>
+    <div class="fr-sheet__grid" role="list">
+      {% for row in rows %}
+      <form method="post" action="{{ start_url }}" role="listitem" data-demo-sub="{{ row.slug }}">{% csrf_token %}
+        <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ activity }}"><input type="hidden" name="sub_activity" value="{{ row.slug }}"><input type="hidden" name="mode" value="sample">
+        <button class="fr-tile" type="submit"><strong>{{ row.label }}</strong><span>{{ row.hint }}</span></button>
+      </form>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ start_url }}" data-demo-default>{% csrf_token %}
+      <input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ default.0 }}"><input type="hidden" name="sub_activity" value="{{ default.1 }}"><input type="hidden" name="mode" value="sample">
+      <button class="fr-primary" type="submit">{{ not_sure }}</button>
+    </form>
+    <p class="fr-sheet__note">{{ words.change_later }}</p>
+  </section>
+</div>
+</body>
+</html>

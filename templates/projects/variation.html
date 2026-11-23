@@ -1,0 +1,69 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=c2-1"><link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1">{% endblock %}
+{% block operation_content %}
+{# Contracting C1 (HG-103): one variation order: its items, its value, the copy the owner signed, and the decision. #}
+{% include "projects/_head.html" %}
+<section class="prj-card sr-sheet" data-variation-page>
+<header class="sr-sheet__head"><div><a class="op-back" href="{% url 'projects:variations' project.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ vw.back }}</a><h2 class="prj-h" data-variation-heading>{{ heading }}</h2><p class="vo-sub" data-variation-title>{{ order.title }}</p></div>
+<div class="sr-sheet__acts">{% if can_edit %}<a class="op-secondary" href="{% url 'projects:variation_edit' project.pk order.pk %}?lang={{ lang }}" data-variation-edit>{{ vw.edit }}</a>{% endif %}<a class="op-secondary" href="{% url 'projects:variation_print' project.pk order.pk %}?lang={{ lang }}" target="_blank" rel="noopener" data-variation-print>{{ vw.print }}</a></div></header>
+<p class="sr-facts"><span class="op-status op-status-{{ status_class }}" data-variation-status="{{ order.status }}">{{ status_label }}</span><span class="sr-fact" data-fact="date"><small>{{ vw.date }}</small><b>{{ day }}</b></span><span class="sr-fact" data-fact="value"><small>{{ vw.total }}</small><b dir="ltr" data-variation-value>{{ value_text }}</b></span>{% if days_text %}<span class="sr-fact" data-fact="extension"><small>{{ vw.extension }}</small><b data-variation-extension>{{ days_text }}</b></span>{% endif %}</p>
+{% if rows %}<h3 class="sr-sub">{{ vw.lines }}</h3><ul class="vo-lines" data-variation-lines>{% for row in rows %}<li data-variation-line="{{ forloop.counter }}"{% if row.new %} data-new{% endif %}>
+<div class="vo-line__what"><span class="vo-chip">{{ row.kind }}</span> <b><bdi dir="ltr">{{ row.line.code }}</bdi> {{ row.line.description }}</b></div>
+<div class="vo-line__math"><span><span dir="ltr" data-line-change>{{ row.change_text }}</span> <bdi>{{ row.line.unit }}</bdi> × <span dir="ltr">{{ row.rate|money }}</span></span><b dir="ltr" data-line-amount>{{ row.amount_text }}</b></div>
+{% if row.now is not None %}<small class="vo-line__after" data-line-after>{{ vw.now }} <span dir="ltr">{{ row.now|qty }}</span> · {{ vw.after }} <span dir="ltr">{{ row.after|qty }}</span></small>{% endif %}
+</li>{% endfor %}</ul>
+{% elif order.lump_amount is None %}<p class="sr-none" data-no-lines>{{ vw.no_lines }}</p>{% endif %}
+{% if contract_before is not None %}<dl class="vo-totals" data-variation-totals>
+<div><dt>{{ vw.contract_before }}</dt><dd dir="ltr" data-total="before">{{ contract_before|money }}</dd></div>
+<div><dt>{{ vw.total }}</dt><dd dir="ltr" data-total="order">{{ value_text }}</dd></div>
+<div class="vo-totals__grand"><dt>{{ vw.contract_after }}</dt><dd dir="ltr" data-total="after">{{ contract_after|money }}</dd></div>
+</dl>{% endif %}
+{% if order.reason %}<h3 class="sr-sub">{{ vw.reason }}</h3><p class="sr-text" data-text="reason">{{ order.reason|linebreaksbr }}</p>{% endif %}
+{% if order.status == 'approved' %}<p class="sr-facts vo-approval" data-variation-approval><span class="sr-fact"><small>{{ vw.owner_approved_on }}</small><b>{{ approved_day }}</b></span>{% if order.owner_reference %}<span class="sr-fact"><small>{{ vw.owner_ref }}</small><b><bdi>{{ order.owner_reference }}</bdi></b></span>{% endif %}</p>{% endif %}
+{% if order.decision_note %}<h3 class="sr-sub">{{ vw.decision_note }}</h3><p class="sr-text" data-text="note">{{ order.decision_note }}</p>{% endif %}
+<p class="sr-meta" data-variation-author>{{ written }}{% if decided %}<br>{{ decided }}{% endif %}</p>
+</section>
+<section class="att-card prj-card prj-docs" id="vo-copy" data-attachments data-refresh="inline" data-signed-copy aria-labelledby="vo-copy-title"
+ data-msg-failed="{% if lang == 'en' %}Something went wrong, try again.{% else %}حصلت مشكلة، جرّب تاني.{% endif %}"
+ data-msg-network="{% if lang == 'en' %}No connection right now, try again.{% else %}مفيش اتصال دلوقتي، جرّب تاني.{% endif %}"
+ data-msg-uploading="{% if lang == 'en' %}Uploading…{% else %}جاري الرفع…{% endif %}" data-msg-uploaded="{% if lang == 'en' %}Saved.{% else %}اتحفظ.{% endif %}"
+ data-msg-deleting="{% if lang == 'en' %}Deleting…{% else %}جاري المسح…{% endif %}" data-msg-confirm="{% if lang == 'en' %}Delete this file?{% else %}تمسح الملف ده؟{% endif %}">
+{% csrf_token %}
+<h2 class="prj-h" id="vo-copy-title">{{ vw.copy_title }}</h2>
+{% if att.closed %}<p class="att-help" data-copy-kept>{{ vw.copy_kept }}</p>
+{% else %}<p class="att-help">{{ vw.copy_intro }}</p>
+<p class="att-help att-formats" data-att-formats>{{ aw.formats }}</p>
+<p class="att-help prj-space" data-copy-space>{{ att.space }}</p>{% endif %}
+{% if att.blocked %}<div class="op-message" data-att-blocked>{{ att.blocked }}</div>{% endif %}
+<div class="op-message op-message-error" role="alert" data-att-error hidden></div>
+<p class="att-status" role="status" aria-live="polite" data-att-status></p>
+{% if att.can_add %}
+<form class="att-upload att-med-upload prj-upload" method="post" enctype="multipart/form-data" action="{{ att.upload_url }}" data-att-upload>{% csrf_token %}
+<input type="hidden" name="stage" value="other"><input type="hidden" name="lang" value="{{ lang }}">
+<div class="att-strip">
+<label class="att-add"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.5"/></svg><span>{{ aw.camera }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*" capture="environment" data-att-file></label>
+<label class="att-add att-add-alt"><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg><span>{{ aw.choose }}</span>
+<input class="sr-only" type="file" name="file" accept="image/*,application/pdf" multiple data-att-file></label>
+</div>
+</form>
+{% endif %}
+{% if att.items %}<ul class="att-list" data-att-list>{% for item in att.items %}{% include "projects/_file_row.html" with item=item aw=aw %}{% endfor %}</ul>
+{% else %}<p class="att-empty" data-att-empty>{{ aw.copy_none }}</p>{% endif %}
+</section>
+{% if can_approve %}
+<form class="op-form vo-decide" method="post" data-approve-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="approve">
+<h2>{{ vw.approve_title }}</h2><p class="op-muted">{{ vw.approve_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="vo-approved-on">{{ vw.approved_on }}</label><input id="vo-approved-on" type="date" name="approved_on" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" min="{{ order.order_date|date:'Y-m-d' }}"></div>
+<div class="op-field"><label for="vo-ref">{{ vw.owner_reference }}</label><input id="vo-ref" name="owner_reference" maxlength="80" placeholder="{{ vw.owner_reference_ph }}" autocomplete="off"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit" data-approve>{{ vw.approve_btn }}</button></div></form>
+{% elif order.status == 'draft' and is_open and not can_decide %}<p class="op-muted" data-decide-only>{{ vw.decide_only }}</p>{% endif %}
+{% if can_reject or can_cancel %}
+<form class="op-form vo-decide" method="post" data-close-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<h2>{{ vw.close_title }}</h2><p class="op-muted">{{ vw.close_hint }}</p>
+<div class="op-field"><label for="vo-note">{{ vw.note }}</label><input id="vo-note" name="note" maxlength="255" autocomplete="off"></div>
+<div class="op-form-actions">{% if can_reject %}<button class="op-secondary" type="submit" name="action" value="reject" data-reject>{{ vw.reject_btn }}</button>{% endif %}{% if can_cancel %}<button class="op-secondary" type="submit" name="action" value="cancel" data-cancel>{{ vw.cancel_btn }}</button>{% endif %}</div></form>
+{% endif %}
+<script src="{% static 'hesba/js/attachments.js' %}?v=c2-1" defer></script>
+{% endblock %}

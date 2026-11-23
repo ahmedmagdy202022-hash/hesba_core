@@ -1,0 +1,826 @@
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models import Q
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+
+from cashboxes.models import Cashbox, OpeningBalanceTarget
+from cashboxes.forms import OpeningBalanceAdjustmentForm, OpeningBalanceReversalForm
+from cashboxes.services import (
+    cancel_opening_balance_adjustment,
+    create_opening_balance_adjustment,
+    target_has_operational_use,
+)
+from entities import scope as entity_scope
+from permissions.services import user_has_permission
+from settings_core.templatetags.hesba_format import money as display_money, unit_label
+
+from .forms import CashboxForm, CategoryForm, CustomerForm, ItemForm, LocationForm, SupplierForm
+from .models import Category, Customer, Item, Location, Supplier
+from config.form_errors import add_form_error
+from config.paging import page_of
+
+
+STRINGS = {
+    "ar": {
+        "page_title": "البيانات الأساسية - حِسبة",
+        "hub_title": "البيانات الأساسية",
+        "hub_note": "جهّز بيانات النشاط مرة واحدة لتستخدمها بعد ذلك في المشتريات والمبيعات والمخزون والخزن.",
+        "search": "بحث",
+        "search_placeholder": "ابحث بالكود أو الاسم...",
+        "status": "الحالة",
+        "active": "نشط",
+        "inactive": "غير نشط",
+        "all": "الكل",
+        "new": "إضافة جديد",
+        "edit": "تعديل",
+        "save": "حفظ",
+        "cancel": "إلغاء",
+        "back": "رجوع",
+        "dashboard": "لوحة القيادة",
+        "language": "English",
+        "empty": "لسه مفيش بيانات.",
+        "readonly": "عرض فقط",
+        "yes": "نعم",
+        "no": "لا",
+        "default": "افتراضي",
+        "stock_item": "صنف مخزني",
+        "service": "خدمة",
+        "saved": "تم حفظ البيانات.",
+        "opening_locked": "استُخدم السجل تشغيليًا؛ الرصيد الافتتاحي مقفول ويُصحح فقط من مسار التسوية المراجع.",
+        "adjust_opening": "تسوية الرصيد الافتتاحي",
+        "adjustment_saved": "تم تسجيل تسوية الرصيد الافتتاحي.",
+        "adjustment_reversed": "تم عكس تسوية الرصيد الافتتاحي.",
+    },
+    "en": {
+        "page_title": "Master data - Hesba",
+        "hub_title": "Master data",
+        "hub_note": "Set up the business records once, then reuse them across purchases, sales, inventory and cashboxes.",
+        "search": "Search",
+        "search_placeholder": "Search by code or name...",
+        "status": "Status",
+        "active": "Active",
+        "inactive": "Inactive",
+        "all": "All",
+        "new": "Add new",
+        "edit": "Edit",
+        "save": "Save",
+        "cancel": "Cancel",
+        "back": "Back",
+        "dashboard": "Dashboard",
+        "language": "العربية",
+        "empty": "No records yet.",
+        "readonly": "View only",
+        "yes": "Yes",
+        "no": "No",
+        "default": "Default",
+        "stock_item": "Stock item",
+        "service": "Service",
+        "saved": "Saved successfully.",
+        "opening_locked": "This record has operational use; its opening balance is locked and can only be corrected through the audited adjustment flow.",
+        "adjust_opening": "Adjust opening balance",
+        "adjustment_saved": "Opening-balance adjustment posted.",
+        "adjustment_reversed": "Opening-balance adjustment reversed.",
+    },
+}
+
+
+ENTITY_CONFIG = {
+    "locations": {
+        "model": Location,
+        "form": LocationForm,
+        "view_permission": "master_data.view_master_data",
+        "manage_permission": "master_data.manage_locations",
+        "title": {"ar": "المخازن والمواقع", "en": "Warehouses & locations"},
+        "singular": {"ar": "مخزن", "en": "Warehouse"},
+        "search_fields": ("location_code", "name_ar", "name_en", "description"),
+        "select_related": (),
+    },
+    "suppliers": {
+        "model": Supplier,
+        "form": SupplierForm,
+        "view_permission": "master_data.view_suppliers",
+        "manage_permission": "master_data.manage_parties",
+        "title": {"ar": "الموردون", "en": "Suppliers"},
+        "singular": {"ar": "مورد", "en": "Supplier"},
+        "search_fields": ("supplier_code", "name", "phone", "whatsapp", "email"),
+        "select_related": (),
+    },
+    "customers": {
+        "model": Customer,
+        "form": CustomerForm,
+        "view_permission": "master_data.view_master_data",
+        "manage_permission": "master_data.manage_parties",
+        "title": {"ar": "العملاء", "en": "Customers"},
+        "singular": {"ar": "عميل", "en": "Customer"},
+        "search_fields": ("customer_code", "name", "phone", "whatsapp", "email"),
+        "select_related": (),
+    },
+    "categories": {
+        "model": Category,
+        "form": CategoryForm,
+        "view_permission": "master_data.view_master_data",
+        "manage_permission": "master_data.manage_items",
+        "title": {"ar": "التصنيفات", "en": "Categories"},
+        "singular": {"ar": "تصنيف", "en": "Category"},
+        "search_fields": ("category_code", "name_ar", "name_en"),
+        "select_related": ("parent",),
+    },
+    "items": {
+        "model": Item,
+        "form": ItemForm,
+        "view_permission": "master_data.view_master_data",
+        "manage_permission": "master_data.manage_items",
+        "title": {"ar": "الأصناف والخدمات", "en": "Items & services"},
+        "singular": {"ar": "صنف / خدمة", "en": "Item / service"},
+        "search_fields": ("item_code", "barcode", "item_name", "size", "color"),
+        "select_related": ("category",),
+    },
+    "cashboxes": {
+        "model": Cashbox,
+        "form": CashboxForm,
+        "view_permission": "cashboxes.view_cashboxes",
+        "manage_permission": "cashboxes.manage_cashboxes",
+        "title": {"ar": "الخزن", "en": "Cashboxes"},
+        "singular": {"ar": "خزنة", "en": "Cashbox"},
+        "search_fields": ("cashbox_code", "name_ar", "name_en", "currency"),
+        "select_related": (),
+    },
+}
+
+
+def _lang(request):
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
+
+
+def _require(user, permission_code):
+    if not user_has_permission(user, permission_code):
+        raise PermissionDenied(f"This screen needs {permission_code}.")
+
+
+ENTITY_TERMS = {"customers": ("customers", "customer"), "suppliers": ("suppliers", "supplier"), "items": ("items", "item")}
+
+
+def _titled(entity, config):
+    """ACT-PROFILE-001: a clinic's customers list is called «المرضى»."""
+
+    if entity not in ENTITY_TERMS:
+        return config
+    from settings_core.vocabulary import active_vocabulary
+
+    words = active_vocabulary()
+    plural, singular = ENTITY_TERMS[entity]
+    return dict(config, title=words[plural], singular=words[singular])
+
+
+def _config(entity):
+    try:
+        return _titled(entity, ENTITY_CONFIG[entity])
+    except KeyError as exc:
+        raise Http404("Unknown master-data area.") from exc
+
+
+def _localized_name(obj, lang):
+    if hasattr(obj, "name_ar"):
+        return (obj.name_en if lang == "en" and obj.name_en else obj.name_ar)
+    return getattr(obj, "name", str(obj))
+
+
+def _yes_no(value, words):
+    return words["yes"] if value else words["no"]
+
+
+def _rows(entity, objects, lang, words, can_view_cost):
+    rows = []
+    for obj in objects:
+        if entity == "locations":
+            values = [
+                obj.location_code,
+                _localized_name(obj, lang),
+                _yes_no(obj.is_receiving_location, words),
+                _yes_no(obj.is_selling_location, words),
+                words["default"] if obj.is_default else "—",
+                words["active"] if obj.active else words["inactive"],
+            ]
+        elif entity == "suppliers":
+            values = [
+                obj.supplier_code,
+                obj.name,
+                obj.phone or "—",
+                obj.whatsapp or "—",
+                words["active"] if obj.active else words["inactive"],
+            ]
+        elif entity == "customers":
+            values = [
+                obj.customer_code,
+                obj.name,
+                obj.phone or "—",
+                display_money(obj.credit_limit),
+                words["active"] if obj.active else words["inactive"],
+            ]
+        elif entity == "categories":
+            values = [
+                obj.category_code,
+                _localized_name(obj, lang),
+                _localized_name(obj.parent, lang) if obj.parent else "—",
+                words["active"] if obj.active else words["inactive"],
+            ]
+        elif entity == "items":
+            values = [
+                obj.item_code,
+                obj.item_name,
+                _localized_name(obj.category, lang) if obj.category else "—",
+                unit_label(obj.unit, lang),
+                words["stock_item"] if obj.is_stock_tracked else words["service"],
+                display_money(obj.default_sale_price),
+            ]
+            if can_view_cost:
+                values.append(display_money(obj.default_purchase_price))
+            values.append(words["active"] if obj.active else words["inactive"])
+        else:
+            values = [
+                obj.cashbox_code,
+                _localized_name(obj, lang),
+                obj.currency,
+                words["default"] if obj.is_default else "—",
+                words["active"] if obj.active else words["inactive"],
+            ]
+        rows.append({"object": obj, "values": values})
+    return rows
+
+
+#: UX Wave 2: what each column is on a phone row (lists.css): "title" (the name, a link), "amount" (the figure on the
+#: opposite side), "meta" (the small second line) or "" (desktop only). The status shows only when it is "inactive".
+ROW_ROLES = {
+    "locations": ("meta", "title", "", "", "", "status"),
+    "suppliers": ("meta", "title", "meta", "", "status"),
+    "customers": ("meta", "title", "meta", "", "status"),
+    "categories": ("meta", "title", "meta", "status"),
+    "items": ("meta", "title", "", "", "", "amount", "status"),
+    "cashboxes": ("meta", "title", "", "", "status"),
+}
+
+
+def _cells(entity, row, can_view_cost):
+    roles = list(ROW_ROLES[entity])
+    if entity == "items" and can_view_cost:
+        roles.insert(-1, "")  # the purchase price: desktop only
+    cells = []
+    for value, role in zip(row["values"], roles):
+        if role == "status":
+            role = "" if row["object"].active else "meta"
+        cells.append({"value": value, "role": role})
+    return cells
+
+
+def new_title(entity, singular, lang):
+    """UX Wave 2: «صنف جديد», «عميل جديد», «خزنة جديدة», and the activity's own words («مريض جديد», «صنف جديد في المنيو»)."""
+
+    if entity == "items":
+        from settings_core.vocabulary import BASE, active_vocabulary, term
+
+        if active_vocabulary().get("item", BASE["item"]) != BASE["item"]:
+            return term("new_item", lang)  # the activity says it its own way
+        return "New item" if lang == "en" else "صنف جديد"
+    word = singular.split(" / ")[0].strip()
+    if lang == "en":
+        return f"New {word.lower()}"
+    return f"{word} {'جديدة' if word.endswith('ة') else 'جديد'}"
+
+
+def _balances(entity, objects):
+    """UX Wave 2: what each customer on the page owes (or each supplier is owed), the same figure as the account card
+    (parties.services.balance), read for the whole page in one aggregate query; nothing stored."""
+
+    from parties.services import balances
+
+    kind = {"customers": "customer", "suppliers": "supplier"}[entity]
+    return balances(kind, objects)
+
+
+def _stock(objects, request):
+    """UX Wave 2: the quantity on hand of each stock item on the page, in one grouped query. Inside an entity only
+    its own locations count, as on the item's stock page; the whole group (no entity chosen) sees the group total."""
+
+    if not user_has_permission(request.user, "inventory.view_stock"):
+        return None
+    from inventory.models import StockMovement
+    from inventory.services import get_items_stock_quantities
+
+    tracked = [obj for obj in objects if obj.is_stock_tracked]
+    if not tracked:
+        return {}
+    return get_items_stock_quantities(tracked, entity_scope.scope(StockMovement.objects.all(), entity_scope.STOCK_MOVEMENT))
+
+
+def _columns(entity, lang, can_view_cost):
+    labels = {
+        "ar": {
+            "code": "الكود",
+            "name": "الاسم",
+            "receiving": "استلام",
+            "selling": "بيع",
+            "default": "افتراضي",
+            "status": "الحالة",
+            "phone": "الهاتف",
+            "whatsapp": "واتساب",
+            "credit_limit": "الحد الائتماني",
+            "parent": "التصنيف الأب",
+            "category": "التصنيف",
+            "unit": "الوحدة",
+            "type": "النوع",
+            "sale_price": "سعر البيع",
+            "purchase_price": "سعر الشراء",
+            "currency": "العملة",
+            "actions": "إجراءات",
+        },
+        "en": {
+            "code": "Code",
+            "name": "Name",
+            "receiving": "Receiving",
+            "selling": "Selling",
+            "default": "Default",
+            "status": "Status",
+            "phone": "Phone",
+            "whatsapp": "WhatsApp",
+            "credit_limit": "Credit limit",
+            "parent": "Parent",
+            "category": "Category",
+            "unit": "Unit",
+            "type": "Type",
+            "sale_price": "Sale price",
+            "purchase_price": "Purchase price",
+            "currency": "Currency",
+            "actions": "Actions",
+        },
+    }[lang]
+    keys = {
+        "locations": ("code", "name", "receiving", "selling", "default", "status"),
+        "suppliers": ("code", "name", "phone", "whatsapp", "status"),
+        "customers": ("code", "name", "phone", "credit_limit", "status"),
+        "categories": ("code", "name", "parent", "status"),
+        "items": ("code", "name", "category", "unit", "type", "sale_price", "status"),
+        "cashboxes": ("code", "name", "currency", "default", "status"),
+    }[entity]
+    keys = list(keys)
+    if entity == "items" and can_view_cost:
+        keys.insert(-1, "purchase_price")
+    return [labels[key] for key in keys]
+
+
+#: AN3: the master-data cards wear the menu's icons, like the reports hub.
+HUB_LOOK = {"customers": ("customers", "teal"), "suppliers": ("suppliers", "gold"), "items": ("items", "teal"),
+            "categories": ("items", "navy"), "locations": ("warehouses", "navy"), "cashboxes": ("cashboxes", "gold")}
+
+
+def master_data_hub(request):
+    lang = _lang(request)
+    words = STRINGS[lang]
+    visible = []
+    from settings_core.module_gate import closed_module
+
+    for key in ENTITY_CONFIG:
+        config = _config(key)
+        if not user_has_permission(request.user, config["view_permission"]):
+            continue
+        if closed_module(f"/master-data/{key}/") is not None:  # AUDIT-1: a switched-off module's list is not offered
+            continue
+        if key == "customers":
+            from reports.navigation import sees_customers
+
+            if not sees_customers(request.user):
+                continue
+        icon, tone = HUB_LOOK.get(key, ("items", "navy"))
+        visible.append(
+            {
+                "key": key,
+                "icon": icon,
+                "tone": tone,
+                "title": config["title"][lang],
+                "count": _scoped_rows(config).filter(active=True).count(),
+                "can_manage": bool(
+                    config["manage_permission"]
+                    and user_has_permission(request.user, config["manage_permission"])
+                ),
+            }
+        )
+    if not visible:
+        raise PermissionDenied("No master-data permission is available.")
+    return render(
+        request,
+        "master_data/hub.html",
+        {
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": words,
+            "areas": visible,
+            "page_title": words["page_title"],
+        },
+    )
+
+
+def _scoped_rows(config):
+    """HG-034: locations and cashboxes are listed and edited inside the entity being worked in."""
+
+    if config["model"] is Cashbox:
+        return entity_scope.cashboxes(Cashbox.objects.all())  # T4: never the cheque boxes, which only the cheques screen runs
+    if config["model"] is Location:
+        return entity_scope.scope(config["model"].objects.all(), entity_scope.LOCATION)
+    return config["model"].objects.all()
+
+
+def entity_list(request, entity):
+    config = _config(entity)
+    _require(request.user, config["view_permission"])
+    if entity == "customers":
+        from reports.navigation import sees_customers
+
+        if not sees_customers(request.user):  # AUDIT-2: patients and students stay with the people who serve them
+            raise PermissionDenied("The customer list is for sales, collection and customer-report users.")
+
+    lang = _lang(request)
+    words = STRINGS[lang]
+    queryset = _scoped_rows(config)
+    if config["select_related"]:
+        queryset = queryset.select_related(*config["select_related"])
+
+    query = request.GET.get("q", "").strip()
+    if query:
+        search = Q()
+        for field in config["search_fields"]:
+            search |= Q(**{f"{field}__icontains": query})
+        queryset = queryset.filter(search)
+
+    status = request.GET.get("status", "active")
+    if status == "active":
+        queryset = queryset.filter(active=True)
+    elif status == "inactive":
+        queryset = queryset.filter(active=False)
+    elif status != "all":
+        status = "active"
+        queryset = queryset.filter(active=True)
+
+    page = page_of(request, queryset)
+
+    can_manage = bool(
+        config["manage_permission"]
+        and user_has_permission(request.user, config["manage_permission"])
+    )
+    can_view_cost = entity == "items" and user_has_permission(
+        request.user, "inventory.view_cost"
+    )
+    can_party_card = user_has_permission(request.user, {"customers": "reports.view_customer_report",
+                                                        "suppliers": "reports.view_supplier_report"}.get(entity, "")) if entity in ("customers", "suppliers") else False
+    # UX Wave 2: after a save the list opens on the record just saved, first and highlighted (view only).
+    from settings_core.saved_toast import saved_pk
+
+    objects = list(page.object_list)
+    saved = None
+    pk = saved_pk(request)
+    if pk is not None:
+        saved = next((obj for obj in objects if obj.pk == pk), None)
+        if saved is None and not request.GET.get("page"):
+            saved = _scoped_rows(config).filter(pk=pk).first()
+            if saved is not None:
+                objects.insert(0, saved)
+    rows = _rows(entity, objects, lang, words, can_view_cost)
+    balances = _balances(entity, objects) if can_party_card else None
+    stock = _stock(objects, request) if entity == "items" else None
+    for row in rows:
+        row["cells"] = _cells(entity, row, can_view_cost)
+        row["saved"] = saved is not None and row["object"].pk == saved.pk
+        if balances is not None:
+            row["balance"] = balances[row["object"].pk]
+        if stock is not None:
+            row["stock"] = stock.get(row["object"].pk)
+    singular = config["singular"][lang]
+
+    return render(
+        request,
+        "master_data/list.html",
+        {
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": words,
+            "entity": entity,
+            "entity_title": config["title"][lang],
+            "singular": config["singular"][lang],
+            "columns": _columns(entity, lang, can_view_cost),
+            "rows": rows,
+            "page": page,
+            "query": query,
+            "status_filter": status,
+            "filter_count": int(bool(query)) + int(status != "active"),
+            "can_manage": can_manage,
+            "new_title": new_title(entity, singular, lang),
+            "show_balance": balances is not None,
+            "show_stock": stock is not None,
+            "saved_actions": [{"url": f"{reverse('master_data:create', kwargs={'entity': entity})}?lang={lang}",
+                               "label": f"+ {new_title(entity, singular, lang)}"}] if saved is not None and can_manage else [],
+            "perms_print_labels": user_has_permission(request.user, "barcode.print_labels"),
+            # AUDIT-1: the account link shows only to those the card opens for.
+            "can_party_card": can_party_card,
+            "page_title": f"{config['title'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
+        },
+    )
+
+
+def entity_create(request, entity):
+    config = _config(entity)
+    if not config["manage_permission"] or config["form"] is None:
+        raise PermissionDenied("This master-data area is currently view-only.")
+    _require(request.user, config["manage_permission"])
+    return _entity_form(request, entity, config, None)
+
+
+def entity_edit(request, entity, pk):
+    config = _config(entity)
+    if not config["manage_permission"] or config["form"] is None:
+        raise PermissionDenied("This master-data area is currently view-only.")
+    _require(request.user, config["manage_permission"])
+    instance = get_object_or_404(_scoped_rows(config), pk=pk)
+    return _entity_form(request, entity, config, instance)
+
+
+VARIANTS_MADE = {"ar": "اتعمل {n} صنف، كل مقاس ولون بكوده وباركوده.", "en": "{n} items made, each size and colour with its own code and barcode."}
+
+
+#: FB-26: the full form these open in a box from an invoice's "+ new …" choice
+POPUP_ENTITIES = {"suppliers", "customers"}
+
+
+def _popup(response):
+    response["X-Frame-Options"] = "SAMEORIGIN"  # framed only by Hesba's own invoice page
+    return response
+
+
+def _record_name(record, lang):
+    return getattr(record, "item_name", None) or _localized_name(record, lang)
+
+
+def _save_with_drug(form, drug, user):
+    """R1: save the item and its drug data in one transaction. Returns the item, or None when ``save_drug`` refused
+    (everything rolled back, the reason on the drug part, the form drawn again as a new item with its values)."""
+
+    record = None
+    try:
+        with transaction.atomic():
+            record = form.save()
+            if drug is not None:
+                drug.save_for(record, user)
+    except ValidationError as exc:
+        if record is None or drug is None:
+            raise
+        add_form_error(drug, exc)
+        form.instance.pk = None
+        form.instance._state.adding = True
+        return None
+    return record
+
+
+def _entity_form(request, entity, config, instance):
+    lang = _lang(request)
+    words = STRINGS[lang]
+    popup = instance is None and entity in POPUP_ENTITIES and request.GET.get("popup") == "1"
+    kwargs = {"lang": lang, "instance": instance}
+    if entity == "items":
+        kwargs["can_view_cost"] = user_has_permission(request.user, "inventory.view_cost")
+    if entity == "cashboxes" and instance is None and request.GET.get("kind") == "bank":
+        kwargs["initial"] = {"kind": "bank"}  # T3: "new bank account" from the banks page
+    drug = None
+    if entity == "items" and instance is None:
+        # R1: a pharmacy's new item carries its drug data and «اختار من القايمة»; None unless the drugs capability is on.
+        from pharmacy.picker import for_new_item
+
+        drug = for_new_item(request, lang)
+        if drug is not None and drug.item_initial:
+            kwargs["initial"] = drug.item_initial
+
+    if request.method == "POST":
+        form = config["form"](request.POST, **kwargs)
+        # R1: the drug part (when drawn) is checked and saved in both branches below, inside the same transaction as
+        # the item(s); a refusal from save_drug rolls everything back and shows on the drug part, values kept.
+        drug_ok = drug is None or drug.is_valid()
+        if form.is_valid() and getattr(form, "offers_variants", False) and form.cleaned_data.get("has_variants"):
+            if drug_ok:
+                step = form
+                try:
+                    with transaction.atomic():
+                        group, created = form.create_variants(request.user)  # AN5: one item per size and colour
+                        if drug is not None:
+                            step = drug
+                            for item in created:
+                                drug.save_for(item, request.user)
+                except ValidationError as exc:
+                    add_form_error(step, exc)
+                else:
+                    messages.success(request, VARIANTS_MADE[lang].format(n=len(created)))
+                    return redirect(f"{reverse('variants:group', args=[group.pk])}?lang={lang}")
+        elif form.is_valid() and drug_ok and (record := _save_with_drug(form, drug, request.user)) is not None:
+            if popup:  # FB-26: hand the new record back to the invoice that opened the box
+                return _popup(render(request, "master_data/popup_done.html", {"lang": lang, "record_id": record.pk, "label": str(record)}))
+            from settings_core.saved_toast import say_saved
+
+            # UX Wave 2: «اتسجل «اسم الصنف»», and the list opens on it.
+            say_saved(request, f"Saved «{_record_name(record, lang)}»" if lang == "en" else f"اتسجل «{_record_name(record, lang)}»")
+            return redirect(f"{reverse('master_data:list', kwargs={'entity': entity})}?lang={lang}&saved={record.pk}")
+    else:
+        form = config["form"](**kwargs)
+    if drug is not None:
+        drug.attach(form)
+
+    target_types = {
+        "customers": OpeningBalanceTarget.CUSTOMER,
+        "suppliers": OpeningBalanceTarget.SUPPLIER,
+        "cashboxes": OpeningBalanceTarget.CASHBOX,
+    }
+    target_type = target_types.get(entity)
+    opening_balance_locked = bool(
+        instance is not None
+        and target_type
+        and target_has_operational_use(target_type, instance)
+    )
+    can_adjust_opening = opening_balance_locked and user_has_permission(
+        request.user, "master_data.adjust_opening_balances"
+    )
+
+    response = render(
+        request,
+        "master_data/form.html",
+        {
+            "popup": popup,
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": words,
+            "entity": entity,
+            "entity_title": config["title"][lang],
+            "singular": config["singular"][lang],
+            "new_title": new_title(entity, config["singular"][lang], lang),
+            "form": form,
+            "drug": drug,
+            "editing": instance is not None,
+            "opening_balance_locked": opening_balance_locked,
+            "can_adjust_opening": can_adjust_opening,
+            "page_title": f"{config['singular'][lang]} - {'Hesba' if lang == 'en' else 'حِسبة'}",
+        },
+    )
+    return _popup(response) if popup else response
+
+
+def _opening_target(entity, pk):
+    target_map = {
+        "customers": (OpeningBalanceTarget.CUSTOMER, Customer),
+        "suppliers": (OpeningBalanceTarget.SUPPLIER, Supplier),
+        "cashboxes": (OpeningBalanceTarget.CASHBOX, Cashbox),
+    }
+    if entity not in target_map:
+        raise Http404("This entity has no opening balance.")
+    target_type, model = target_map[entity]
+    rows = entity_scope.cashboxes(model.objects) if model is Cashbox else model.objects
+    return target_type, get_object_or_404(rows, pk=pk)
+
+
+def opening_balance_adjustment(request, entity, pk):
+    _require(request.user, "master_data.adjust_opening_balances")
+    config = _config(entity)
+    _require(request.user, config["view_permission"])
+    target_type, target = _opening_target(entity, pk)
+    lang = _lang(request)
+    words = STRINGS[lang]
+    if not target_has_operational_use(target_type, target):
+        messages.error(
+            request,
+            "Edit the opening balance directly before operational use."
+            if lang == "en"
+            else "عدّل الرصيد الافتتاحي مباشرة قبل بدء الاستخدام التشغيلي.",
+        )
+        return redirect(
+            f"{reverse('master_data:edit', kwargs={'entity': entity, 'pk': pk})}?lang={lang}"
+        )
+
+    if request.method == "POST" and request.POST.get("action") == "create":
+        form = OpeningBalanceAdjustmentForm(request.POST, lang=lang)
+        if form.is_valid():
+            try:
+                create_opening_balance_adjustment(
+                    target_type=target_type,
+                    target_id=target.pk,
+                    user=request.user,
+                    **form.cleaned_data,
+                )
+            except ValidationError as exc:
+                add_form_error(form, exc)
+            else:
+                messages.success(request, words["adjustment_saved"])
+                return redirect(request.get_full_path())
+    else:
+        form = OpeningBalanceAdjustmentForm(lang=lang)
+
+    adjustments = target.opening_balance_adjustments.select_related(
+        "created_by", "cancelled_by"
+    )
+    return render(
+        request,
+        "master_data/opening_balance_adjustment.html",
+        {
+            "lang": lang,
+            "dir": "ltr" if lang == "en" else "rtl",
+            "words": words,
+            "entity": entity,
+            "target": target,
+            "target_type": target_type,
+            "form": form,
+            "reversal_form": OpeningBalanceReversalForm(lang=lang),
+            "adjustments": adjustments,
+            "page_title": words["adjust_opening"],
+        },
+    )
+
+
+def reverse_opening_balance_adjustment(request, entity, pk, adjustment_id):
+    _require(request.user, "master_data.adjust_opening_balances")
+    target_type, target = _opening_target(entity, pk)
+    adjustment = get_object_or_404(
+        target.opening_balance_adjustments,
+        pk=adjustment_id,
+        target_type=target_type,
+    )
+    lang = _lang(request)
+    if request.method == "POST":
+        form = OpeningBalanceReversalForm(request.POST, lang=lang)
+        if form.is_valid():
+            try:
+                cancel_opening_balance_adjustment(
+                    adjustment.pk, user=request.user, **form.cleaned_data
+                )
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, STRINGS[lang]["adjustment_reversed"])
+    return redirect(
+        f"{reverse('master_data:opening_adjustment', kwargs={'entity': entity, 'pk': pk})}?lang={lang}"
+    )
+
+
+def category_quick_create(request):
+    """FB-TYPES: "+ new category" from inside the item form; an existing name is reused, not doubled."""
+
+    from django.http import JsonResponse
+
+    from config.numbering import next_in_series
+
+    lang = _lang(request)
+    if not user_has_permission(request.user, "master_data.manage_items"):
+        return JsonResponse({"ok": False, "error": "Not allowed."}, status=403)
+    name = (request.POST.get("name") or "").strip()[:255]
+    if request.method != "POST" or not name:
+        return JsonResponse({"ok": False, "error": "اكتب اسم التصنيف." if lang == "ar" else "Enter the category's name."}, status=400)
+    category = Category.objects.filter(Q(name_ar__iexact=name) | Q(name_en__iexact=name)).first()
+    if category is None:
+        category = Category.objects.create(category_code=next_in_series(Category, "category_code", "CAT-"), name_ar=name, active=True)
+    elif not category.active:
+        category.active = True
+        category.save(update_fields=["active"])
+    return JsonResponse({"ok": True, "id": category.pk, "label": (category.name_en or category.name_ar) if lang == "en" else category.name_ar})
+
+
+QUICK_ITEM_WORDS = {
+    "ar": {"denied": "إضافة صنف محتاجة صلاحية إدارة الأصناف.", "bad": "راجع بيانات الصنف."},
+    "en": {"denied": "Adding an item needs the manage-items permission.", "bad": "Check the item's details."},
+}
+
+
+def item_quick_create(request):
+    """FB-QUICKADD: a new item from inside an invoice (or any document line), without leaving it.
+
+    The same form, validation and automatic code as the items screen, answered
+    as JSON so the line picker can take the new item straight away."""
+
+    from django.http import JsonResponse
+
+    lang = _lang(request)
+    words = QUICK_ITEM_WORDS[lang]
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "POST only"}, status=405)
+    if not user_has_permission(request.user, "master_data.manage_items"):
+        return JsonResponse({"ok": False, "error": words["denied"]}, status=403)
+    can_view_cost = user_has_permission(request.user, "inventory.view_cost")
+    data = {
+        "item_code": "", "barcode": request.POST.get("barcode", ""), "item_name": request.POST.get("item_name", ""),
+        "category": request.POST.get("category", ""), "size": "", "color": "", "unit": request.POST.get("unit", "") or "unit",
+        "default_sale_price": request.POST.get("default_sale_price", "") or "0",
+        "default_purchase_price": request.POST.get("default_purchase_price", "") or "0",
+        "min_stock": "0", "is_stock_tracked": "on" if request.POST.get("is_stock_tracked") in ("on", "1", "true") else "", "active": "on",
+    }
+    form = ItemForm(data, lang=lang, can_view_cost=can_view_cost)
+    if not form.is_valid():
+        errors = {(form.fields[name].label if name in form.fields else name): [str(message) for message in messages_]
+                  for name, messages_ in form.errors.items()}
+        return JsonResponse({"ok": False, "error": words["bad"], "errors": errors}, status=400)
+    item = form.save()
+    return JsonResponse({"ok": True, "item": {
+        "id": item.pk, "code": item.item_code, "barcode": item.barcode, "label": item.search_label,
+        "sale_price": str(item.default_sale_price), "purchase_price": str(item.default_purchase_price) if can_view_cost else "",
+        "is_stock_tracked": item.is_stock_tracked}})

@@ -1,0 +1,521 @@
+from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.db.models import Q
+from django.shortcuts import get_object_or_404, redirect, render
+
+from barcode.services import item_catalog, scan_words
+from master_data.quick import offer_quick_add
+from settings_core.capabilities import capability_enabled
+from taxes.services import create_purchase_draft_with_tax, rates_by_item, vat_enabled
+from batches.services import attach_purchase_batches
+from serials.services import attach_purchase_serials, prepare_purchase_serials
+from units.services import convert_lines, units_catalog
+from approvals.gate import held
+from permissions.decorators import require_permission
+from entities import scope as entity_scope
+from permissions.services import user_has_permission
+from config.return_table import chosen_lines, return_table
+
+from .forms import (
+    PurchaseDraftForm,
+    PurchaseLineFormSet,
+    PurchaseReturnForm,
+    PurchaseReturnTableFormSet,
+    PurchaseReturnReversalForm,
+    SupplierPaymentForm,
+)
+from .models import PurchaseInvoice, PurchaseReturn, SupplierPayment
+from .services import (
+    cancel_posted_purchase_invoice,
+    cancel_purchase_return,
+    cancel_supplier_payment,
+    create_purchase_return,
+    post_purchase_invoice,
+    record_supplier_payment,
+)
+from config.form_errors import add_form_error
+from config.paging import page_of
+from batches.words import expiry_only
+from settings_core.saved_toast import payment_actions
+
+
+STRINGS = {
+    "ar": {
+        "page_title": "المشتريات",
+        "invoices": "فواتير الشراء",
+        "new": "فاتورة شراء جديدة",
+        "search": "بحث",
+        "empty": "مفيش فواتير شراء بالفلاتر دي.",
+        "save_draft": "حفظ المسودة",
+        "lines": "بنود الفاتورة",
+        "post": "ترحيل الفاتورة",
+        "cancel": "إلغاء وعكس الفاتورة",
+        "back": "العودة للمشتريات",
+        "saved": "تم حفظ مسودة فاتورة الشراء.",
+        "overpaid": "المدفوع أكبر من إجمالي الفاتورة",
+        "posted": "تم ترحيل فاتورة الشراء.",
+        "cancelled": "تم إلغاء فاتورة الشراء وعكس آثارها.",
+        "language": "English",
+        "dashboard": "لوحة القيادة",
+        "all": "كل الحالات",
+        "payments": "مدفوعات الموردين",
+        "new_payment": "سداد جديد لمورد",
+        "payment_saved": "تم تسجيل سداد المورد.",
+        "payment_cancelled": "تم إلغاء سداد المورد وعكس آثاره.",
+        "new_return": "مرتجع شراء جديد",
+        "return_saved": "تم ترحيل مرتجع الشراء.",
+        "return_reversed": "تم عكس مرتجع الشراء.",
+    },
+    "en": {
+        "page_title": "Purchases",
+        "invoices": "Purchase invoices",
+        "new": "New purchase invoice",
+        "search": "Search",
+        "empty": "No matching purchase invoices.",
+        "save_draft": "Save draft",
+        "lines": "Invoice lines",
+        "post": "Post invoice",
+        "cancel": "Cancel and reverse invoice",
+        "back": "Back to purchases",
+        "saved": "Purchase draft saved.",
+        "overpaid": "Paid now is more than the invoice total",
+        "posted": "Purchase invoice posted.",
+        "cancelled": "Purchase invoice cancelled and reversed.",
+        "language": "العربية",
+        "dashboard": "Dashboard",
+        "all": "All statuses",
+        "payments": "Supplier payments",
+        "new_payment": "New supplier payment",
+        "payment_saved": "Supplier payment recorded.",
+        "payment_cancelled": "Supplier payment cancelled and reversed.",
+        "new_return": "New purchase return",
+        "return_saved": "Purchase return posted.",
+        "return_reversed": "Purchase return reversed.",
+    },
+}
+
+
+def _lang(request):
+    return "en" if request.GET.get("lang") == "en" or request.POST.get("lang") == "en" else "ar"
+
+
+def _party_initial(request, field):
+    """PARTY-001: "New invoice" / "Collect" from a party card pre-selects that party."""
+
+    value = request.GET.get(field) or ""
+    return {field: value} if value.isdigit() else None
+
+
+def _reorder_initial(request):
+    """REORDER-001: lines suggested by the "buy soon" screen, for the owner to review."""
+
+    from decimal import Decimal, InvalidOperation
+
+    from master_data.models import Item
+
+    items = request.GET.getlist("reorder_item")[:15]
+    quantities, prices = request.GET.getlist("reorder_qty"), request.GET.getlist("reorder_price")
+    found = {str(item.pk): item for item in Item.objects.filter(pk__in=[pk for pk in items if pk.isdigit()], active=True)}
+    lines = []
+    for index, pk in enumerate(items):
+        item = found.get(pk)
+        try:
+            quantity = Decimal(quantities[index])
+            price = Decimal(prices[index])
+        except (IndexError, InvalidOperation):
+            continue
+        if item is not None and quantity > 0 and price >= 0:
+            lines.append({"item": item.pk, "quantity": quantity, "unit_purchase_price": price, "line_discount_amount": Decimal("0")})
+    return lines or None
+
+
+def _context(request, **extra):
+    lang = _lang(request)
+    context = {
+        "lang": lang,
+        "dir": "ltr" if lang == "en" else "rtl",
+        "words": STRINGS[lang],
+        "section": "purchases",
+        "page_title": STRINGS[lang]["page_title"],
+    }
+    context.update(extra)
+    return context
+
+
+@require_permission("purchases.view_purchase_invoices")
+def invoice_list(request):
+    queryset = entity_scope.scope(PurchaseInvoice.objects.select_related(
+        "supplier", "receiving_location", "cashbox"
+    ), entity_scope.PURCHASE_INVOICE)
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "")
+    if query:
+        queryset = queryset.filter(
+            Q(invoice_number__icontains=query) | Q(supplier__name__icontains=query)
+        )
+    if status in {"draft", "posted", "cancelled"}:
+        queryset = queryset.filter(status=status)
+    else:
+        status = ""
+    page = page_of(request, queryset)
+    return render(
+        request,
+        "purchases/list.html",
+        _context(request, page=page, query=query, status_filter=status,
+                 can_create=user_has_permission(request.user, "purchases.create_purchase_invoice"),
+                 photo_link=_photo_link(request.user)),
+    )
+
+
+def _photo_link(user):
+    """A3 (HG-081): «فاتورة من صورة», only while its capability is on and only for someone who may use it. Expired waiting
+    photos are pruned here too (one indexed delete), so they go even while the feature is switched off."""
+
+    from ai import invoice_photo
+
+    invoice_photo.prune()
+    return invoice_photo.is_on() and invoice_photo.can_use(user)
+
+
+@require_permission("purchases.create_purchase_invoice")
+def invoice_create(request):
+    from orders.purchasing import link_receipt, order_for_receipt, receipt_initial
+
+    lang = _lang(request)
+    from_order = order_for_receipt(request.user, request.POST.get("order") if request.method == "POST" else request.GET.get("order"))  # T2
+    if request.method == "POST":
+        form = PurchaseDraftForm(request.POST, lang=lang)
+        if vat_enabled():
+            del form.fields["tax_amount"]  # TAX-002: input VAT per line from item rates
+        line_formset = PurchaseLineFormSet(request.POST, prefix="lines", form_kwargs={"lang": lang})
+        if form.is_valid() and line_formset.is_valid():
+            line_data = [
+                row.cleaned_data
+                for row in line_formset.forms
+                if row.cleaned_data.get("item") is not None
+            ]
+            try:
+                line_data = convert_lines(line_data, "unit_purchase_price", lang)  # UNITS-001
+                line_data = prepare_purchase_serials(line_data, lang)  # SERIAL-001
+                def create():
+                    invoice = create_purchase_draft_with_tax(form.cleaned_data, line_data, request.user)
+                    attach_purchase_batches(invoice, line_data, request.user)  # BATCH-001
+                    attach_purchase_serials(invoice, line_data, request.user)
+                    if from_order is not None:  # T2: this invoice receives goods ordered on the purchase order
+                        link_receipt(from_order, invoice, request.user, lang)
+                    return invoice
+
+                invoice = form.create_with_fresh_number(create)  # UI-TRACK F12: atomic, retried on a taken PI- number
+            except ValidationError as exc:
+                add_form_error(form, exc, overrides={"remaining_due": STRINGS[lang]["overpaid"]})
+            else:
+                # R2-6: "save and post" in one press; UI-TRACK F23: one message, "posted", unless posting failed.
+                if request.POST.get("then") == "post":
+                    _post_now(request, invoice.pk, lang, saved_first=True)
+                else:
+                    messages.success(request, STRINGS[lang]["saved"])
+                return redirect(f"/purchases/{invoice.pk}/?lang={lang}")
+    else:
+        initial = _party_initial(request, "supplier") or {}
+        line_initial = _reorder_initial(request)
+        copy = _copy_of(request) if from_order is None else None
+        if copy is not None:  # FB-27 (undo): a cancelled purchase back as a new draft
+            copy_header, line_initial = _copy_initial(copy, lang)
+            initial.update(copy_header)
+            # Codex #284: the cancelled purchase gave its order's quantities back; the new one receives them again
+            from_order = order_for_receipt(request.user, _copy_order(copy))
+        elif from_order is not None:  # T2: what is still to come on the order, at the order's prices
+            order_header, line_initial = receipt_initial(from_order, lang)
+            initial.update({key: getattr(value, "pk", value) for key, value in order_header.items()})
+        form = PurchaseDraftForm(lang=lang, initial=initial)
+        if vat_enabled():
+            del form.fields["tax_amount"]
+        line_formset = PurchaseLineFormSet(prefix="lines", form_kwargs={"lang": lang}, initial=line_initial)
+    offer_quick_add(form, request.user, lang)  # FB2-QUICKPARTY: + new supplier / customer / warehouse
+    return render(
+        request,
+        "purchases/form.html",
+        _context(request, form=form, line_formset=line_formset, can_post=True, item_catalog=item_catalog(sale_prices=False, purchase_prices=True), scan_words=scan_words(lang), tax_rates=rates_by_item(), units=units_catalog(purchase=True), from_order=from_order,
+                 from_order_url=f"/purchases/orders/{from_order.pk}/" if from_order else ""),
+    )
+
+
+def _fits_form(invoice):
+    """Codex #284: the invoice form takes a limited number of lines; a longer cancelled invoice (a big till sale) is not
+    offered to be made again here, as saving it would fail."""
+
+    return invoice.lines.count() <= PurchaseLineFormSet.max_num
+
+
+def _copy_of(request):
+    raw = request.GET.get("copy", "")
+    if not raw.isdigit() or not user_has_permission(request.user, "purchases.view_purchase_invoices"):  # Codex #284: copying shows the invoice
+        return None
+    invoice = entity_scope.scope(PurchaseInvoice.objects.prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE).filter(pk=raw, status="cancelled").first()
+    return invoice if invoice is not None and _fits_form(invoice) else None
+
+
+def _copy_order(invoice):
+    """The purchase order the cancelled purchase received, if any."""
+
+    from orders.models import OrderReceiptLine
+
+    return OrderReceiptLine.objects.filter(purchase_line__invoice=invoice).values_list("order_line__order_id", flat=True).first()
+
+
+def _copy_initial(invoice, lang):
+    """FB-27 (Ahmed's note #27, undo): a cancelled purchase made again in one step, as a new draft to check and save.
+
+    Codex #284: a tax typed by hand is kept, and each line keeps its batch number, expiry date and serials (the
+    cancelled purchase's no longer count, so the new one registers them again, checked when it is saved)."""
+
+    from batches.models import Batch
+
+    header = {"supplier": invoice.supplier_id, "receiving_location": invoice.receiving_location_id, "cashbox": invoice.cashbox_id,
+              "discount_amount": invoice.discount_amount, "tax_amount": invoice.tax_amount, "paid_now": invoice.paid_now,
+              "notes": (f"Made again from cancelled invoice {invoice.invoice_number}" if lang == "en" else f"معمولة تاني من الفاتورة الملغية {invoice.invoice_number}")}
+    batches = {batch.purchase_line_id: batch for batch in Batch.objects.filter(purchase_line__invoice=invoice)}
+    lines = []
+    for line in invoice.lines.order_by("line_number"):
+        batch = batches.get(line.pk)
+        lines.append({"item": line.item, "description": line.description, "quantity": line.quantity, "unit_purchase_price": line.unit_purchase_price,
+                      "line_discount_amount": line.line_discount_amount, "batch_no": batch.batch_no if batch else "",
+                      "expiry_date": batch.expiry_date if batch else None,
+                      "serials": ", ".join(line.serials.order_by("pk").values_list("serial", flat=True))})
+    return header, lines
+
+
+@require_permission("purchases.view_purchase_invoices")
+def invoice_detail(request, pk):
+    invoice = get_object_or_404(
+        entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item", "returns"), entity_scope.PURCHASE_INVOICE),
+        pk=pk,
+    )
+    return render(
+        request,
+        "purchases/detail.html",
+        _context(
+            request,
+            expiry_only=expiry_only(),  # AN8: a supermarket reads the expiry date, not a lot number
+            invoice=invoice,
+            can_post=user_has_permission(request.user, "purchases.create_purchase_invoice"),
+            can_copy=invoice.status == "cancelled" and _fits_form(invoice),
+            can_return=user_has_permission(request.user, "purchases.return_purchase"),
+            # FB2-LABELS: goods just received usually need their price labels.
+            can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels"),
+            photos=_photos(invoice, request.user),  # A3 (HG-081): the supplier's invoice photo it was made from
+        ),
+    )
+
+
+def _photos(invoice, user):
+    """A3 (HG-081): the photos kept on this invoice (S1 attachments, without their bytes), as far as ``user`` may see them."""
+
+    from django.core.exceptions import PermissionDenied
+
+    from attachments.services import OwnerNotFound, attachments_for
+
+    try:
+        return list(attachments_for(invoice, user))
+    except (PermissionDenied, OwnerNotFound):
+        return []
+
+
+@require_permission("purchases.create_purchase_invoice")
+def invoice_post(request, pk):
+    if request.method != "POST":
+        return redirect("purchases:detail", pk=pk)
+    lang = _lang(request)
+    entity_scope.get_or_404(PurchaseInvoice, entity_scope.PURCHASE_INVOICE, pk=pk)
+    _post_now(request, pk, lang)
+    return redirect(f"/purchases/{pk}/?lang={lang}")
+
+
+def _post_now(request, pk, lang, saved_first=False):
+    """Post the invoice; say so, or say why not. True when it posted."""
+
+    try:
+        post_purchase_invoice(pk, request.user)
+    except ValidationError as exc:
+        # Codex #233: one message either way; after "save and post" it also says the draft was kept.
+        reason = "; ".join(exc.messages)
+        messages.error(request, f"{STRINGS[lang]['saved']}; {reason}" if saved_first else reason)  # "; " so each part is still translated (ui_messages)
+        return False
+    messages.success(request, STRINGS[lang]["posted"])
+    return True
+
+
+@require_permission("purchases.return_purchase")
+def invoice_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("purchases:detail", pk=pk)
+    lang = _lang(request)
+    invoice = entity_scope.get_or_404(PurchaseInvoice, entity_scope.PURCHASE_INVOICE, pk=pk)
+    if held(request, "purchases.cancel_invoice", pk, {"reason": request.POST.get("reason", "")}, invoice.invoice_number):  # FB-27
+        return redirect(f"/purchases/{pk}/?lang={lang}")
+    try:
+        cancel_posted_purchase_invoice(pk, request.user, request.POST.get("reason", ""))
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    else:
+        messages.success(request, STRINGS[lang]["cancelled"])
+    return redirect(f"/purchases/{pk}/?lang={lang}")
+
+
+@require_permission("purchases.return_purchase")
+def return_create(request, pk):
+    invoice = get_object_or_404(
+        entity_scope.scope(PurchaseInvoice.objects.select_related("supplier", "receiving_location", "cashbox").prefetch_related("lines__item"), entity_scope.PURCHASE_INVOICE),
+        pk=pk,
+    )
+    lang = _lang(request)
+    form = PurchaseReturnForm(request.POST or None, lang=lang)
+    # UI-TRACK F15: one row per line of the invoice, not five empty pickers.
+    line_formset = return_table(PurchaseReturnTableFormSet, invoice, request.POST or None, lang, "purchase_return")
+    if request.method == "POST" and form.is_valid() and line_formset.is_valid():
+        line_data = chosen_lines(line_formset)
+        try:
+            purchase_return = form.create_with_fresh_number(lambda: create_purchase_return(  # UI-TRACK F09
+                source_invoice_id=invoice.pk,
+                lines=line_data,
+                user=request.user,
+                **form.cleaned_data,
+            ))
+        except ValidationError as exc:
+            add_form_error(form, exc)
+        else:
+            messages.success(request, STRINGS[lang]["return_saved"])
+            return redirect(f"/purchases/returns/{purchase_return.pk}/?lang={lang}")
+    return render(
+        request,
+        "purchases/return_form.html",
+        _context(request, invoice=invoice, form=form, line_formset=line_formset),
+    )
+
+
+@require_permission("purchases.view_purchase_invoices")
+def return_detail(request, pk):
+    purchase_return = get_object_or_404(
+        PurchaseReturn.objects.select_related(
+            "source_invoice__supplier", "source_invoice__receiving_location", "source_invoice__cashbox"
+        ).prefetch_related("lines__source_line__item").filter(entity_scope.q(entity_scope.PURCHASE_RETURN)),
+        pk=pk,
+    )
+    return render(
+        request,
+        "purchases/return_detail.html",
+        _context(
+            request,
+            purchase_return=purchase_return,
+            can_reverse=user_has_permission(request.user, "purchases.return_purchase"),
+            reversal_form=PurchaseReturnReversalForm(lang=_lang(request)),
+        ),
+    )
+
+
+@require_permission("purchases.return_purchase")
+def return_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("purchases:return_detail", pk=pk)
+    lang = _lang(request)
+    purchase_return = entity_scope.get_or_404(PurchaseReturn, entity_scope.PURCHASE_RETURN, pk=pk)
+    form = PurchaseReturnReversalForm(request.POST, lang=lang)
+    if form.is_valid() and held(request, "purchases.reverse_return", pk, form.cleaned_data, purchase_return.return_number):  # FB-27
+        return redirect(f"/purchases/returns/{pk}/?lang={lang}")
+    if form.is_valid():
+        try:
+            cancel_purchase_return(pk, user=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, STRINGS[lang]["return_reversed"])
+    else:
+        messages.error(request, "; ".join(error for errors in form.errors.values() for error in errors))
+    return redirect(f"/purchases/returns/{pk}/?lang={lang}")
+
+
+@require_permission("purchases.pay_supplier")
+def payment_list(request):
+    queryset = entity_scope.scope(SupplierPayment.objects.select_related("supplier", "cashbox", "created_by"), entity_scope.SUPPLIER_PAYMENT)
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "")
+    if query:
+        queryset = queryset.filter(
+            Q(payment_number__icontains=query) | Q(supplier__name__icontains=query)
+        )
+    if status in {"posted", "cancelled"}:
+        queryset = queryset.filter(status=status)
+    else:
+        status = ""
+    lang = _lang(request)
+    page = page_of(request, queryset)
+    return render(
+        request,
+        "payments/list.html",
+        _context(
+            request,
+            page=page,
+            query=query,
+            status_filter=status,
+            saved_actions=payment_actions(request, lang, "supplier"),  # UX Wave 2: the receipt and the next one
+            title=STRINGS[lang]["payments"],
+            new_label=STRINGS[lang]["new_payment"],
+            create_url="purchases:payment_create",
+            cancel_url="purchases:payment_cancel",
+            party_kind="supplier",
+        ),
+    )
+
+
+@require_permission("purchases.pay_supplier")
+def payment_create(request):
+    lang = _lang(request)
+    if request.method == "POST":
+        form = SupplierPaymentForm(request.POST, lang=lang)
+        if form.is_valid():
+            try:
+                payment = form.create_with_fresh_number(lambda: record_supplier_payment(user=request.user, **form.cleaned_data))  # UI-TRACK F08
+            except ValidationError as exc:
+                add_form_error(form, exc)
+            else:
+                from settings_core.saved_toast import amount_text, say_saved
+
+                say_saved(request, (f"Paid {amount_text(payment.amount, lang)} to «{payment.supplier.name}» ({payment.payment_number})" if lang == "en"
+                                    else f"اتسجل دفع {amount_text(payment.amount, lang)} لـ«{payment.supplier.name}» ({payment.payment_number})"))
+                return redirect(f"/purchases/payments/?lang={lang}&saved={payment.pk}")
+    else:
+        form = SupplierPaymentForm(lang=lang, initial=_party_initial(request, "supplier"))
+    from parties.views import due_on_form, may_see_balance
+
+    return render(
+        request,
+        "payments/form.html",
+        _context(
+            request,
+            form=form,
+            title=STRINGS[lang]["new_payment"],
+            back_url="purchases:payments",
+            # UX Wave 2: «مستحق ليه …» with a «المبلغ كله» chip, as on the collection form.
+            party_kind="supplier",
+            show_due=may_see_balance(request.user, "supplier"),
+            due=due_on_form(request.user, "supplier", form["supplier"].value(), form.fields["supplier"].queryset),
+            submit_label="Record the payment" if lang == "en" else "سجّل الدفعة",
+        ),
+    )
+
+
+@require_permission("purchases.pay_supplier")
+def payment_cancel(request, pk):
+    if request.method != "POST":
+        return redirect("purchases:payments")
+    lang = _lang(request)
+    payment = entity_scope.get_or_404(SupplierPayment, entity_scope.SUPPLIER_PAYMENT, pk=pk)
+    if held(request, "purchases.cancel_payment", pk, {"reason": request.POST.get("reason", "")}, payment.payment_number):  # FB-27
+        return redirect(f"/purchases/payments/?lang={lang}")
+    try:
+        cancel_supplier_payment(pk, request.user, request.POST.get("reason", ""))
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+    else:
+        messages.success(request, STRINGS[lang]["payment_cancelled"])
+    return redirect(f"/purchases/payments/?lang={lang}")

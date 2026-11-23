@@ -1,0 +1,28 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1"><link rel="stylesheet" href="{% static 'hesba/css/projects_requests.css' %}?v=c7-1">{% endblock %}
+{% block operation_content %}
+{# Contracting C7 (HG-125): draft or edit a purchase request. A draft is only a list: nothing is ordered until it is approved. #}
+{% include "projects/_head.html" %}
+<section class="prj-card sr-formhead"><h2 class="prj-h">{{ heading }}</h2><p class="sr-hint">{{ pw.form_intro }}</p></section>
+{% if closed %}<div class="op-message" data-project-closed>{{ pw.closed }}</div>
+{% else %}
+{% if form_error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ form_error }}</div>{% endif %}
+<form class="op-form hs-form sr-form prq-form" method="post" data-request-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<div class="prj-card sr-block">
+<div class="op-field"><label for="prq-needed">{{ pw.f_needed_by }}</label><input id="prq-needed" type="date" name="needed_by" value="{{ form.needed_by }}"></div>
+<div class="op-field"><label for="prq-note">{{ pw.f_note }}</label><input id="prq-note" name="note" maxlength="255" value="{{ form.note }}" placeholder="{{ pw.f_note_ph }}" autocomplete="off"></div>
+</div>
+<div class="prj-card sr-block">
+<div class="prq-lines" data-sr-rows="line" data-request-lines><h3 class="sr-sub prq-lines__title">{{ pw.lines }}</h3>
+{% for row in form.rows %}{% include "projects/_request_line.html" with row=row %}{% endfor %}
+<button class="op-secondary sr-add" type="button" data-sr-add="line"{% if form.rows|length >= max_lines %} hidden{% endif %}>{{ pw.add_row }}</button>
+<template data-sr-template="line">{% include "projects/_request_line.html" with row=None %}</template>
+<datalist id="prq-units"><option value="شيكارة"><option value="طن"><option value="م³"><option value="م²"><option value="م.ط"><option value="عدد"><option value="لوح"></datalist>
+</div>
+</div>
+<div class="op-form-actions hs-sticky-save"><button class="op-primary" type="submit" data-save>{{ pw.save }}</button><a class="op-secondary" href="{{ back_url }}">{{ pw.cancel }}</a></div>
+</form>
+<script src="{% static 'hesba/js/site_report.js' %}?v=c2-1" defer></script>
+{% endif %}
+{% endblock %}

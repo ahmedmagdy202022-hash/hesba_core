@@ -1,0 +1,75 @@
+{% load static %}{% comment %}
+Shell for the signed-in application screens.
+
+Every template before this one carried its own <head>, so a change to the header
+or the language switch had to be repeated in each. Screens added from here
+extend this instead.
+
+Note that the stylesheets key off body[data-lang], not [dir]: setting direction
+alone leaves a page unstyled, so the language script below stamps both and must
+not be dropped.
+{% endcomment %}<!doctype html>
+<html lang="{{ lang|default:'ar' }}" dir="{{ dir|default:'rtl' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ page_title }}{% endblock %}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}?v=w4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/buttons.css' %}?v=w4-1">
+{% block styles %}{% endblock %}
+<link rel="stylesheet" href="{% static 'hesba/css/lists.css' %}?v=w4-2">
+<link rel="stylesheet" href="{% static 'hesba/css/table_cards.css' %}?v=w4-1">
+<link rel="stylesheet" href="{% static 'hesba/css/form_required.css' %}?v=req-2">
+<link rel="stylesheet" href="{% static 'hesba/css/form_controls.css' %}?v=w4-2">
+<link rel="stylesheet" href="{% static 'hesba/css/datepicker.css' %}?v=ux2-1">
+<link rel="stylesheet" href="{% static 'hesba/css/pager.css' %}?v=w4-1">
+{% if report_tools %}<link rel="stylesheet" href="{% static 'hesba/css/report_tools.css' %}?v=w4-1">{% endif %}
+</head>
+<body class="{% block body_class %}{% endblock %}" data-lang="{{ lang|default:'ar' }}">
+{% block content %}{% endblock %}
+<script src="{% static 'hesba/js/quick_option.js' %}?v=fb26-form" defer></script>
+<script src="{% static 'hesba/js/price_markup.js' %}?v=r1-1" defer></script>
+<script src="{% static 'hesba/js/discount_percent.js' %}?v=ux1-2" defer></script>
+{% if report_tools %}{% include "partials/report_tools.html" %}<script src="{% static 'hesba/js/report_tools.js' %}?v=ux2-3" defer></script>{% endif %}
+
+<script>
+(function(){
+  var stored = localStorage.getItem('hesba_lang');
+  var params = new URLSearchParams(window.location.search);
+  var requested = params.get('lang');
+  var lang = requested === 'en' ? 'en' : (requested === 'ar' ? 'ar' : (stored === 'en' ? 'en' : 'ar'));
+
+  // The server already rendered one language. Only reload when the remembered
+  // choice disagrees, so the usual case costs nothing.
+  if (!requested && lang !== document.body.dataset.lang) {
+    params.set('lang', lang);
+    window.location.replace(window.location.pathname + '?' + params.toString());
+    return;
+  }
+
+  localStorage.setItem('hesba_lang', lang);
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  document.body.dataset.lang = lang;
+
+  document.querySelectorAll('[data-lang-toggle]').forEach(function(button){
+    button.addEventListener('click', function(){
+      var next = lang === 'ar' ? 'en' : 'ar';
+      localStorage.setItem('hesba_lang', next);
+      var url = new URLSearchParams(window.location.search);
+      url.set('lang', next);
+      window.location.assign(window.location.pathname + '?' + url.toString());
+    });
+  });
+})();
+</script>
+<script src="{% static 'hesba/js/table_cards.js' %}?v=ux3-1" defer></script>
+<script src="{% static 'hesba/js/lists.js' %}?v=ux2-1" defer></script>
+<script src="{% static 'hesba/js/datepicker.js' %}?v=date-8" defer></script>
+<script src="{% static 'hesba/js/confirm_danger.js' %}?v=fb27-1" defer></script>
+<script src="{% static 'hesba/js/submit_once.js' %}?v=once-1" defer></script>
+{% block scripts %}{% endblock %}
+{% include "partials/demo_feedback.html" %}
+</body>
+</html>

@@ -1,0 +1,93 @@
+"""SHARE-001: a link the customer can open without an account.
+
+The link carries a signed token (Django signing with the SECRET_KEY and its
+own salt), so it cannot be guessed or edited to reach another document, and
+it expires after SHARE_LINK_DAYS (default 60). Nothing is stored. The page is
+read-only, shows what the printed document shows (never cost or profit) and a
+cancelled document shows its "cancelled" watermark.
+"""
+
+from urllib.parse import quote
+
+from django.conf import settings
+from django.core import signing
+from django.urls import reverse
+
+from reports.aging import whatsapp_number
+
+
+SALT = "hesba.share.v1"
+KINDS = ("sales_invoice", "sales_return", "customer_payment", "customer_statement", "sales_quote", "work_order", "appointment",
+         "project")  # C10 (HG-135): the owner's project page, always bound to the project's customer
+
+
+def max_age():
+    return getattr(settings, "SHARE_LINK_DAYS", 60) * 86400
+
+
+def make_token(kind, pk, owner=None):
+    """``owner`` (a customer's id) binds the link to one person: a page whose object can change hands (M3: an
+    appointment moved to another patient) reads it back with ``read_token_data`` and refuses anyone else's link."""
+
+    if kind not in KINDS:
+        raise ValueError(kind)
+    data = {"k": kind, "id": int(pk)}
+    if owner is not None:
+        data["o"] = int(owner)
+    return signing.dumps(data, salt=SALT, compress=True)
+
+
+def read_token_data(token):
+    """The token's content (``k``, ``id``, and ``o`` when it was bound to a person), or None for a forged, altered or
+    expired token."""
+
+    try:
+        data = signing.loads(token, salt=SALT, max_age=max_age())
+    except signing.BadSignature:
+        return None
+    if not isinstance(data, dict) or data.get("k") not in KINDS or not isinstance(data.get("id"), int):
+        return None
+    return data
+
+
+def read_token(token):
+    """(kind, pk) or None for a forged, altered or expired token."""
+
+    data = read_token_data(token)
+    return (data["k"], data["id"]) if data is not None else None
+
+
+def share_url(request, kind, pk, lang="ar"):
+    return request.build_absolute_uri(f"{reverse('share_document', args=[make_token(kind, pk)])}?lang={lang}")
+
+
+def public_url(kind, pk, lang="ar", owner=None):
+    """The link built from settings.PUBLIC_BASE_URL (Ahmed's standing rule), never from the request's host.
+
+    ``None`` when PUBLIC_BASE_URL is not set: a link with no address is not one to send."""
+
+    base = getattr(settings, "PUBLIC_BASE_URL", "")
+    if not base:
+        return None
+    return f"{base.rstrip('/')}{reverse('share_document', args=[make_token(kind, pk, owner)])}?lang={lang}"
+
+
+def whatsapp_link(phone, text):
+    number = whatsapp_number(phone)
+    return f"https://wa.me/{number}?text={quote(text)}" if number else f"https://wa.me/?text={quote(text)}"
+
+
+def expired_page(request, lang="ar"):
+    """The page for a link that is forged, altered or past its days. It knows no order, so it shows only the shop's own identity."""
+
+    from django.shortcuts import render
+
+    from .company import company_details
+
+    company = company_details()
+    response = render(request, "printing/share_expired.html", {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "company": company,
+                                                              "phone": company["phone"], "whatsapp": whatsapp_number(company["phone"])}, status=404)
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["Cache-Control"] = "no-store"
+    response["Referrer-Policy"] = "same-origin"  # the stricter "no referrer" policy makes browsers post "Origin: null" (CSRF 403)
+    return response

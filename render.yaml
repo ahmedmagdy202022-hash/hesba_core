@@ -1,0 +1,57 @@
+# DEPLOY-002: one Hesba client on Render's free web service, with the
+# client's own Supabase database (docs/SUPABASE_SETUP.md, docs/GO_LIVE.md).
+services:
+  - type: web
+    name: hesba-client
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60 --access-logfile -
+    healthCheckPath: /healthz/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TRUST_PROXY_SSL_HEADER
+        value: "True"
+      # Filled in by hand for each client (never committed):
+      - key: DATABASE_URL          # the client's Supabase Session pooler URL, user hesba_app
+        sync: false
+      - key: ALLOWED_HOSTS         # e.g. client.hesba.nuzmtech.com,hesba-client.onrender.com (docs/DOMAINS.md)
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS  # e.g. https://client.hesba.nuzmtech.com,https://hesba-client.onrender.com
+        sync: false
+      - key: NIGHTLY_TOKEN
+        generateValue: true
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      # DIGEST-002: the daily follow-up email (any SMTP provider; see docs/DAILY_EMAIL_SETUP.md)
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: PUBLIC_BASE_URL       # e.g. https://client.hesba.nuzmtech.com (links inside the email)
+        sync: false
+      # ETA-002: the client's own e-invoicing portal connection (docs/ETA_INTEGRATION.md).
+      - key: ETA_ENVIRONMENT       # preprod while testing, prod when live: set in the dashboard (Hesba defaults to preprod)
+        sync: false
+      - key: ETA_CLIENT_ID         # the ERP system's client ID from the portal
+        sync: false
+      - key: ETA_CLIENT_SECRET
+        sync: false
+      - key: ETA_SIGNER_URL        # the signer next to the client's e-signature token
+        sync: false
+      - key: ETA_SIGNER_TOKEN
+        sync: false

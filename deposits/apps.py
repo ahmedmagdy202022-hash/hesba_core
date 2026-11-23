@@ -1,0 +1,12 @@
+from django.apps import AppConfig
+
+
+class DepositsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "deposits"
+    verbose_name = "Deposits"
+
+    def ready(self):
+        from . import services
+
+        services.connect()

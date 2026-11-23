@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/education_cards.css' %}?v=e1-1">
+</head>
+<body class="ec-body">
+{# E1: the cards. The QR text is the student code and nothing else: no phone, no date of birth, no payer is read or printed here. #}
+<nav class="ec-toolbar"><a class="ec-button" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ title }}</h1>{% if count %}<button class="ec-button ec-button--primary" type="button" data-print>{{ words.print }}</button>{% endif %}<p>{{ words.tip }} {{ words.pdf_hint }}</p></nav>
+{% if not count %}<p class="ec-empty" data-no-cards>{{ words.no_cards }}</p>{% endif %}
+<main class="ec-sheets" data-cards="{{ count }}">{% for page in pages %}<section class="ec-page">{% for card in page %}<article class="ec-card" data-card="{{ card.student.pk }}">
+<header class="ec-card__head">{% if company.logo %}<img class="ec-card__logo" src="{{ company.logo }}" alt="" data-company-logo>{% endif %}<span class="ec-card__centre" data-card-centre>{{ company.name }}</span></header>
+<div class="ec-card__body"><div class="ec-card__who"><strong class="ec-card__name" data-card-name>{{ card.student.name }}</strong>{% if card.stage %}<span class="ec-card__line" data-card-stage>{{ card.stage }}</span>{% endif %}{% if card.group %}<span class="ec-card__line" data-card-group>{{ card.group }}</span>{% endif %}</div>
+<div class="ec-card__qr"><div class="ec-qr" data-qr-text="{{ card.code }}" role="img" aria-label="{{ words.code }} {{ card.code }}"></div><bdi class="ec-card__code" dir="ltr" data-card-code>{{ card.code }}</bdi></div></div>
+</article>{% endfor %}</section>{% endfor %}</main>
+<script src="{% static 'hesba/vendor/qrcode/qrcode-1.4.4.js' %}"></script>
+<script>(function () { document.querySelectorAll('[data-qr-text]').forEach(function (box) { if (!window.qrcode) { return; } var qr = window.qrcode(0, 'M'); qr.addData(box.getAttribute('data-qr-text')); qr.make(); box.innerHTML = qr.createSvgTag({ cellSize: 3, margin: 0, scalable: true }); }); var print = document.querySelector('[data-print]'); if (print) { print.addEventListener('click', function () { window.print(); }); } }());</script>
+</body>
+</html>

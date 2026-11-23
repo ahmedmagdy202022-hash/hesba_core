@@ -1,8 +1,11 @@
 import json
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+
+from reports.test_utils import AuthenticatedTestCase
 
 
 class LoginAndDeviceShellSmokeTests(TestCase):
@@ -22,6 +25,12 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(response["Location"], reverse("login"))
 
     def test_existing_safe_routes_still_return_200(self):
+        user = get_user_model().objects.create_user(
+            username="safe_routes_tester",
+            password="smoke-tests-only",
+        )
+        self.client.force_login(user)
+
         for path in ["/setup/", "/dashboard/", "/reports/", "/status/"]:
             with self.subTest(path=path):
                 response = self.client.get(path)
@@ -35,7 +44,7 @@ class LoginAndDeviceShellSmokeTests(TestCase):
         self.assertEqual(manifest["start_url"], "/login/")
 
 
-class SetupGateWebSmokeTests(TestCase):
+class SetupGateWebSmokeTests(AuthenticatedTestCase):
     def test_setup_gate_route_renders_component_rebuild(self):
         response = self.client.get(reverse("setup_gate"))
 
@@ -100,65 +109,25 @@ class SetupGateWebSmokeTests(TestCase):
         self.assertIn(".step-item:not(:last-child)::after", css)
 
 
-class FirstUiNavigationMapTests(TestCase):
-    def test_home_page_renders_first_ui_navigation_map(self):
+class FirstUiNavigationMapTests(AuthenticatedTestCase):
+    # UX Wave 3: the first navigation map (/home/) is retired; an old bookmark now lands on the dashboard for good.
+    # The redirect itself is covered in reports.tests_ux_wave3.LegacyHomeTests.
+    def test_home_now_redirects_to_the_dashboard(self):
         response = self.client.get(reverse("home"))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "093_FOUNDATION_FIRST_UI_NAVIGATION_MAP")
-        self.assertContains(response, "خريطة تشغيل أول شاشة UI")
-        self.assertContains(response, "فتح لوحة Admin")
-        self.assertContains(response, "Dashboard")
-        self.assertContains(response, "Reports")
-        self.assertContains(response, "Status")
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], reverse("dashboard_snapshot"))
 
-    def test_home_page_keeps_full_business_cycle_visible(self):
-        response = self.client.get(reverse("home"))
-
-        required_labels = [
-            "Supplier",
-            "Purchase Invoice",
-            "Inventory by Location",
-            "Sales Invoice",
-            "Customer",
-            "Cashbox",
-            "Reports",
-        ]
-        for label in required_labels:
-            self.assertContains(response, label)
-
-    def test_home_page_documents_protected_rules(self):
-        response = self.client.get(reverse("home"))
-
-        self.assertContains(response, "المبيعات لا تنشئ مستحقات للموردين")
-        self.assertContains(response, "المشتريات لا تنشئ مديونية للعملاء")
-        self.assertContains(response, "الخزن تتحرك بالمبلغ المدفوع فعليًا فقط")
-        self.assertContains(response, "التقارير قراءة فقط")
-
-    def test_dashboard_snapshot_page_renders_read_only_checkpoint(self):
-        response = self.client.get(reverse("dashboard_snapshot"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "094_FOUNDATION_DASHBOARD_SNAPSHOT")
-        self.assertContains(response, "Dashboard Snapshot قراءة فقط")
-        self.assertContains(response, "KPIs آمنة لاحقًا")
-        self.assertContains(response, "حالة المخزون")
-        self.assertContains(response, "حالة الخزن")
-        self.assertContains(response, "Status")
-
-    def test_dashboard_snapshot_keeps_sensitive_finance_protected(self):
-        response = self.client.get(reverse("dashboard_snapshot"))
-
-        self.assertContains(response, "الربح")
-        self.assertContains(response, "التكلفة")
-        self.assertContains(response, "صلاحيات حقيقية")
+    # The dashboard is its own screen now rather than another copy of this
+    # navigation map, so it is covered in reports.tests_dashboard.
 
     def test_report_hub_renders_read_only_report_map(self):
         response = self.client.get(reverse("report_hub"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "096_FOUNDATION_READ_ONLY_REPORT_HUB")
-        self.assertContains(response, "مركز التقارير قراءة فقط")
+        # UI-TRACK F20: the title is just "Reports" (UX Wave 3: after the hub's own icon mark)
+        self.assertContains(response, '</svg></span>التقارير</h1>', html=False)
         self.assertContains(response, "Customer Report")
         self.assertContains(response, "Supplier Report")
         self.assertContains(response, "Inventory Report")
@@ -168,7 +137,7 @@ class FirstUiNavigationMapTests(TestCase):
     def test_report_hub_keeps_reports_read_only_and_profit_protected(self):
         response = self.client.get(reverse("report_hub"))
 
-        self.assertContains(response, "التقارير قراءة فقط")
+        self.assertContains(response, "التقارير بتعرض بس ومش بتغيّر أي رقم")  # still read-only, said plainly (UI-TRACK F20)
         self.assertContains(response, "Profit Report")
         self.assertContains(response, "Sales - Cost of Goods Sold")
         self.assertContains(response, "صلاحيات حقيقية")
@@ -204,8 +173,11 @@ class FirstUiNavigationMapTests(TestCase):
         self.assertContains(response, "No profit")
 
     def test_shared_top_navigation_separates_dashboard_reports_and_status(self):
-        for url_name in ["home", "dashboard_snapshot", "report_hub", "status_counts_report"]:
-            response = self.client.get(reverse(url_name))
-            self.assertContains(response, "Dashboard")
-            self.assertContains(response, "Reports")
-            self.assertContains(response, "Status")
+        # The dashboard carries the Hesba shell and its own Arabic navigation, so
+        # it is excluded here and covered in reports.tests_dashboard.
+        for url_name in ["report_hub", "status_counts_report"]:  # UX Wave 3: "home" now redirects to the dashboard
+            with self.subTest(route=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertContains(response, "Dashboard")
+                self.assertContains(response, "Reports")
+                self.assertContains(response, "Status")

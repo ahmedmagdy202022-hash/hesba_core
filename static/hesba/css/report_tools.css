@@ -1,0 +1,34 @@
+/* FB-REPORTS: the print / Excel toolbar on reading screens, and the printed page. */
+.hs-report-tools[hidden]{display:none}
+.hs-report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 14px}
+.hs-report-tools__hint{flex:1 1 220px}
+.hs-print-head{display:none}
+@media print{
+  .hs-report-tools,.op-filters,.op-subnav,.op-messages,.op-form,.op-form-actions,.dash-bell,.hs-entity-bar,.op-back,
+  form button,a.op-primary,a.op-secondary,button.op-primary,button.op-secondary,
+  .hs-more,.hs-filter>summary,.hs-head__actions,[data-pick-return]{display:none !important}
+  .hs-print-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin:0 0 12px;padding:0 0 8px;border-bottom:1px solid #000;font-size:12px}
+  .op-shell{padding:0 !important}
+  .op-table-wrap{border:0;overflow:visible}
+  .op-table{min-width:0;width:100%;font-size:11px}
+  .op-table tr{break-inside:avoid}
+  .op-summary-grid{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+
+/* UX Wave 3: a report's heading wears its hub card's icon and colour (the same tones as .hs-tile). */
+.hs-report-title{display:flex;align-items:center;gap:var(--hs-space-3)}
+.hs-report-title{flex-wrap:wrap}  /* so a date kept in one piece drops to its own line on a phone instead of pushing the page sideways */
+.hs-report-title bdi{white-space:nowrap}  /* a date or number in a title never breaks in the middle («2026-11-/10») */
+.hs-report-mark{--tone:var(--hs-navy);--tone-wash:var(--hs-neutral-wash);flex:0 0 var(--hs-chip-size);width:var(--hs-chip-size);height:var(--hs-chip-size);display:grid;place-items:center;border-radius:var(--hs-chip-radius);background:var(--tone-wash);color:var(--tone)}
+.hs-report-mark--teal{--tone:var(--hs-teal-deep);--tone-wash:var(--hs-teal-wash)}
+.hs-report-mark--gold{--tone:var(--hs-gold);--tone-wash:var(--hs-gold-wash)}
+.hs-report-mark .hs-icon{width:24px;height:24px}
+/* UX Wave 3: the period chips of a report («النهارده / الأسبوع / الشهر / مخصوص»): each a 44px link. */
+.hs-periods{display:flex;flex-wrap:wrap;gap:var(--hs-space-2);margin:0 0 var(--hs-space-3);padding:0;list-style:none}
+.hs-period{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);min-width:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid transparent;border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-navy);font-weight:var(--hs-weight-semibold);text-decoration:none}
+.hs-period:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.hs-period:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.hs-period[aria-current="true"]{border-color:var(--hs-navy);background:var(--hs-navy);color:var(--hs-surface)}
+.hs-period-range{margin:0 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm)}
+@media print{.hs-periods,.hs-report-mark{display:none !important}}

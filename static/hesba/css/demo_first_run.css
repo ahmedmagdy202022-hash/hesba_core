@@ -1,0 +1,108 @@
+/* DEMO-FIRST-RUN: the landing (D1), the sub-activity sheet (D2), the demo bar and tour card (D3),
+   «ابدأ من هنا» (D4) and the preparing page. Tokens only (static/hesba/css/tokens.css). Phone first. */
+.fr-body{margin:0;min-height:100svh;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);font-size:var(--hs-text-base);line-height:var(--hs-leading)}
+.fr-body a{color:var(--hs-teal-deep)}
+.fr-page{min-height:100svh;display:flex;flex-direction:column}
+.fr-head{background:var(--hs-navy);color:var(--hs-surface);padding:var(--hs-space-5) var(--hs-space-4) var(--hs-space-6);display:flex;flex-direction:column;gap:10px}
+.fr-head__row{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3)}
+.fr-head__brand{height:34px;width:auto}
+.fr-head__lang{font-size:var(--hs-text-sm);color:var(--hs-on-navy-muted);text-decoration:none;min-height:var(--hs-control-height);display:inline-flex;align-items:center}
+.fr-head__lang:hover{color:var(--hs-surface)}
+.fr-head h1{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-xl);line-height:1.35}
+.fr-head p{margin:0;font-size:var(--hs-text-md);color:var(--hs-on-navy-muted)}
+.fr-main{flex:1;width:100%;max-width:1100px;margin:0 auto;box-sizing:border-box;padding:var(--hs-space-4)}
+.fr-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-3);align-content:start}
+@media (min-width:760px){.fr-tiles{grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--hs-space-4)}}
+.fr-tile{display:flex;flex-direction:column;gap:6px;min-height:112px;padding:14px 12px;box-sizing:border-box;width:100%;text-align:start;
+  border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-surface);color:var(--hs-ink);text-decoration:none;
+  font:inherit;cursor:pointer;box-shadow:var(--hs-shadow-sm);transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.fr-tile:hover{border-color:var(--hs-teal);box-shadow:var(--hs-shadow-md);transform:translateY(-1px)}
+.fr-tile:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.fr-tile__icon{width:36px;height:36px;object-fit:contain}
+.fr-tile strong{font-size:var(--hs-text-base);color:var(--hs-navy)}
+.fr-tile span{font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.fr-tile form{display:contents}
+.fr-foot{padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-5);display:flex;flex-direction:column;gap:var(--hs-space-2);align-items:center;text-align:center}
+.fr-foot small{font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.fr-foot a{font-size:var(--hs-text-md);font-weight:700;min-height:var(--hs-control-height);display:inline-flex;align-items:center;text-decoration:none}
+
+/* D2: the sheet. On a phone it rises from the bottom over the navy; on a wide screen it is a card in the middle. */
+.fr-sheet-page{background:var(--hs-navy);justify-content:flex-end}
+.fr-sheet-page .fr-head{flex:1;padding-bottom:0}
+.fr-sheet{background:var(--hs-ground);border-radius:var(--hs-radius-xl) var(--hs-radius-xl) 0 0;padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-5);
+  display:flex;flex-direction:column;gap:var(--hs-space-3);box-shadow:var(--hs-shadow-lg)}
+.fr-sheet__grip{width:40px;height:4px;border-radius:var(--hs-radius-pill);background:var(--hs-line-strong);align-self:center}
+.fr-sheet__head{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-2)}
+.fr-sheet__head h2{margin:0;font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.fr-sheet__close{width:var(--hs-control-height);height:var(--hs-control-height);display:inline-flex;align-items:center;justify-content:center;border-radius:var(--hs-radius-md);color:var(--hs-navy);text-decoration:none;font-size:22px;line-height:1}
+.fr-sheet__grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fr-sheet .fr-tile{min-height:60px;padding:12px;justify-content:center;gap:2px}
+.fr-sheet .fr-tile strong{font-size:var(--hs-text-md)}
+.fr-primary{min-height:var(--hs-control-height-lg);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 var(--hs-space-4);border:0;border-radius:var(--hs-radius-md);
+  background:var(--hs-teal);color:var(--hs-on-teal);font:inherit;font-weight:700;text-decoration:none;cursor:pointer;width:100%;box-sizing:border-box}
+.fr-primary:hover{filter:brightness(1.05)}
+.fr-primary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+.fr-sheet__note{font-size:var(--hs-text-xs);color:var(--hs-muted);text-align:center;margin:0}
+@media (min-width:760px){
+  .fr-sheet-page{justify-content:center;align-items:center;padding:var(--hs-space-8) var(--hs-space-4)}
+  .fr-sheet-page .fr-head{flex:0 0 auto;width:min(640px,100%);box-sizing:border-box;padding-bottom:var(--hs-space-4)}
+  .fr-sheet{width:min(640px,100%);box-sizing:border-box;border-radius:var(--hs-radius-xl)}
+  .fr-sheet__grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+/* Preparing: one card, a spinner made of the ring, refreshes by itself. */
+.fr-wait{margin:auto;width:min(420px,100%);box-sizing:border-box;padding:var(--hs-space-6);border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);background:var(--hs-surface);box-shadow:var(--hs-shadow-md);display:flex;flex-direction:column;gap:var(--hs-space-3);text-align:center;align-items:center}
+.fr-wait h1{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.fr-wait p{margin:0;color:var(--hs-muted);font-size:var(--hs-text-md)}
+.fr-spin{width:36px;height:36px;border-radius:50%;border:3px solid var(--hs-teal-wash);border-top-color:var(--hs-teal);animation:fr-spin 1s linear infinite}
+@keyframes fr-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.fr-spin{animation:none}}
+
+/* D3: the one-line demo bar. Gold wash, small, never taller than one line on a phone; every link and button a full touch target. */
+.fr-demobar{display:flex;align-items:center;gap:10px;padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);background:var(--hs-gold-wash);color:var(--hs-warning);font-size:var(--hs-text-xs);line-height:1.4;overflow-x:auto;white-space:nowrap;scrollbar-width:none;max-width:100%;box-sizing:border-box}
+.fr-demobar::-webkit-scrollbar{display:none}
+.fr-demobar strong{font-weight:700;color:var(--hs-gold)}
+.fr-demobar a,.fr-demobar button{color:var(--hs-warning);text-decoration:underline;min-height:var(--hs-control-height);display:inline-flex;align-items:center;background:none;border:0;padding:0;font:inherit;cursor:pointer;white-space:nowrap}
+.fr-demobar a:hover,.fr-demobar button:hover{color:var(--hs-gold)}
+.fr-demobar form{display:contents}
+.fr-demobar__end{margin-inline-start:auto;display:inline-flex;gap:10px}
+.fr-demobar details{display:inline-block;position:relative}
+.fr-demobar summary{list-style:none;cursor:pointer;text-decoration:underline;min-height:var(--hs-control-height);min-width:var(--hs-control-height);justify-content:center;display:inline-flex;align-items:center}
+.fr-demobar summary::-webkit-details-marker{display:none}
+.fr-demobar details[open] > div{position:absolute;inset-inline-end:0;top:100%;z-index:40;padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);box-shadow:var(--hs-shadow-md);white-space:nowrap}
+.fr-demobar details[open] > div button{color:var(--hs-teal-deep);text-decoration:none;font-weight:600}
+.hs-main > .fr-demobar{border-radius:0}
+/* The bar already says «ملاحظاتك»; the floating button would only cover the cards on these two pages. */
+body.dashboard-page .hs-feedback-fab,body.demo-begin-page .hs-feedback-fab{display:none}
+
+/* D3: «جرّب دلوقتي». */
+.fr-tour{background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);box-shadow:var(--hs-shadow-md);padding:var(--hs-space-4);display:flex;flex-direction:column;gap:var(--hs-space-3)}
+.fr-tour[hidden]{display:none}
+.fr-tour__head{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-2)}
+.fr-tour__head h2{margin:0;font-family:var(--hs-font-head);font-size:var(--hs-text-lg);line-height:1.3;color:var(--hs-navy)}
+.fr-tour__close{width:var(--hs-control-height);height:var(--hs-control-height);border:0;background:transparent;color:var(--hs-muted);font-size:22px;line-height:1;cursor:pointer;border-radius:var(--hs-radius-md)}
+.fr-tour__close:hover{background:var(--hs-neutral-wash);color:var(--hs-navy)}
+.fr-tour__lead{margin:0;font-size:var(--hs-text-md);color:var(--hs-muted)}
+.fr-steps{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+@media (min-width:900px){.fr-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.fr-steps--4{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.fr-step{display:flex;align-items:center;gap:12px;min-height:56px;padding:12px;border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);color:var(--hs-ink);text-decoration:none;background:var(--hs-surface)}
+.fr-step:hover{border-color:var(--hs-teal);background:var(--hs-teal-wash)}
+.fr-step__n{width:32px;height:32px;flex-shrink:0;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-weight:700;font-size:var(--hs-text-md);display:inline-flex;align-items:center;justify-content:center}
+.fr-step:first-child .fr-step__n{background:var(--hs-teal);color:var(--hs-on-teal)}
+.fr-step.is-done .fr-step__n{background:var(--hs-success-wash);color:var(--hs-success)}
+.fr-step__text{display:flex;flex-direction:column;flex:1;min-width:0}
+.fr-step__text strong{font-size:var(--hs-text-md);color:var(--hs-navy)}
+.fr-step__text span{font-size:var(--hs-text-xs);color:var(--hs-muted)}
+.fr-step__arrow{color:var(--hs-muted);font-size:18px}
+.fr-step__done{font-size:var(--hs-text-xs);color:var(--hs-success);font-weight:700}
+
+/* D4: «ابدأ من هنا». */
+.fr-begin{max-width:760px;margin:0 auto;padding:0 var(--hs-space-4) var(--hs-space-8);display:flex;flex-direction:column;gap:var(--hs-space-4)}
+.fr-begin__head{background:var(--hs-navy);color:var(--hs-surface);padding:14px var(--hs-space-4);display:flex;flex-direction:column;border-radius:0 0 var(--hs-radius-lg) var(--hs-radius-lg)}
+.fr-begin__head strong{font-family:var(--hs-font-head);font-weight:700;font-size:var(--hs-text-lg)}
+.fr-begin__head span{font-size:var(--hs-text-sm);color:var(--hs-on-navy-muted)}
+.fr-fill{background:var(--hs-teal-wash);border:1px solid var(--hs-teal-glow);border-radius:var(--hs-radius-lg);padding:14px var(--hs-space-4);display:flex;flex-direction:column;gap:8px}
+.fr-fill strong{font-size:var(--hs-text-md);color:var(--hs-navy)}
+.fr-fill span{font-size:var(--hs-text-sm);color:var(--hs-ink)}
+.fr-fill .fr-primary{align-self:flex-start;width:auto;min-height:var(--hs-control-height);padding:0 var(--hs-space-4)}
+.fr-begin__details{font-size:var(--hs-text-sm);text-align:center;min-height:var(--hs-control-height);display:inline-flex;align-items:center;justify-content:center}

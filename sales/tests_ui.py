@@ -1,0 +1,345 @@
+from decimal import Decimal
+from unittest import mock
+
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from cashboxes.models import CashboxMovement
+from hesba_testing.factories import (
+    add_sales_line,
+    make_cashbox,
+    make_customer,
+    make_draft_sales_invoice,
+    make_item,
+    make_location,
+    make_seeded_role,
+    make_user,
+    make_user_profile,
+    posted_invoice_ready,
+    recalculate_invoice_totals,
+    stock_in,
+)
+from inventory.models import StockMovement, StockMovementType
+from permissions.models import RoleCode
+
+from .models import CustomerLedgerEntry, SalesInvoice
+from .services import post_sales_invoice
+
+
+class SalesUiTests(TestCase):
+    def login_as(self, role_code, username):
+        user = make_user(username=username)
+        make_user_profile(user=user, role=make_seeded_role(role_code))
+        self.client.force_login(user)
+        return user
+
+    def draft_payload(self, paid_now="20.00"):
+        return {
+            "lang": "en",
+            "invoice_number": "SI-UI-001",
+            "invoice_date": "2026-01-15",
+            "customer": make_customer().pk,
+            "selling_location": make_location().pk,
+            "cashbox": make_cashbox().pk,
+            "discount_amount": "5.00",
+            "tax_amount": "5.00",
+            "paid_now": paid_now,
+            "notes": "UI draft",
+            "lines-TOTAL_FORMS": "5",
+            "lines-INITIAL_FORMS": "0",
+            "lines-MIN_NUM_FORMS": "0",
+            "lines-MAX_NUM_FORMS": "20",
+            "lines-0-item": make_item().pk,
+            "lines-0-description": "First line",
+            "lines-0-quantity": "2.000",
+            "lines-0-unit_sale_price": "25.00",
+            "lines-0-line_discount_amount": "0.00",
+        }
+
+    def test_cashier_can_create_consistent_sales_draft(self):
+        self.login_as(RoleCode.CASHIER, "sales_cashier")
+        response = self.client.post(reverse("sales:create"), self.draft_payload())
+        self.assertEqual(response.status_code, 302)
+        invoice = SalesInvoice.objects.get()
+        self.assertEqual(invoice.total_amount, Decimal("50.00"))
+        self.assertEqual(invoice.remaining_due, Decimal("30.00"))
+        self.assertFalse(StockMovement.objects.exists())
+
+    def test_post_route_enforces_stock_and_creates_no_partial_effects(self):
+        self.login_as(RoleCode.CASHIER, "sales_no_stock")
+        invoice = make_draft_sales_invoice(cashbox=make_cashbox())
+        add_sales_line(invoice, make_item(), 2, "10.00")
+        response = self.client.post(reverse("sales:post", args=[invoice.pk]))
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, "draft")
+        self.assertFalse(CustomerLedgerEntry.objects.exists())
+        self.assertFalse(CashboxMovement.objects.exists())
+        self.assertFalse(StockMovement.objects.exists())
+
+    def test_post_route_creates_customer_cashbox_stock_and_cost_effects(self):
+        user = self.login_as(RoleCode.OWNER, "sales_post")
+        invoice, item, location, cashbox = posted_invoice_ready(paid_now="20.00")
+        response = self.client.post(reverse("sales:post", args=[invoice.pk]), {"lang": "en"})
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        line = invoice.lines.get()
+        self.assertEqual(invoice.status, "posted")
+        self.assertEqual(CustomerLedgerEntry.objects.get().due_increase, Decimal("40.00"))
+        self.assertEqual(CashboxMovement.objects.get().amount, Decimal("20.00"))
+        sale_movement = StockMovement.objects.get(movement_type=StockMovementType.SALE_OUT)
+        self.assertEqual(sale_movement.quantity, Decimal("2.000"))
+        self.assertEqual(line.line_cost_amount, Decimal("10.00"))
+        self.assertEqual(sale_movement.created_by, user)
+
+    def test_repeated_post_does_not_duplicate_effects(self):
+        self.login_as(RoleCode.OWNER, "sales_repeat")
+        invoice, *_ = posted_invoice_ready(paid_now="20.00")
+        post_sales_invoice(invoice.pk)
+        self.client.post(reverse("sales:post", args=[invoice.pk]))
+        self.assertEqual(CustomerLedgerEntry.objects.count(), 1)
+        self.assertEqual(CashboxMovement.objects.count(), 1)
+        self.assertEqual(StockMovement.objects.count(), 2)  # opening in + sale out
+
+    def test_cancel_route_reverses_customer_cashbox_and_stock(self):
+        self.login_as(RoleCode.OWNER, "sales_cancel")
+        invoice, *_ = posted_invoice_ready(paid_now="20.00")
+        post_sales_invoice(invoice.pk)
+        response = self.client.post(reverse("sales:cancel", args=[invoice.pk]), {"reason": "Wrong", "lang": "en"})
+        self.assertEqual(response.status_code, 302)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status, "cancelled")
+        self.assertEqual(CustomerLedgerEntry.objects.count(), 2)
+        self.assertEqual(CashboxMovement.objects.count(), 2)
+        self.assertEqual(StockMovement.objects.count(), 3)  # opening, sale, return
+
+    def test_manager_detail_hides_cost_and_profit(self):
+        self.login_as(RoleCode.MANAGER, "sales_manager")
+        invoice, *_ = posted_invoice_ready()
+        post_sales_invoice(invoice.pk)
+        response = self.client.get(reverse("sales:detail", args=[invoice.pk]), {"lang": "en"})
+        self.assertFalse(response.context["can_view_cost"])
+        self.assertFalse(response.context["can_view_profit"])
+        self.assertNotContains(response, "Unit cost")
+        self.assertNotContains(response, "Profit")
+
+    def test_stale_average_cost_is_replaced_by_authoritative_inventory_cost(self):
+        self.login_as(RoleCode.OWNER, "sales_stale_cost")
+        location = make_location()
+        item = make_item(average_cost=Decimal("1.0000"))
+        stock_in(item, location, 10, "10.00")
+        # Deliberately leave the stored cache stale; posting must use movements.
+        invoice = make_draft_sales_invoice(location=location)
+        add_sales_line(invoice, item, 2, "30.00")
+        recalculate_invoice_totals(invoice)
+        self.client.post(reverse("sales:post", args=[invoice.pk]))
+        line = invoice.lines.get()
+        self.assertEqual(line.unit_cost, Decimal("10.0000"))
+        self.assertEqual(line.line_cost_amount, Decimal("20.00"))
+
+    def test_english_sales_list_renders(self):
+        self.login_as(RoleCode.CASHIER, "sales_english")
+        response = self.client.get(reverse("sales:list"), {"lang": "en"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sales invoices")
+
+
+class InvoiceRedesignTests(TestCase):
+    """R2-6: one compact invoice screen, with "save and post" in one press."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from hesba_testing.factories import make_cashbox, make_customer, make_item, make_location, make_seeded_role, make_user, make_user_profile
+        from inventory.services import adjust_stock
+        from inventory.models import StockAdjustmentDirection
+        from permissions.models import RoleCode
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client()
+        cls.owner = make_user(username="inv_owner")
+        make_user_profile(user=cls.owner, role=make_seeded_role(RoleCode.OWNER))
+        cls.customer = make_customer(customer_code="C-INV")
+        cls.location = make_location(location_code="L-INV", is_selling_location=True, is_receiving_location=True)
+        cls.item = make_item(item_code="IT-INV", default_sale_price="50")
+        adjust_stock("INV-OPEN", timezone.localdate(), cls.item, cls.location, StockAdjustmentDirection.IN, Decimal("10"), "opening", cls.owner, unit_cost=Decimal("20"))
+        from hesba_testing.factories import open_test_shift
+
+        open_test_shift(cls.owner)  # AN4: posting a sale needs an open shift
+
+    def post(self, then=None):
+        data = {"lang": "ar", "invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": self.customer.pk,
+                "selling_location": self.location.pk, "discount_amount": "0", "tax_amount": "0", "paid_now": "0",
+                "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": self.item.pk, "lines-0-quantity": "2", "lines-0-unit_sale_price": "50"}
+        if then:
+            data["then"] = then
+        self.client.force_login(self.owner)
+        return self.client.post(reverse("sales:create") + "?lang=ar", data)
+
+    def test_the_screen_has_a_header_row_line_table_and_summary(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("sales:create") + "?lang=ar")
+        for marker in ("data-inv-head", "inv-lines-head", "data-line-total", "data-clear-line", "data-sum-total", "data-sum-remaining", "data-pay-all", "data-save-post", "data-add-line"):
+            self.assertContains(page, marker)
+        self.assertContains(page, "حفظ وترحيل")
+        self.assertContains(page, "الباقي على العميل")
+
+    def test_save_keeps_a_draft(self):
+        response = self.post()
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertRedirects(response, f"/sales/{invoice.pk}/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual(invoice.status, "draft")
+
+    def test_save_and_post_posts_it_through_the_service(self):
+        from inventory.services import get_item_location_stock_quantity
+
+        self.post(then="post")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertEqual(invoice.status, "posted")
+        self.assertEqual(invoice.total_amount, Decimal("100.00"))
+        self.assertEqual(get_item_location_stock_quantity(self.item, self.location), Decimal("8"))
+
+    def test_a_post_that_fails_leaves_the_saved_draft_and_says_why(self):
+        from sales import views
+
+        from django.core.exceptions import ValidationError
+
+        with mock.patch.object(views, "post_sales_invoice", side_effect=ValidationError("لا يوجد مخزون كافٍ")):
+            response = self.post(then="post")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertEqual(invoice.status, "draft")
+        page = self.client.get(response["Location"])
+        self.assertContains(page, "لا يوجد مخزون كافٍ")
+
+
+class InvoiceRedesignSafetyTests(InvoiceRedesignTests):
+    """Codex on #169: Enter must never post, and a bad e-invoice setting must not break the page."""
+
+    def test_the_draft_button_comes_first(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(reverse("sales:create") + "?lang=ar").content.decode()
+        self.assertLess(html.index("data-save-draft"), html.index("data-save-post"))
+
+    def test_a_malformed_einvoice_setting_does_not_break_the_invoice_page(self):
+        from settings_core import capabilities
+
+        self.post(then="post")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        with mock.patch.object(capabilities, "capability_enabled", return_value=True), \
+                mock.patch("einvoice.services.build_document", side_effect=ArithmeticError("bad threshold")), \
+                self.assertLogs("hesba.einvoice", level="ERROR"):
+            page = self.client.get(reverse("sales:detail", args=[invoice.pk]) + "?lang=ar")
+        self.assertEqual(page.status_code, 200)
+
+
+class OverpaidInvoiceTests(TestCase):
+    """Paid now above the invoice total is a form error, not an HTTP 500 (the model's dict ValidationError)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from reports.tests_dashboard import prepared_client
+
+        prepared_client()
+        cls.owner = make_user(username="overpaid_owner")
+        make_user_profile(user=cls.owner, role=make_seeded_role(RoleCode.OWNER))
+        cls.customer = make_customer(customer_code="C-OVER")
+        cls.location = make_location(location_code="L-OVER", is_selling_location=True, is_receiving_location=True)
+        cls.cashbox = make_cashbox(cashbox_code="CB-OVER")
+        cls.item = make_item(item_code="IT-OVER", default_sale_price="184.68")
+
+    def post(self, paid_now, lang="ar", price="184.68", quantity="2", then=None):
+        data = {"lang": lang, "invoice_number": "", "invoice_date": timezone.localdate().isoformat(), "customer": self.customer.pk,
+                "selling_location": self.location.pk, "cashbox": self.cashbox.pk, "discount_amount": "0", "tax_amount": "0",
+                "paid_now": paid_now, "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-0-item": self.item.pk,
+                "lines-0-quantity": quantity, "lines-0-unit_sale_price": price}
+        if then:
+            data["then"] = then
+        self.client.force_login(self.owner)
+        return self.client.post(reverse("sales:create") + f"?lang={lang}", data)
+
+    def test_paid_far_above_the_total_rerenders_in_arabic_and_saves_nothing(self):
+        response = self.post("5000")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة")
+        self.assert_nothing_moved()
+
+    def test_paid_a_little_above_the_total_rerenders_in_english_and_saves_nothing(self):
+        response = self.post("370", lang="en")  # 2 x 184.68 = 369.36
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Paid now is more than the invoice total")
+        self.assert_nothing_moved()
+
+    def test_save_and_post_while_overpaid_posts_nothing(self):
+        response = self.post("5000", then="post")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة")
+        self.assert_nothing_moved()
+
+    def assert_nothing_moved(self):
+        """No invoice, and no money, stock or customer-balance movement."""
+        self.assertEqual(SalesInvoice.objects.count(), 0)
+        self.assertEqual(CashboxMovement.objects.count(), 0)
+        self.assertEqual(StockMovement.objects.filter(item=self.item).count(), 0)
+        self.assertEqual(CustomerLedgerEntry.objects.filter(customer=self.customer).count(), 0)
+
+    def test_the_message_is_shown_once(self):
+        response = self.post("370")
+        self.assertContains(response, "المدفوع أكبر من إجمالي الفاتورة", count=1)
+
+    def test_an_exactly_paid_invoice_still_saves(self):
+        response = self.post("369.36")
+        invoice = SalesInvoice.objects.get(customer=self.customer)
+        self.assertRedirects(response, f"/sales/{invoice.pk}/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual((invoice.total_amount, invoice.paid_now, invoice.remaining_due), (Decimal("369.36"), Decimal("369.36"), Decimal("0.00")))
+
+
+class AddFormErrorTests(TestCase):
+    """config.form_errors.add_form_error: dict errors never raise, whatever the form's fields are."""
+
+    def make_form(self):
+        from django import forms
+
+        class Demo(forms.Form):
+            amount = forms.DecimalField()
+
+        form = Demo({"amount": "1"})
+        form.is_valid()
+        return form
+
+    def test_a_key_that_is_a_field_goes_to_the_field(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError({"amount": "Amount must be greater than zero."}))
+        self.assertEqual(form.errors["amount"], ["Amount must be greater than zero."])
+
+    def test_a_key_that_is_not_a_field_becomes_a_non_field_error(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError({"remaining_due": "Remaining due must equal total.", "amount": "Bad amount."}))
+        self.assertEqual(form.non_field_errors(), ["Remaining due must equal total."])
+        self.assertEqual(form.errors["amount"], ["Bad amount."])
+
+    def test_plain_and_list_errors_still_work(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError("Plain."))
+        add_form_error(form, ValidationError(["One.", "Two."]))
+        self.assertEqual(form.non_field_errors(), ["Plain.", "One.", "Two."])
+
+    def test_an_override_replaces_the_text_and_is_added_once(self):
+        from django.core.exceptions import ValidationError
+
+        from config.form_errors import add_form_error
+
+        form = self.make_form()
+        add_form_error(form, ValidationError({"paid_now": "a", "remaining_due": "b"}), overrides={"paid_now": "Friendly", "remaining_due": "Friendly"})
+        self.assertEqual(form.non_field_errors(), ["Friendly"])

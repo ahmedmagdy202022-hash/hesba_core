@@ -22,6 +22,10 @@ class RoleCode(models.TextChoices):
     STOCK_KEEPER = "stock_keeper", "Stock Keeper"
     ACCOUNTANT = "accountant", "Accountant"
     SUPPORT = "support", "Support"
+    WAITER = "waiter", "Waiter"  # HG-048
+    SITE_ENGINEER = "site_engineer", "Site engineer"  # HG-048
+    DOCTOR = "doctor", "Doctor or clinician"  # HG-084 (seeded by medical/0010)
+    PRODUCTION_WORKER = "production_worker", "Production worker"  # HG-140 (Manufacturing F8)
 
 
 class Permission(models.Model):
@@ -52,7 +56,8 @@ class Permission(models.Model):
 
 
 class Role(models.Model):
-    code = models.CharField(max_length=40, choices=RoleCode.choices, unique=True)
+    # FB-ROLES (HG-049): the seeded roles use RoleCode; an owner's own roles are "custom_<n>", so the code is not limited to the choices.
+    code = models.CharField(max_length=40, unique=True)
     name_ar = models.CharField(max_length=255)
     name_en = models.CharField(max_length=255, blank=True)
     description = models.TextField(blank=True)

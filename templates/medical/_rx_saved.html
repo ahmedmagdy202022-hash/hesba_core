@@ -1,0 +1,3 @@
+{% if lines %}<div data-visit-medicines><p><b>{{ words.section }}:</b></p>
+<ol class="med-visit__medicines">{% for m in lines %}<li data-visit-medicine="{{ m.id }}"><b><bdi>{{ m.name }}</bdi></b>{% if m.strength_shown %} <bdi dir="ltr">{{ m.strength_shown }}</bdi>{% endif %}{% if m.form_label %} · {{ m.form_label }}{% endif %}{% if m.how_full %} — <bdi>{{ m.how_full }}</bdi>{% endif %}{% if m.notes %} · <bdi>{{ m.notes }}</bdi>{% endif %}
+{% if m.allergy %}<p class="op-message op-message-error" role="note" data-visit-medicine-allergy>⚠ {{ m.allergy_text }}</p>{% endif %}</li>{% endfor %}</ol></div>{% endif %}

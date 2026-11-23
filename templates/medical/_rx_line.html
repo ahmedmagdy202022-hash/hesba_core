@@ -1,0 +1,31 @@
+{% with w=rx.words %}<li class="rx-line" data-rx-line data-form="{{ m.form }}" tabindex="-1">
+<input type="hidden" name="rx_id" value="{{ m.id }}"><input type="hidden" name="rx_reference" value="{{ m.reference }}" data-rx-ref>
+<div class="rx-line__head">
+  <span class="rx-line__no" aria-hidden="true" data-rx-no>{{ m.number }}</span>
+  <div class="rx-line__title">
+    {% if m.from_list %}<input type="hidden" name="rx_name" value="{{ m.name }}" data-rx-name><strong class="rx-line__name" data-rx-title>{{ m.name }}</strong>{% else %}<label class="rx-line__label"><span class="hs-drug-sr">{{ w.name }}</span><input class="rx-line__input" name="rx_name" value="{{ m.name }}" placeholder="{{ w.name_hint }}" maxlength="255" autocomplete="off" dir="auto" data-rx-name data-rx-input="name"></label>{% endif %}
+    <span class="rx-line__sub" data-rx-sub>{% if m.strength_shown %}<bdi dir="ltr">{{ m.strength_shown }}</bdi>{% endif %}{% if m.strength_shown and m.form_label %} · {% endif %}{{ m.form_label }}</span>
+    <span class="rx-line__ing" data-rx-ing dir="ltr">{{ m.ingredient }}</span>
+    <span class="rx-line__how" data-rx-summary dir="auto">{{ m.how }}</span>
+  </div>
+  <div class="rx-line__tools">
+    <button class="rx-icon" type="button" data-rx-edit aria-expanded="true" aria-label="{{ w.edit }}" title="{{ w.edit }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg></button>
+    <button class="rx-icon rx-icon--remove" type="button" data-rx-remove aria-label="{{ w.remove }}" title="{{ w.remove }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+</div>
+<p class="rx-alert" role="alert" data-rx-alert{% if not m.allergy %} hidden{% endif %}><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span data-rx-alert-text>{{ m.allergy_text }}</span></p>
+<div class="rx-line__body" data-rx-body>
+  <div class="rx-field"><label><span class="rx-field__label">{{ w.dose }}</span><input name="rx_dose" value="{{ m.dose }}" maxlength="60" autocomplete="off" dir="auto" enterkeyhint="next" data-rx-input="dose"></label><div class="rx-chips" data-rx-chips="dose"></div></div>
+  <div class="rx-field"><label><span class="rx-field__label">{{ w.frequency }}</span><input name="rx_frequency" value="{{ m.frequency }}" maxlength="80" autocomplete="off" dir="auto" enterkeyhint="next" data-rx-input="frequency"></label><div class="rx-chips" data-rx-chips="frequency"></div></div>
+  <div class="rx-field"><label><span class="rx-field__label">{{ w.duration }}</span><input name="rx_duration" value="{{ m.duration }}" maxlength="60" autocomplete="off" dir="auto" enterkeyhint="done" data-rx-input="duration"></label><div class="rx-chips" data-rx-chips="duration"></div></div>
+  <details class="rx-more"{% if m.route or m.notes %} open{% endif %}><summary>{{ w.more }}</summary><div class="rx-more__grid">
+    <label class="rx-field"><span class="rx-field__label">{{ w.route }}</span><input name="rx_route" value="{{ m.route }}" maxlength="60" autocomplete="off" dir="auto" data-rx-input="route"></label>
+    <label class="rx-field"><span class="rx-field__label">{{ w.notes }}</span><input name="rx_notes" value="{{ m.notes }}" maxlength="255" autocomplete="off" dir="auto" data-rx-input="notes"></label>
+  </div></details>
+  <div class="rx-line__foot">
+    <button class="rx-icon" type="button" data-rx-up aria-label="{{ w.up }}" title="{{ w.up }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+    <button class="rx-icon" type="button" data-rx-down aria-label="{{ w.down }}" title="{{ w.down }}"><svg class="hs-drug-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
+    <button class="rx-done" type="button" data-rx-done>{{ w.done }}</button>
+  </div>
+</div>
+</li>{% endwith %}

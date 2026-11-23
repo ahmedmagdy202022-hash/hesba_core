@@ -1,0 +1,24 @@
+<article class="tc-job{% if card.done %} is-done{% elif card.is_next %} is-next{% endif %}" data-job="{{ card.kind }}-{{ card.pk }}"{% if card.is_next %} data-next{% endif %}>
+<div class="tc-job__head">
+{% if card.time %}<span class="tc-when"><bdi>{{ card.time }}</bdi></span>{% endif %}
+<span class="tc-type{% if card.type == 'work_order' %} tc-type--wo{% endif %}">{% if card.type == 'visit' %}{{ words.visit }}{% elif card.type == 'shop' %}{{ words.shop }}{% else %}{{ words.work_order }}{% endif %}</span>
+<span class="op-status {% if card.done %}op-status-posted{% else %}op-status-draft{% endif %}">{{ card.status_label }}</span>
+</div>
+<div class="tc-job__body">
+{% if card.is_next %}<div class="tc-eyebrow">{{ words.next }}</div>{% endif %}
+<div class="tc-cust">{{ card.customer }}</div>
+{% if card.what %}<div class="tc-what">{{ card.what }}</div>{% endif %}
+<div class="tc-ref"><bdi dir="ltr">{{ card.ref }}</bdi>{% if card.late %} · <span class="tc-late">{{ words.late }}</span>{% elif card.due_today %} · <span class="tc-late">{{ words.due_today }}</span>{% endif %}{% if card.promised_on and not card.late and not card.due_today %} · {{ words.promised }} <bdi>{{ card.promised_on|date:"Y-m-d" }}</bdi>{% endif %}</div>
+{% if card.address %}<div class="tc-addr"><svg class="tc-ico" aria-hidden="true"><use href="#tc-i-pin"></use></svg><span data-address>{{ card.address }}</span></div>
+{% elif card.type != 'shop' %}<div class="tc-addr tc-addr--none"><svg class="tc-ico" aria-hidden="true"><use href="#tc-i-pin"></use></svg><span>{{ words.no_address }}</span></div>{% endif %}
+</div>
+{% if card.done %}<div class="tc-done-note"><svg class="tc-ico" aria-hidden="true"><use href="#tc-i-check"></use></svg><span>{{ words.done_note }}</span></div>{% endif %}
+{% if card.actions %}<div class="tc-actions">{% for to, label in card.actions %}
+<form method="post" action="{% url 'staff:my_day' %}" data-action="{{ to }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="kind" value="{{ card.kind }}"><input type="hidden" name="pk" value="{{ card.pk }}"><input type="hidden" name="to" value="{{ to }}">
+<button type="submit" class="{% if forloop.first %}op-primary{% else %}op-secondary{% endif %} tc-status">{{ label }}</button></form>{% endfor %}</div>{% endif %}
+<div class="tc-contact">
+{% if card.tel %}<a class="op-secondary" href="{{ card.tel }}" data-call><svg class="tc-ico" aria-hidden="true"><use href="#tc-i-phone"></use></svg>{{ words.call }}</a>{% endif %}
+{% if card.map %}<a class="op-secondary" href="{{ card.map }}" target="_blank" rel="noopener noreferrer" data-map><svg class="tc-ico tc-ico--teal" aria-hidden="true"><use href="#tc-i-pin"></use></svg>{{ words.map }}</a>{% endif %}
+{% if card.kind == 'work_order' %}<a class="op-secondary" href="{% url 'workorders:detail' card.pk %}?lang={{ lang }}">{{ words.details }}</a>{% elif card.can_open %}<a class="op-secondary" href="{% url 'appointments:detail' card.pk %}?lang={{ lang }}">{{ words.details }}</a>{% endif %}
+</div>
+</article>

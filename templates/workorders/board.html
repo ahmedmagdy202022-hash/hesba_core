@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% with tab="board" %}{% include "workorders/_tabs.html" %}{% endwith %}
+<section class="op-summary-grid">
+<article><small>{{ words.f_open }}</small><strong data-count-open>{{ counts.open }}</strong></article>
+<article><small>{{ words.f_ready }}</small><strong data-count-ready>{{ counts.ready }}</strong></article>
+<article><small>{{ words.f_late }}</small><strong class="{% if counts.late %}wo-low{% endif %}" data-count-late>{{ counts.late }}</strong></article>
+</section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="show" value="{{ show }}">
+<label class="sr-only" for="wo-q">{{ words.search }}</label><input id="wo-q" type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+<nav class="op-form-actions wo-tabs" data-wo-filter>
+<a class="{% if show == 'open' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=open">{{ words.f_open }}</a>
+<a class="{% if show == 'ready' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=ready">{{ words.f_ready }}</a>
+<a class="{% if show == 'late' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=late">{{ words.f_late }}</a>
+<a class="{% if show == 'delivered' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=delivered">{{ words.f_delivered }}</a>
+<a class="{% if show == 'all' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=all">{{ words.f_all }}</a>
+</nav>
+<div class="op-table-wrap"><table class="op-table" data-work-orders><thead><tr><th>{{ words.number }}</th><th>{{ words.customer }}</th><th>{{ words.device }}</th><th>{{ words.technician }}</th><th>{{ words.status }}</th><th>{{ words.received }}</th><th>{{ words.promised }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-order="{{ row.pk }}"><td><a href="{% url 'workorders:detail' row.pk %}?lang={{ lang }}"><bdi>{{ row.number }}</bdi></a></td><td class="op-cell-text">{{ row.customer.name }}</td>
+<td class="op-cell-text">{{ row.device }}{% if row.serial %} · <bdi>{{ row.serial }}</bdi>{% endif %}{% if row.warranty_of_id %} · <span class="op-status op-status-draft">{{ words.warranty_return }}</span>{% endif %}</td>
+<td class="op-cell-text">{{ row.technician.name|default:'—' }}</td><td><span class="op-status {% if row.status == 'ready' %}op-status-open{% elif row.status == 'delivered' %}op-status-posted{% else %}op-status-draft{% endif %}">{% for key, label in labels.items %}{% if key == row.status %}{{ label }}{% endif %}{% endfor %}</span></td>
+<td><bdi>{{ row.received_at|date:"Y-m-d" }}</bdi></td><td>{% if row.promised_on %}<bdi class="{% if row.is_late %}wo-low{% endif %}">{{ row.promised_on|date:"Y-m-d" }}</bdi>{% if row.is_late %} <small class="wo-low">{{ words.late }}</small>{% endif %}{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

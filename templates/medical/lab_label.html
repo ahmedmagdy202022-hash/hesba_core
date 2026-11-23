@@ -1,0 +1,21 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/lab_label.css' %}?v=m9-1">
+</head>
+<body class="ls-body ls-{{ size }}" data-lab-label-page data-label-size="{{ size }}">
+{# M9 (HG-092): the sample label. It carries the sample code, the patient's name, the day and the tests' short names, and nothing else: no phone, no file number, no diagnosis, never the results link. #}
+<nav class="ls-toolbar"><a class="ls-button" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ sw.sheet_back }}</a>
+<a class="ls-button" href="?lang={{ lang }}&amp;day={{ day|date:'Y-m-d' }}&amp;size=roll&amp;copies={{ copies }}"{% if size == 'roll' %} aria-current="true"{% endif %} data-size-roll>{{ sw.size_roll }}</a>
+<a class="ls-button" href="?lang={{ lang }}&amp;day={{ day|date:'Y-m-d' }}&amp;size=a4&amp;copies={{ copies }}"{% if size == 'a4' %} aria-current="true"{% endif %} data-size-a4>{{ sw.size_a4 }}</a>
+<form method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}"><input type="hidden" name="size" value="{{ size }}"><label>{{ sw.copies }} <input type="number" name="copies" value="{{ copies }}" min="1" max="40" inputmode="numeric"></label><button class="ls-button" type="submit">{{ sw.show }}</button></form>
+<button class="ls-button ls-button--primary" type="button" data-print>{{ sw.print }}</button><p>{{ sw.label_hint }}</p></nav>
+<main class="ls-sheet">{% for _ in labels %}<div class="ls-label" data-sample-label><p class="ls-name" data-sample-name>{{ patient.name }}</p><p class="ls-date" data-sample-day>{{ day|day_text:lang }}</p><div class="ls-code" dir="ltr" data-sample-barcode>{{ svg }}</div><p class="ls-text" dir="ltr" data-sample-code>{{ code }}</p><p class="ls-tests" dir="ltr" data-sample-tests>{% for name in names %}<bdi>{{ name }}</bdi>{% if not forloop.last %} · {% endif %}{% empty %}<span dir="auto">{{ sw.none_tests }}</span>{% endfor %}{% if more %} <bdi>{{ more_text }}</bdi>{% endif %}</p></div>{% endfor %}</main>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

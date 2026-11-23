@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}{# Manufacturing F6a (HG-133): one work centre. The rate field is here only for those who may see costs. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:work_centres' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.title }}</a><h1>{% if centre %}{{ words.edit }}{% else %}{{ words.new }}{% endif %}</h1></div></section>
+<form class="op-form" method="post" data-work-centre-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if error %}<div class="op-message op-message-error" role="alert" data-work-centre-error>{{ error }}</div>{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="wc-code">{{ words.code }}</label><input id="wc-code" name="code" value="{{ form.code|default:'' }}" maxlength="20" dir="ltr" required></div>
+<div class="op-field"><label for="wc-ar">{{ words.name_ar }}</label><input id="wc-ar" name="name_ar" value="{{ form.name_ar|default:'' }}" maxlength="120" required></div>
+<div class="op-field"><label for="wc-en">{{ words.name_en }}</label><input id="wc-en" name="name_en" value="{{ form.name_en|default:'' }}" maxlength="120" dir="ltr"></div>
+<div class="op-field"><label for="wc-kind">{{ words.kind }}</label><select id="wc-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if form.kind == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="wc-asset">{{ words.asset }}</label><select id="wc-asset" name="fixed_asset"><option value="">{{ words.no_asset }}</option>{% for asset in assets %}<option value="{{ asset.pk }}"{% if form.fixed_asset == asset.pk|stringformat:'s' %} selected{% endif %}>{{ asset.code }} · {{ asset.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="wc-hours">{{ words.hours }}</label><input id="wc-hours" name="hours_per_day" value="{{ form.hours_per_day|default:'' }}" inputmode="decimal" dir="ltr"></div>
+{% if can_cost %}<div class="op-field"><label for="wc-rate">{{ words.rate }}</label><input id="wc-rate" name="rate_per_hour" value="{{ form.rate_per_hour|default:'' }}" inputmode="decimal" dir="ltr" data-wc-rate-input></div>{% endif %}
+<label class="op-field"><span><input type="checkbox" name="active"{% if form.active %} checked{% endif %}> {{ words.active }}</span></label></div>
+{% if can_cost %}<p class="op-muted">{{ words.rate_hint }}</p>{% else %}<p class="op-muted">{{ words.no_rate_perm }}</p>{% endif %}
+<fieldset class="op-field" data-wc-workers><legend>{{ words.workers }}</legend><p class="op-muted">{{ words.workers_hint }}</p>
+{% for row in employees %}<label class="op-check"><input type="checkbox" name="workers" value="{{ row.employee.pk }}"{% if row.on %} checked{% endif %}><span>{{ row.employee.name }}{% if row.employee.title %} · {{ row.employee.title }}{% endif %}</span></label>
+{% empty %}<p class="op-muted" data-wc-workers-empty>{{ words.workers_none }}</p>{% endfor %}</fieldset>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div></form>
+{% endblock %}

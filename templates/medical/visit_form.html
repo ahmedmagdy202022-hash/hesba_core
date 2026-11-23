@@ -1,0 +1,38 @@
+{% extends "operations/base.html" %}
+{% load l10n static %}
+{% block styles %}{{ block.super }}{% if attachments %}<link rel="stylesheet" href="{% static 'hesba/css/attachments.css' %}?v=m5-1">{% endif %}{% endblock %}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'medical:file' patient.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ patient.name }}</a><h1>{% if visit %}{{ words.edit }} — {{ words.visit }}{% else %}{{ words.new_visit|cut:'+ ' }}{% endif %}</h1>{% if appointment %}<p>{{ words.from_appointment }} <bdi>{{ appointment.number }}</bdi></p>{% endif %}{% if call_online %}<p class="op-form-actions" data-visit-online-box><span class="op-status op-status-draft" data-visit-online>{{ words_online.kind_online }}</span>{% if join_url %}<a class="op-primary" href="{{ join_url }}" target="_blank" rel="noopener noreferrer" referrerpolicy="same-origin" data-join-call>{{ words_online.join }}</a>{% endif %}</p>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-visit-error>{{ error }}</div>{% endif %}
+{% include "medical/_vt_bar.html" %}
+<form class="op-form" method="post" data-visit-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if appointment %}<input type="hidden" name="appointment" value="{{ appointment.pk }}">{% endif %}
+<div class="op-form-grid">
+<div class="op-field"><label for="visit_date">{{ words.date }}</label><input id="visit_date" type="date" name="visit_date" value="{% if post.visit_date %}{{ post.visit_date }}{% else %}{{ default_date|date:'Y-m-d' }}{% endif %}"></div>
+{% for a in animals %}{% if a.allergies %}<p class="op-message op-message-error" role="alert" data-animal-allergy="{{ a.pk }}">⚠ {{ a.name }}: {{ a.allergies }}</p>{% endif %}{% endfor %}
+{% if animals %}<div class="op-field"><label for="animal">{{ animal_label }}</label><select id="animal" name="animal" data-visit-animal-select><option value="">—</option>{% for a in animals %}<option value="{{ a.pk }}"{% if post.animal == a.pk|stringformat:'s' or not post and a.pk == default_animal %} selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="doctor">{{ words.doctor }}</label><select id="doctor" name="doctor"><option value="">—</option>{% for d in doctors %}<option value="{{ d.pk }}"{% if d.pk == default_doctor %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="complaint">{{ words.complaint }}</label><textarea id="complaint" name="complaint">{% if post %}{{ post.complaint }}{% else %}{{ visit.complaint }}{% endif %}</textarea></div>
+<div class="op-field"><label for="examination">{{ words.examination }}</label><textarea id="examination" name="examination">{% if post %}{{ post.examination }}{% else %}{{ visit.examination }}{% endif %}</textarea></div>
+</div>
+<h2>{{ words.vitals }}</h2>
+<div class="op-form-grid med-vitals">
+<div class="op-field"><label for="bp">{{ words.bp }}</label><input id="bp" name="blood_pressure" inputmode="numeric" placeholder="120/80" dir="ltr" value="{% if post %}{{ post.blood_pressure }}{% else %}{{ visit.blood_pressure }}{% endif %}"></div>
+<div class="op-field"><label for="pulse">{{ words.pulse }}</label><input id="pulse" name="pulse" inputmode="numeric" dir="ltr" value="{% if post %}{{ post.pulse }}{% else %}{{ visit.pulse|default_if_none:'' }}{% endif %}"></div>
+<div class="op-field"><label for="temp">{{ words.temp }}</label><input id="temp" name="temperature" inputmode="decimal" dir="ltr" value="{% if post %}{{ post.temperature }}{% else %}{{ visit.temperature|default_if_none:''|unlocalize }}{% endif %}"></div>
+<div class="op-field"><label for="weight">{{ words.weight }}</label><input id="weight" name="weight" inputmode="decimal" dir="ltr" value="{% if post %}{{ post.weight }}{% else %}{{ visit.weight|default_if_none:''|unlocalize }}{% endif %}"></div>
+<div class="op-field"><label for="height">{{ words.height }}</label><input id="height" name="height" inputmode="decimal" dir="ltr" value="{% if post %}{{ post.height }}{% else %}{{ visit.height|default_if_none:''|unlocalize }}{% endif %}"></div>
+</div>
+<div class="op-form-grid">
+<div class="op-field rx-wide"><label for="diagnosis">{{ words.diagnosis }}</label><textarea id="diagnosis" name="diagnosis">{% if post %}{{ post.diagnosis }}{% else %}{{ visit.diagnosis }}{% endif %}</textarea></div>
+</div>
+{% include "medical/_rx_lines.html" %}
+<div class="op-form-grid">
+<div class="op-field"><label for="treatment">{{ rx.words.instructions }}</label><textarea id="treatment" name="treatment" rows="4" aria-describedby="treatment-hint">{% if post %}{{ post.treatment }}{% else %}{{ visit.treatment }}{% endif %}</textarea><small class="rx-hint" id="treatment-hint">{{ rx.words.instructions_hint }}</small></div>
+<div class="op-field"><label for="follow">{{ words.follow_up }}</label><input id="follow" type="date" name="follow_up_date" value="{% if post %}{{ post.follow_up_date }}{% else %}{{ visit.follow_up_date|date:'Y-m-d' }}{% endif %}"></div>
+</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button><button class="op-secondary" type="button" data-vt-save-open hidden aria-haspopup="dialog" aria-controls="vt-save" aria-label="{{ vt.words.save_as_label }}">{{ vt.words.save_as }}</button></div></form>
+{% include "medical/_vt_sheets.html" %}
+{% include "medical/_attachments.html" %}
+{% if not visit %}<p class="op-muted" data-att-after-save>{% if lang == 'en' %}Save the visit first, then attach scans, lab reports and photos to it.{% else %}احفظ الكشف الأول، وبعدها ارفع عليه الأشعة والتحاليل والصور.{% endif %}</p>{% endif %}
+{% if attachments %}<script src="{% static 'hesba/js/attachments.js' %}?v=m5-1" defer></script>{% endif %}
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}{# Manufacturing F5 (HG-136): the check form of what waits in the quality hold: a finished order's goods, or a purchase line. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{% url 'manufacturing:quality' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ qw.title }}</a><h1>{{ qw.check_title }}</h1><p data-check-subject>{{ what }} · <bdi dir="ltr">{{ number }}</bdi></p></div><div class="op-form-actions">{% if source_url %}<a class="op-secondary" href="{{ source_url }}?lang={{ lang }}" data-check-source>{% if order %}{{ qw.open_order }}{% else %}{{ qw.open_invoice }}{% endif %}</a>{% endif %}{% if recipe_url %}<a class="op-secondary" href="{{ recipe_url }}?lang={{ lang }}">{{ qw.open_recipe }}</a>{% endif %}</div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-check-error>{{ error }}</div>{% endif %}
+<section class="op-summary-grid" data-hold-position><article><small>{% if order %}{{ qw.made }}{% else %}{{ qw.received }}{% endif %}</small><strong>{{ position.made|qty }}</strong></article><article><small>{{ qw.released }}</small><strong data-hold-released>{{ position.passed|qty }}</strong></article><article><small>{{ qw.written_off }}</small><strong data-hold-rejected>{{ position.rejected|qty }}</strong></article><article><small>{{ qw.still_held }}</small><strong data-hold-waiting>{{ position.waiting|qty }}</strong></article>{% if lot %}<article><small>{{ qw.lot }}</small><strong dir="ltr" data-hold-lot>{{ lot.batch_no|default:"—" }}</strong>{% if lot.expiry_date %}<small>{{ qw.expiry }} <bdi>{{ lot.expiry_date|date:"Y-m-d" }}</bdi></small>{% endif %}</article>{% endif %}</section>
+{% if position.waiting > 0 %}{% if can_check %}<form class="op-form" method="post" data-check-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check">
+<h2>{{ qw.criteria }}</h2>
+{% if criteria %}{% include "manufacturing/_quality_inputs.html" with criteria_inputs=criteria %}{% else %}<p class="op-muted" data-no-criteria>{% if order %}{{ qw.no_criteria_recipe }}{% else %}{{ qw.no_criteria_item }}{% endif %}</p>{% endif %}
+<h2>{{ qw.decision }}</h2>
+<div class="op-form-grid">
+<div class="op-field"><label for="qc-passed">{{ qw.passed_qty }}</label><input id="qc-passed" name="passed" value="{% if post.passed is not None %}{{ post.passed }}{% else %}{{ waiting_plain }}{% endif %}" inputmode="decimal" dir="ltr"></div>
+{% if line or can_reject %}<div class="op-field"><label for="qc-rejected">{{ qw.rejected_qty }}</label><input id="qc-rejected" name="rejected" value="{{ post.rejected|default:'' }}" inputmode="decimal" dir="ltr" placeholder="0"></div>{% endif %}
+{% if destinations %}<div class="op-field"><label for="qc-destination">{{ qw.destination }}</label><select id="qc-destination" name="destination">{% for place in destinations %}<option value="{{ place.pk }}"{% if post.destination == place.pk|stringformat:'s' %} selected{% endif %}>{% if lang == 'en' %}{{ place.name_en|default:place.name_ar }}{% else %}{{ place.name_ar }}{% endif %}</option>{% endfor %}</select></div>{% endif %}
+<div class="op-field"><label for="qc-note">{{ qw.note }}</label><input id="qc-note" name="note" value="{{ post.note|default:'' }}" maxlength="255"></div></div>
+<p class="op-muted" data-check-hint>{{ hint }}</p>
+<div class="op-form-actions"><button class="op-primary" type="submit" name="decision" value="record" data-decision="record">{{ qw.record }}</button><button class="op-secondary" type="submit" name="decision" value="hold" data-decision="hold">{{ qw.hold }}</button>{% if line or can_reject %}<button class="op-danger" type="submit" name="decision" value="reject" data-decision="reject">{{ qw.reject_all }}</button>{% endif %}</div></form>
+{% else %}<p class="op-message" data-check-view-only>{{ qw.view_only }}</p>{% endif %}
+{% else %}<p class="op-message" data-nothing-waiting>{{ qw.nothing_waiting }}</p>{% endif %}
+{% if line %}<h2 data-item-criteria>{{ qw.item_criteria }}</h2><p class="op-muted">{{ qw.item_criteria_hint }}</p>
+{% if criteria_error %}<div class="op-message op-message-error" role="alert" data-criteria-error>{{ criteria_error }}</div>{% endif %}
+{% if can_criteria %}<form class="op-form" method="post" data-item-criteria-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="criteria">
+{% include "manufacturing/_quality_criteria_form.html" %}
+<div class="op-form-actions"><button class="op-secondary" type="submit">{{ qw.save_quality }}</button></div></form>{% elif not criteria %}<p class="op-muted">{{ qw.no_criteria_item }}</p>{% endif %}{% endif %}
+{% if history %}<h2>{{ qw.history }}</h2>{% include "manufacturing/_quality_checks_table.html" with check_rows=history %}{% endif %}
+{% endblock %}

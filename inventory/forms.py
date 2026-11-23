@@ -1,0 +1,125 @@
+from decimal import Decimal
+
+from django import forms
+from django.utils import timezone
+
+from config.form_defaults import choose_labels, preselect
+from config.numbering import AutoNumbered
+from master_data.models import Item, Location
+from settings_core.display_labels import localized_choices
+
+from .models import StockAdjustmentDirection, StockOperation
+from entities import scope as entity_scope
+
+
+LABELS = {
+    "ar": {
+        "reference_number": "رقم المرجع",
+        "operation_date": "تاريخ الحركة",
+        "item": "الصنف",
+        "source_location": "الموقع المصدر",
+        "destination_location": "الموقع المستلم",
+        "location": "الموقع",
+        "direction": "اتجاه التسوية",
+        "quantity": "الكمية",
+        "unit_cost": "تكلفة الوحدة",
+        "reason": "السبب / الملاحظات",
+        "reversal_date": "تاريخ العكس",
+    },
+    "en": {
+        "reference_number": "Reference number",
+        "operation_date": "Operation date",
+        "item": "Item",
+        "source_location": "Source location",
+        "destination_location": "Destination location",
+        "location": "Location",
+        "direction": "Adjustment direction",
+        "quantity": "Quantity",
+        "unit_cost": "Unit cost",
+        "reason": "Reason / notes",
+        "reversal_date": "Reversal date",
+    },
+}
+
+
+class StockOperationForm(AutoNumbered, forms.Form):
+    # UI-TRACK F10: the reference is the next TR- / ADJ- number unless one is typed.
+    auto_number = None
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = LABELS[lang][name]
+        if "direction" in self.fields:
+            self.fields["direction"].choices = localized_choices(
+                StockOperation, "adjustment_direction", lang
+            )
+        if "item" in self.fields:
+            self.fields["item"].queryset = Item.objects.filter(
+                active=True, is_stock_tracked=True
+            )
+        for name in ("source_location", "destination_location", "location"):
+            if name in self.fields:
+                self.fields[name].queryset = entity_scope.locations(Location.objects).filter(active=True)
+        if not self.is_bound and "operation_date" in self.fields:
+            self.initial["operation_date"] = timezone.localdate()
+        preselect(self, "source_location", "location")  # UI-TRACK F13: the default warehouse
+        if self.auto_number:
+            self.offer_auto_number(lang)
+        choose_labels(self, lang)  # UX Wave 3: «اختار …», not «---------»
+
+    def clean_reference_number(self):
+        number = (self.cleaned_data["reference_number"] or "").strip()
+        if number and StockOperation.objects.filter(reference_number=number).exists():
+            raise forms.ValidationError("A stock operation with this reference already exists.")
+        return number
+
+
+class StockTransferForm(StockOperationForm):
+    auto_number = ("reference_number", StockOperation, "reference_number", "TR-")
+    reference_number = forms.CharField(max_length=100)
+    operation_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    item = forms.ModelChoiceField(queryset=Item.objects.none())
+    source_location = forms.ModelChoiceField(queryset=Location.objects.none())
+    destination_location = forms.ModelChoiceField(queryset=Location.objects.none())
+    quantity = forms.DecimalField(max_digits=14, decimal_places=3, min_value=Decimal("0.001"))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def clean(self):
+        cleaned = super().clean()
+        source = cleaned.get("source_location")
+        destination = cleaned.get("destination_location")
+        if source and destination and source.pk == destination.pk:
+            self.add_error("destination_location", "Transfer locations must be different.")
+        return cleaned
+
+
+class StockAdjustmentForm(StockOperationForm):
+    auto_number = ("reference_number", StockOperation, "reference_number", "ADJ-")
+    reference_number = forms.CharField(max_length=100)
+    operation_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    item = forms.ModelChoiceField(queryset=Item.objects.none())
+    location = forms.ModelChoiceField(queryset=Location.objects.none())
+    direction = forms.ChoiceField(choices=StockAdjustmentDirection.choices)
+    quantity = forms.DecimalField(max_digits=14, decimal_places=3, min_value=Decimal("0.001"))
+    unit_cost = forms.DecimalField(
+        max_digits=14, decimal_places=4, min_value=Decimal("0"), required=False
+    )
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, can_view_cost=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not can_view_cost:
+            self.fields.pop("unit_cost")
+
+
+class StockOperationReversalForm(forms.Form):
+    reversal_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = LABELS[lang][name]
+        if not self.is_bound:
+            self.initial["reversal_date"] = timezone.localdate()

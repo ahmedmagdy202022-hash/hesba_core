@@ -1,0 +1,42 @@
+/* BARCODE-001 / LABEL-002: label sheets. The size comes from the chosen template as --lb-* variables set by the print page. */
+*{box-sizing:border-box}
+body.lb-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body)}
+.lb-toolbar{position:sticky;top:0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
+.lb-toolbar p{flex-basis:100%;margin:0;color:var(--hs-muted);font-size:12px}
+.lb-button{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding:0 14px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
+.lb-button--primary{border:0;background:var(--hs-teal);color:var(--hs-on-teal);margin-inline-start:auto}
+.lb-button:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.lb-label{display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;background:var(--hs-surface);text-align:center}
+.lb-name{margin:0;font-size:10pt;font-weight:600;line-height:1.2;max-height:2.4em;overflow:hidden}
+.lb-price{margin:1mm 0;font-size:11pt;font-weight:700;color:var(--hs-navy)}
+.lb-price small{font-size:7pt;font-weight:400}
+/* Text lines keep their height; the barcode takes what is left, so nothing is ever squeezed out. */
+.lb-label>p{flex-shrink:0}
+.lb-code{flex:1 1 0;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+.lb-code svg{display:block;max-width:var(--lb-code-w,100%);max-height:100%;width:auto;height:100%}
+.lb-shop,.lb-itemcode{margin:0;font-size:7pt;color:var(--hs-muted);line-height:1.1}
+[data-label-small] .lb-name{font-size:6.5pt}[data-label-small] .lb-price{font-size:7.5pt;margin:0}
+
+.lb-a4 .lb-sheet{width:210mm;margin:16px auto;padding:var(--lb-top,0.5mm) 0 0;display:grid;justify-content:center;grid-template-columns:repeat(var(--lb-cols,3),var(--lb-w,70mm));grid-auto-rows:var(--lb-h,37mm);column-gap:var(--lb-gap-x,0);row-gap:var(--lb-gap-y,0);background:var(--hs-surface);transform:translate(var(--lb-dx,0),var(--lb-dy,0))}
+.lb-a4 .lb-label{padding:2mm 3mm;outline:1px dashed var(--hs-line)}
+
+.lb-roll .lb-sheet{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px}
+.lb-roll .lb-label{width:var(--lb-w,50mm);height:var(--lb-h,25mm);padding:1mm 2mm;outline:1px dashed var(--hs-line);transform:translate(var(--lb-dx,0),var(--lb-dy,0))}
+.lb-roll .lb-name{font-size:7pt}
+.lb-roll .lb-price{margin:0;font-size:8pt}
+
+@page{size:A4;margin:0}
+.lb-roll .lb-label{page:roll}
+@media print{
+  body.lb-body{background:var(--hs-surface)}
+  .lb-toolbar{display:none}
+  .lb-sheet{margin:0!important}
+  .lb-label{outline:none!important}
+  .lb-a4 .lb-label{break-inside:avoid}
+  .lb-roll .lb-sheet{padding:0;gap:0}
+  .lb-roll .lb-label{break-after:page}
+}
+
+/* UX Wave 3: the toolbar's back link carries the one back arrow (partials/back_arrow.html), turned for Arabic. */
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:var(--hs-space-2)}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}

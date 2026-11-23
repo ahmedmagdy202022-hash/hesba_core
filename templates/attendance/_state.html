@@ -1,0 +1,1 @@
+<span class="op-status {% if state == 'present' %}op-status-posted{% elif state == 'late' or state == 'missing' or state == 'leave' %}op-status-draft{% elif state == 'absent' %}op-status-cancelled{% else %}op-status-open{% endif %}" data-state="{{ state }}">{% for key, label in labels.items %}{% if key == state %}{{ label }}{% endif %}{% endfor %}</span>

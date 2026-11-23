@@ -1,0 +1,40 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ page_title }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/education_report.css' %}?v=e2-1">
+</head>
+<body class="rc-body">
+{# E2: the report card, to print or save as a PDF by staff. It holds one student's own marks and attendance: no rank, no one else, and no send button. #}
+<nav class="rc-toolbar" data-report-toolbar><a class="rc-button" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ xw.back }}</a><h1>{{ xw.report }}</h1><button class="rc-button rc-button--primary" type="button" data-print>{{ xw.print }}</button>
+<form class="rc-period" method="get" data-period-form><input type="hidden" name="lang" value="{{ lang }}">
+<label>{{ xw.from }}<input type="date" name="first" value="{{ card.first|date:'Y-m-d' }}" required></label><label>{{ xw.to }}<input type="date" name="last" value="{{ card.last|date:'Y-m-d' }}" required></label><button class="rc-button" type="submit">{{ xw.show }}</button></form>
+<p class="rc-quick">{% for label, first, last in quick %}<a href="?lang={{ lang }}&amp;first={{ first|date:'Y-m-d' }}&amp;last={{ last|date:'Y-m-d' }}" data-quick>{{ label }}</a>{% endfor %}</p>
+{% if error %}<p class="rc-error" role="alert" data-form-error>{{ error }}</p>{% endif %}
+<p class="rc-hint">{{ xw.note_staff }} {{ xw.pdf_hint }}</p></nav>
+<main class="rc-sheet" data-report>
+<header class="rc-head">{% if company.logo %}<img class="rc-logo" src="{{ company.logo }}" alt="" data-company-logo>{% endif %}<div><strong class="rc-centre" data-report-centre>{{ company.name }}</strong><span class="rc-title">{{ xw.report }}</span></div></header>
+<section class="rc-who"><h2 class="rc-name" data-report-student>{{ student.name }}</h2>
+<p><span>{{ xw.code }} <bdi dir="ltr">{{ student.code }}</bdi></span>{% if student.stage %}<span>{{ xw.stage }}: {{ student.stage }}</span>{% endif %}{% if groups %}<span>{{ xw.group }}: {{ groups|join:"، " }}</span>{% endif %}</p>
+<p class="rc-period-line" data-report-period>{{ xw.period }}: <bdi>{{ card.first|day_text:lang }}</bdi> — <bdi>{{ card.last|day_text:lang }}</bdi></p></section>
+<section class="rc-block" data-report-attendance><h3>{{ xw.attendance }}</h3>
+{% if card.attendance.held %}<dl class="rc-stats"><div><dt>{{ xw.rate }}</dt><dd data-attendance-rate><bdi dir="ltr">{{ card.attendance.rate }}%</bdi></dd></div><div><dt>{{ xw.held }}</dt><dd>{{ card.attendance.held }}</dd></div><div><dt>{{ xw.present }}</dt><dd>{{ card.attendance.present }}</dd></div><div><dt>{{ xw.late }}</dt><dd>{{ card.attendance.late }}</dd></div><div><dt>{{ xw.absent }}</dt><dd>{{ card.attendance.absent }}</dd></div>{% if card.attendance.excused %}<div><dt>{{ xw.excused }}</dt><dd>{{ card.attendance.excused }}</dd></div>{% endif %}</dl>
+{% else %}<p class="rc-empty" data-no-classes>{{ xw.no_classes }}</p>{% endif %}</section>
+<section class="rc-block" data-report-exams><h3>{{ xw.exams }}</h3>
+{% if card.rows %}<table class="rc-table"><thead><tr><th>{{ xw.date }}</th><th>{{ xw.exam }}</th><th>{{ xw.score }}</th><th>{{ xw.percent }}</th></tr></thead><tbody>
+{% for row in card.rows %}<tr data-report-exam="{{ row.exam.pk }}" data-status="{{ row.status }}"><td><bdi>{{ row.exam.held_on|day_text:lang }}</bdi></td><td class="rc-exam"><strong>{{ row.exam.title }}</strong><small>{{ row.exam.group.name }}</small></td>
+<td>{% if row.status == 'scored' %}<bdi dir="ltr">{{ row.score_text }} / {{ row.out_text }}</bdi>{% elif row.status == 'absent' %}<span class="rc-tag">{{ xw.absent }}</span>{% else %}<span class="rc-muted">{{ xw.pending }}</span>{% endif %}</td>
+<td>{% if row.percent is not None %}<bdi dir="ltr">{{ row.percent|percent }}</bdi>{% else %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+<div class="rc-average" data-report-average><span>{{ xw.average }}</span><strong>{% if card.average is not None %}<bdi dir="ltr">{{ card.average|percent }}</bdi>{% else %}—{% endif %}</strong></div>
+<p class="rc-note">{{ xw.average_note }} {{ xw.sat }}: {{ card.sat }}{% if card.absent_exams %} · {{ xw.absent_exams }}: {{ card.absent_exams }}{% endif %}{% if card.not_entered %} · {{ xw.not_entered }}: {{ card.not_entered }}{% endif %}</p>
+{% else %}<p class="rc-empty" data-no-exams>{{ xw.no_exams_period }}</p>{% endif %}</section>
+<footer class="rc-foot">{{ xw.printed_on }} <bdi>{{ today|day_text:lang }}</bdi></footer>
+</main>
+<script>(function () { var print = document.querySelector('[data-print]'); if (print) { print.addEventListener('click', function () { window.print(); }); } }());</script>
+</body>
+</html>

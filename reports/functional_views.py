@@ -1,0 +1,255 @@
+from datetime import date
+from decimal import Decimal
+
+from django.db.models import Count, Sum
+from django.shortcuts import render
+
+from cashboxes.models import Cashbox
+from expenses.services import expense_total
+from master_data.models import Customer, Location, Supplier
+from permissions.decorators import require_permission
+from permissions.services import user_has_permission
+from settings_core.capabilities import capability_enabled
+
+from .selectors import (
+    cashbox_report,
+    customer_report,
+    profit_report,
+    profit_totals,
+    purchase_report,
+    sales_report,
+    stock_report,
+    supplier_report,
+)
+from entities import scope as entity_scope
+from config.paging import page_of
+
+
+STRINGS = {
+    "ar": {"page_title": "التقارير", "dashboard": "لوحة القيادة", "language": "English", "reports": "التقارير", "search": "تطبيق الفلاتر", "empty": "مفيش نتايج بالفلاتر دي.", "back": "التقارير", "all_statuses": "كل الحالات", "all_cashboxes": "كل الخزن"},
+    "en": {"page_title": "Reports", "dashboard": "Dashboard", "language": "العربية", "reports": "Read-only report center", "search": "Apply filters", "empty": "No matching results.", "back": "Back to reports", "all_statuses": "All statuses", "all_cashboxes": "All cashboxes"},
+}
+
+REPORT_CARDS = (
+    ("reports:insights", "reports.view_all_sales_report", "Business insights", "تحليل النشاط", "The last 30 days in plain words and charts, with what your kind of business watches", "آخر 30 يوم بالكلام والرسومات، ومعاها اللي نشاطك محتاج يتابعه"),
+    ("reports:daily", "reports.view_sales_report", "Daily summary", "ملخص اليوم", "Yesterday's sales, cash, collections and alerts on one page — send it on WhatsApp", "مبيعات وخزن وتحصيلات وتنبيهات امبارح في صفحة واحدة — وابعتها واتساب"),
+    ("reports:sales", "reports.view_sales_report", "Sales Report", "تقرير المبيعات", "Posted, draft, and cancelled sales invoices", "فواتير البيع النهائية والمسودة والملغية"),
+    ("reports:purchases", "reports.view_purchase_report", "Purchase Report", "تقرير المشتريات", "Purchase invoice history and due context", "سجل فواتير الشراء والمتبقي"),
+    ("reports:inventory", "reports.view_inventory_report", "Inventory Report", "تقرير المخزون", "Stock by item and active location", "المخزون حسب الصنف والموقع"),
+    ("reports:customers", "reports.view_customer_report", "Customer Report", "تقرير العملاء", "Balances and customer statement entries", "أرصدة وحركات كشف حساب العملاء"),
+    ("reports:suppliers", "reports.view_supplier_report", "Supplier Report", "تقرير الموردين", "Balances and supplier statement entries", "أرصدة وحركات كشف حساب الموردين"),
+    ("reports:cashboxes", "reports.view_cashbox_report", "Cashbox Report", "تقرير الخزن", "Opening balance and real cash movements", "الرصيد الافتتاحي وحركات النقد الفعلية"),
+    ("reports:aging", "reports.view_customer_report", "Aging and collections", "أعمار الديون والتحصيل", "Who owes what and since when, with WhatsApp reminders", "مين عليه فلوس ومن إمتى، مع تذكير واتساب"),
+    ("reports:reps", "reports.view_all_sales_report", "Sales reps", "أداء المناديب", "Each rep's net sales, returns, collections, profit and commission, with alerts", "صافي مبيعات كل مندوب ومرتجعاته وتحصيله وربحه وعمولته، مع تنبيهات"),
+    ("taxes:report", "reports.view_sales_report", "VAT return", "إقرار ضريبة القيمة المضافة", "Sales VAT minus purchase VAT, net of returns", "ضريبة المبيعات ناقص ضريبة المشتريات بعد المرتجعات"),
+    ("reports:profit", "reports.view_profit_report", "Profit Report", "تقرير الأرباح", "Sales - Cost of Goods Sold", "المبيعات - تكلفة البضاعة المباعة"),
+)
+
+
+def _lang(request):
+    return "en" if request.GET.get("lang") == "en" else "ar"
+
+
+def _context(request, **extra):
+    lang = _lang(request)
+    context = {"lang": lang, "dir": "ltr" if lang == "en" else "rtl", "words": STRINGS[lang], "page_title": STRINGS[lang]["page_title"]}
+    context.update(extra)
+    return context
+
+
+def _date_filter(request, name):
+    raw = request.GET.get(name, "").strip()
+    if not raw:
+        return None, ""
+    try:
+        return date.fromisoformat(raw), raw
+    except ValueError:
+        return None, raw
+
+
+#: AN3 (Ahmed: "شكل الكروت محتاج يكون اشيك"): each report card gets the menu's icon and a colour for its kind of work.
+CARD_LOOK = {
+    "reports:insights": ("dashboard", "teal"), "reports:daily": ("operations", "navy"), "reports:sales": ("operations", "teal"),
+    "reports:purchases": ("purchases", "gold"), "reports:inventory": ("inventory", "navy"), "reports:customers": ("customers", "teal"),
+    "reports:suppliers": ("suppliers", "gold"), "reports:cashboxes": ("cashboxes", "navy"), "reports:aging": ("customers", "gold"),
+    "reports:reps": ("staff", "teal"), "taxes:report": ("taxes", "navy"), "reports:profit": ("reports", "gold"),
+}
+
+
+#: WATCH1B (SH-12): the report an activity works from leads its hub, for those who may open it (no locked tile: the others' permission
+#: already shows as locked below; this one is a shortcut, so it is only there when it opens). Each ``allow`` is the report's own gate.
+#: The clinic's tile says what its revenue counts (CL-05): the visits that were billed, not every sale.
+ACTIVITY_REPORT_CARDS = (
+    {"url_name": "medical:report", "allow": "medical.services.can_see_report", "icon": "medical", "tone": "teal",
+     # Video finding 5: a lab's tile says «تقرير المعمل», from the activity vocabulary's "clinic_report".
+     "term": "clinic_report", "title_en": "Clinic report", "title_ar": "تقرير العيادة",
+     "description_en": "Visits, follow-ups and new patients per doctor, and the revenue of the visits that were billed — not every sale",
+     "description_ar": "الكشوفات والمتابعات والمرضى الجداد لكل دكتور، وإيراد الكشوفات اللي اتفوترت بس — مش كل المبيعات"},
+    {"url_name": "workorders:report", "allow": "workorders.services.can_see_report", "icon": "workorders", "tone": "teal",
+     "title_en": "Technicians report", "title_ar": "تقرير الفنيين",
+     "description_en": "Orders delivered in the month per technician: how many, revenue before VAT, average days in the shop, and warranty returns",
+     "description_ar": "الأوامر اللي اتسلمت في الشهر لكل فني: عددها، وإيرادها قبل الضريبة، ومتوسط الأيام في المحل، واللي رجع في الضمان"},
+)
+
+
+def activity_report_cards(user, lang):
+    from django.urls import reverse
+    from django.utils.module_loading import import_string
+
+    from settings_core.capabilities import closed_capability
+    from settings_core.module_gate import closed_module
+
+    rows = []
+    for spec in ACTIVITY_REPORT_CARDS:
+        if not import_string(spec["allow"])(user):
+            continue
+        path = reverse(spec["url_name"])
+        if closed_module(path) is not None or closed_capability(path) is not None:  # never a tile into a switched-off module
+            continue
+        title, alt = spec[f"title_{lang}"], spec["title_en" if lang == "ar" else "title_ar"]
+        if spec.get("term"):  # the activity's own name for its report (a lab's «تقرير المعمل»)
+            from settings_core.vocabulary import term
+
+            title, alt = term(spec["term"], lang), term(spec["term"], "en" if lang == "ar" else "ar")
+        rows.append({"url_name": spec["url_name"], "allowed": True, "icon": spec["icon"], "tone": spec["tone"], "activity": True,
+                     "title": title, "title_alt": alt, "description": spec[f"description_{lang}"]})
+    return rows
+
+
+def report_hub(request):
+    from sales.models import SalesInvoice
+    from staff.services import reps_in_use
+
+    lang = _lang(request)
+    # FEEDBACK-R1: the rep report is offered while reps are used, and stays
+    # for a business that used them before switching employees off (GATE-001).
+    reps_shown = reps_in_use() or SalesInvoice.objects.exclude(salesperson=None).exists()
+    cards = [
+        {"url_name": url_name, "allowed": user_has_permission(request.user, permission), "title": title_en if lang == "en" else title_ar, "title_alt": title_ar if lang == "en" else title_en, "description": description_en if lang == "en" else description_ar}
+        for url_name, permission, title_en, title_ar, description_en, description_ar in REPORT_CARDS
+        if url_name != "taxes:report" or capability_enabled("vat")  # TAX-001
+        if url_name != "reports:reps" or reps_shown  # FEEDBACK-R1
+    ]
+    for card in cards:
+        card["icon"], card["tone"] = CARD_LOOK.get(card["url_name"], ("reports", "navy"))
+    cards = activity_report_cards(request.user, lang) + cards  # WATCH1B (SH-12): the activity's own report first
+    return render(request, "reports/functional_hub.html", _context(request, cards=cards, checkpoint_code="096_FOUNDATION_READ_ONLY_REPORT_HUB"))
+
+
+@require_permission("reports.view_sales_report")
+def sales_report_view(request):
+    date_from, date_from_raw = _date_filter(request, "date_from")
+    date_to, date_to_raw = _date_filter(request, "date_to")
+    status = request.GET.get("status", "")
+    if status not in {"draft", "posted", "cancelled"}:
+        status = ""
+    rows = sales_report(date_from, date_to, status or None)
+    if not user_has_permission(request.user, "reports.view_all_sales_report"):
+        rows = rows.filter(created_by=request.user)
+    page = page_of(request, rows)
+    totals = _posted_totals(rows)
+    if user_has_permission(request.user, "reports.view_all_sales_report"):
+        # TRACK-START: the dashboard's month figure is net of returns and tax; say so under the same list.
+        totals["net"] = profit_totals(date_from=date_from, date_to=date_to)["sales"]
+    return render(request, "reports/invoices.html", _context(request, title="Sales Report" if _lang(request) == "en" else "تقرير المبيعات", kind="sales", page=page, totals=totals, date_from=date_from_raw, date_to=date_to_raw, status=status))
+
+
+@require_permission("reports.view_purchase_report")
+def purchase_report_view(request):
+    date_from, date_from_raw = _date_filter(request, "date_from")
+    date_to, date_to_raw = _date_filter(request, "date_to")
+    status = request.GET.get("status", "")
+    if status not in {"draft", "posted", "cancelled"}:
+        status = ""
+    rows = purchase_report(date_from, date_to, status or None)
+    page = page_of(request, rows)
+    return render(request, "reports/invoices.html", _context(request, title="Purchase Report" if _lang(request) == "en" else "تقرير المشتريات", kind="purchases", page=page, totals=_posted_totals(rows), date_from=date_from_raw, date_to=date_to_raw, status=status))
+
+
+def _posted_totals(rows):
+    """TRACK-START: a total under the invoice list, posted invoices only (drafts and cancelled carry no money)."""
+
+    posted = rows.filter(status="posted")
+    totals = posted.aggregate(count=Count("id"), total=Sum("total_amount"), paid=Sum("paid_now"), due=Sum("remaining_due"))
+    totals = {key: value if value is not None else Decimal("0") for key, value in totals.items()}
+    from sales.models import SalesInvoice
+
+    if posted.model is SalesInvoice:
+        # HG-069: what a deposit, paid link or gift card settled is shown on its own and taken off what is due, so
+        # total = paid + applied + due still holds under the list; ``paid`` stays paid_now.
+        from settlements.services import applied_total
+
+        totals["applied"] = applied_total(posted)
+        totals["due"] -= totals["applied"]
+    return totals
+
+
+@require_permission("reports.view_inventory_report")
+def inventory_report_view(request):
+    location = None
+    location_id = request.GET.get("location", "")
+    if location_id.isdigit():
+        location = entity_scope.locations(Location.objects).filter(pk=location_id, active=True).first()
+    rows = stock_report(location)
+    # UI-TRACK F19: a total under the list (the same rows, summed for display).
+    totals = {"lines": len(rows), "value": sum((row["stock_value"] for row in rows), Decimal("0"))}
+    return render(request, "reports/inventory.html", _context(request, title="Inventory Report" if _lang(request) == "en" else "تقرير المخزون", rows=rows, page=page_of(request, rows), totals=totals, locations=entity_scope.locations(Location.objects).filter(active=True), selected_location=location, can_view_cost=user_has_permission(request.user, "inventory.view_cost"),
+                  can_labels=capability_enabled("barcode") and user_has_permission(request.user, "barcode.print_labels")))
+
+
+def _party_context(request, party_kind):
+    model = Customer if party_kind == "customer" else Supplier
+    selected = None
+    party_id = request.GET.get(party_kind, "")
+    if party_id.isdigit():
+        selected = model.objects.filter(pk=party_id, active=True).first()
+    rows = customer_report(selected) if party_kind == "customer" else supplier_report(selected)
+    entries = selected.ledger_entries.filter(entity_scope.customer_entries_q()).select_related("sales_invoice", "customer_payment") if selected and party_kind == "customer" else None
+    if selected and party_kind == "supplier":
+        entries = selected.ledger_entries.filter(entity_scope.supplier_entries_q()).select_related("purchase_invoice", "supplier_payment")
+    return {"rows": rows, "page": page_of(request, rows), "parties": model.objects.filter(active=True), "selected": selected, "entries": entries, "party_kind": party_kind}
+
+
+@require_permission("reports.view_customer_report")
+def customer_report_view(request):
+    return render(request, "reports/parties.html", _context(request, title="Customer Report" if _lang(request) == "en" else "تقرير العملاء", **_party_context(request, "customer")))
+
+
+@require_permission("reports.view_supplier_report")
+def supplier_report_view(request):
+    return render(request, "reports/parties.html", _context(request, title="Supplier Report" if _lang(request) == "en" else "تقرير الموردين", **_party_context(request, "supplier")))
+
+
+@require_permission("reports.view_cashbox_report")
+def cashbox_report_view(request):
+    selected = None
+    cashbox_id = request.GET.get("cashbox", "")
+    if cashbox_id.isdigit():
+        selected = entity_scope.cashboxes(Cashbox.objects).filter(pk=cashbox_id, active=True).first()
+    date_from, date_from_raw = _date_filter(request, "date_from")
+    date_to, date_to_raw = _date_filter(request, "date_to")
+    rows = cashbox_report(selected, date_from, date_to)
+    return render(request, "reports/cashboxes.html", _context(request, title="Cashbox Report" if _lang(request) == "en" else "تقرير الخزن", rows=rows, page=page_of(request, rows), cashboxes=entity_scope.cashboxes(Cashbox.objects).filter(active=True), selected=selected, date_from=date_from_raw, date_to=date_to_raw))
+
+
+@require_permission("reports.view_profit_report")
+def profit_report_view(request):
+    date_from, date_from_raw = _date_filter(request, "date_from")
+    date_to, date_to_raw = _date_filter(request, "date_to")
+    rows = profit_report(date_from, date_to)
+    totals = profit_totals(date_from, date_to)
+    # EXP-001: gross profit stays exactly what profit_totals computes; expenses
+    # are a separate line under it, shown to whoever may read expenses.
+    show_expenses = user_has_permission(request.user, "cashboxes.view_expenses")
+    if show_expenses:
+        totals["expenses"] = expense_total(date_from, date_to)
+        totals["net_profit"] = totals["profit"] - totals["expenses"]
+        # ASSET-001: depreciation and asset-sale results are their own lines
+        # under net profit; nothing above them changes.
+        from fixed_assets.services import assets_enabled, depreciation_between, disposal_results_between
+
+        if assets_enabled():
+            totals["depreciation"] = depreciation_between(date_from, date_to)
+            totals["asset_disposals"] = disposal_results_between(date_from, date_to)
+            totals["net_after_depreciation"] = totals["net_profit"] - totals["depreciation"] + totals["asset_disposals"]
+    return render(request, "reports/profit.html", _context(request, title="Profit Report" if _lang(request) == "en" else "تقرير الأرباح", rows=rows, page=page_of(request, rows), totals=totals, show_expenses=show_expenses, date_from=date_from_raw, date_to=date_to_raw))

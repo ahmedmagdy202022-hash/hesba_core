@@ -1,0 +1,11 @@
+{% if demo_bar %}{# DEMO-FIRST-RUN (D3): one line that says this is a demo and offers the ways out; never a confirm dialog. #}
+<div class="fr-demobar" data-demo-bar role="region" aria-label="{{ demo_bar.label }}">
+  <strong data-demo-activity>{{ demo_bar.label }}</strong>
+  <a href="{{ demo_bar.change_url }}" data-demo-change>{{ demo_bar.words.change }}</a>
+  {% if demo_bar.known %}<form method="post" action="{{ demo_bar.start_url }}" data-demo-{% if demo_bar.empty %}fill{% else %}empty{% endif %}>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="activity" value="{{ demo_bar.activity }}"><input type="hidden" name="sub_activity" value="{{ demo_bar.sub_activity }}"><input type="hidden" name="mode" value="{% if demo_bar.empty %}sample{% else %}empty{% endif %}"><button type="submit">{% if demo_bar.empty %}{{ demo_bar.words.fill }}{% else %}{{ demo_bar.words.empty }}{% endif %}</button></form>{% endif %}
+  <span class="fr-demobar__end">
+    <button type="button" data-feedback-open>{{ demo_bar.words.feedback }}</button>
+    {% if demo_bar.other_user %}<details><summary aria-label="{{ demo_bar.words.more }}">⋯</summary><div><form method="post" action="{{ demo_bar.login_as_url }}" data-demo-login-as="{{ demo_bar.other_user }}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="username" value="{{ demo_bar.other_user }}"><button type="submit">{{ demo_bar.words.other }}</button></form></div></details>{% endif %}
+  </span>
+</div>
+{% endif %}

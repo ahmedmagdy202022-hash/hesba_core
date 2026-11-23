@@ -2,6 +2,8 @@ from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 
+from reports.test_utils import AuthenticatedTestCase
+
 
 MODULE_SLUGS = [
     'customers',
@@ -36,10 +38,13 @@ COMMERCIAL_OPTIONAL_MODULES = [
     'appointments_visits',
     'employees_technicians',
 ]
+#: ACT-FIT: modules with nothing to do with a shop or a service business are not offered to them.
+NOT_FOR_SHOPS_OR_SERVICES = ['tables_orders', 'projects', 'manufacturing']
 
 SERVICES_REQUIRED_MODULES = [
     'items_services',
     'customers',
+    'sales_operations',
     'cashboxes',
     'reports',
 ]
@@ -56,7 +61,7 @@ SERVICES_OPTIONAL_MODULES = [
 ]
 
 
-class SetupFlowSmokeTests(TestCase):
+class SetupFlowSmokeTests(AuthenticatedTestCase):
     def test_117a_activity_selection_still_works(self):
         response = self.client.get('/setup/activity/?lang=ar')
 
@@ -79,7 +84,7 @@ class SetupFlowSmokeTests(TestCase):
         self.assertContains(response, 'data-sub-activity="retail"')
         self.assertContains(response, 'data-sub-activity=', count=8)
         self.assertContains(response, "url.searchParams.set('activity','commercial')")
-        self.assertContains(response, "'/setup/modules/'")
+        self.assertContains(response, "'/setup/questions/'")  # ST6: the questions step follows
 
     def test_117c_services_subactivity_still_works(self):
         response = self.client.get('/setup/activity/services/?lang=en')
@@ -90,7 +95,7 @@ class SetupFlowSmokeTests(TestCase):
         self.assertContains(response, 'data-sub-activity="general"')
         self.assertContains(response, 'data-sub-activity=', count=8)
         self.assertContains(response, "url.searchParams.set('activity', 'services');")
-        self.assertContains(response, "new URL('/setup/modules/', window.location.origin)")
+        self.assertContains(response, "new URL('/setup/questions/', window.location.origin)")  # ST6
 
     def test_setup_gate_still_routes_to_117a(self):
         response = self.client.get(reverse('setup_gate'))
@@ -134,7 +139,7 @@ class SetupFlowSmokeTests(TestCase):
         self.assertIn('Disabling a module must never delete existing data.', plan)
 
 
-class ModulesSelectionScreenTests(TestCase):
+class ModulesSelectionScreenTests(AuthenticatedTestCase):
     @staticmethod
     def _module_tag(response, slug):
         html = response.content.decode('utf-8')
@@ -145,7 +150,7 @@ class ModulesSelectionScreenTests(TestCase):
 
     def assertModuleState(self, response, slug, activity, state):
         tag = self._module_tag(response, slug)
-        self.assertIn(f'data-{activity}-state="{state}"', tag)
+        self.assertIn(f'data-preset-state="{state}"', tag)
 
     def test_modules_selection_route_renders(self):
         response = self.client.get('/setup/modules/?lang=ar&activity=commercial&sub_activity=retail')
@@ -167,14 +172,14 @@ class ModulesSelectionScreenTests(TestCase):
         response = self.client.get('/setup/modules/?lang=ar&activity=commercial&sub_activity=retail')
 
         arabic_labels = [
-            'اختر الموديولات المناسبة',
-            'جهزنا لك اقتراحًا مبدئيًا حسب نوع نشاطك، ويمكنك تعديله قبل المتابعة.',
+            'اختر الأقسام المناسبة',
+            'جهّزنالك اقتراح على حسب نشاطك، وتقدر تغيّره قبل ما تكمّل.',
             'أساسي',
             'مقترح',
             'اختياري',
-            'مقفول',
-            'مفعّل',
-            'غير مفعّل',
+            'أساسي · شغّال دايمًا',  # TRACK-START S03: «مقفول» meant always-on here and off in the settings
+            'شغّال',
+            'مش شغّال',
             'الأصناف والخدمات',
             'عمليات البيع',
             'الخزن',
@@ -192,7 +197,7 @@ class ModulesSelectionScreenTests(TestCase):
             'Required',
             'Suggested',
             'Optional',
-            'Locked',
+            'Core · always on',
             'On',
             'Off',
             'Items & services',
@@ -206,16 +211,18 @@ class ModulesSelectionScreenTests(TestCase):
     def test_all_module_slugs_exist_once_each(self):
         response = self.client.get(reverse('setup_modules'))
 
-        self.assertContains(response, 'class="module-card"', count=12)
+        self.assertContains(response, 'class="module-card"', count=12)  # a shop: no tables, projects or manufacturing
         for slug in MODULE_SLUGS:
             self.assertContains(response, f'data-module="{slug}"', count=1)
+        for slug in NOT_FOR_SHOPS_OR_SERVICES:
+            self.assertNotContains(response, f'data-module="{slug}"')
 
     def test_commercial_preset_required_suggested_optional_modules_exist(self):
         response = self.client.get('/setup/modules/?lang=ar&activity=commercial&sub_activity=retail')
 
-        self.assertContains(response, 'data-commercial-state="required"', count=4)
-        self.assertContains(response, 'data-commercial-state="suggested"', count=6)
-        self.assertContains(response, 'data-commercial-state="optional"', count=2)
+        self.assertContains(response, 'data-preset-state="required"', count=4)
+        self.assertContains(response, 'data-preset-state="suggested"', count=6)
+        self.assertContains(response, 'data-preset-state="optional"', count=2)
         for slug in COMMERCIAL_REQUIRED_MODULES:
             self.assertModuleState(response, slug, 'commercial', 'required')
         for slug in COMMERCIAL_SUGGESTED_MODULES:
@@ -226,9 +233,9 @@ class ModulesSelectionScreenTests(TestCase):
     def test_services_preset_required_suggested_optional_modules_exist(self):
         response = self.client.get('/setup/modules/?lang=ar&activity=services&sub_activity=general')
 
-        self.assertContains(response, 'data-services-state="required"', count=4)
-        self.assertContains(response, 'data-services-state="suggested"', count=2)
-        self.assertContains(response, 'data-services-state="optional"', count=5)
+        self.assertContains(response, 'data-preset-state="required"', count=5)  # AUDIT-2: sales operations too, so a services business can invoice
+        self.assertContains(response, 'data-preset-state="suggested"', count=2)
+        self.assertContains(response, 'data-preset-state="optional"', count=5)
         for slug in SERVICES_REQUIRED_MODULES:
             self.assertModuleState(response, slug, 'services', 'required')
         for slug in SERVICES_SUGGESTED_MODULES:
@@ -255,9 +262,10 @@ class ModulesSelectionScreenTests(TestCase):
 
     def test_optional_modules_start_unselected_and_are_toggleable(self):
         response = self.client.get(reverse('setup_modules'))
+        services = self.client.get('/setup/modules/?lang=ar&activity=services&sub_activity=general')
 
-        self.assertContains(response, 'data-commercial-state="optional"', count=2)
-        self.assertContains(response, 'data-services-state="optional"', count=5)
+        self.assertContains(response, 'data-preset-state="optional"', count=2)
+        self.assertContains(services, 'data-preset-state="optional"', count=5)
         self.assertContains(response, 'selectedModules.delete(slug);')
         self.assertContains(response, 'selectedModules.add(slug);')
         self.assertContains(response, "card.classList.toggle('is-optional', state === 'optional');")
@@ -308,7 +316,7 @@ class ModulesSelectionScreenTests(TestCase):
         self.assertIn('activity-bg-frame', template)
         self.assertIn('activity-ui-layer', template)
         self.assertIn('activity-panel', template)
-        self.assertIn('activity-stepper', template)
+        self.assertIn('partials/setup_stepper.html', template)  # DEMO-FIRST-RUN §7: the one stepper partial
         self.assertIn('activity-footer', template)
         self.assertIn('activity-action', template)
         self.assertIn('setup_gate_logo_approved.png', template)
@@ -318,7 +326,7 @@ class ModulesSelectionScreenTests(TestCase):
         self.assertNotIn('generated background', template.lower())
 
 
-class ReviewSetupScreenTests(TestCase):
+class ReviewSetupScreenTests(AuthenticatedTestCase):
     def test_review_route_renders(self):
         response = self.client.get('/setup/review/?lang=ar&activity=commercial&sub_activity=retail&modules=sales_operations,items_services,cashboxes,reports')
 
@@ -339,14 +347,14 @@ class ReviewSetupScreenTests(TestCase):
 
         arabic_labels = [
             'راجع إعدادات نشاطك',
-            'تأكد من الاختيارات التالية قبل إنهاء إعداد حِسْبَة لنشاطك.',
+            'راجع اختياراتك قبل ما تنهي الإعداد.',
             'ملخص النشاط',
             'النشاط العام',
             'النشاط الفرعي',
-            'الموديولات المختارة',
+            'الأقسام المختارة',
             'ملاحظة الإعدادات',
-            'يمكنك تعديل الموديولات لاحقًا من الإعدادات، ولن يتم حذف أي بيانات عند تعطيل موديول.',
-            'الرجوع إلى اختيار الموديولات',
+            'تقدر تغيّر الأقسام بعدين من الإعدادات، ومفيش بيانات بتتمسح لما توقف قسم.',
+            'الرجوع إلى اختيار الأقسام',
             'إنهاء الإعداد',
         ]
         for label in arabic_labels:
@@ -398,24 +406,42 @@ class ReviewSetupScreenTests(TestCase):
             'href="/setup/modules/?lang=en&amp;activity=commercial&amp;sub_activity=retail&amp;modules=sales_operations,items_services,pdf_printing"',
         )
 
-    def test_next_target_goes_to_complete_with_lang(self):
+    def test_next_submits_the_reviewed_choices(self):
+        """The final step posts its answers now, so there is no onward href.
+
+        It used to be a plain link to a placeholder, which is why nothing the
+        wizard collected was ever saved. Setup persistence is covered in
+        reports.tests_setup_persistence.
+        """
+
         english = self.client.get('/setup/review/?lang=en&activity=commercial&sub_activity=retail&modules=sales_operations')
         arabic = self.client.get('/setup/review/?lang=ar&activity=services&sub_activity=general&modules=items_services')
 
-        self.assertContains(english, 'href="/setup/complete/?lang=en"')
-        self.assertContains(arabic, 'href="/setup/complete/?lang=ar"')
+        for response, lang, activity, sub_activity, modules in (
+            (english, 'en', 'commercial', 'retail', 'sales_operations'),
+            (arabic, 'ar', 'services', 'general', 'items_services'),
+        ):
+            self.assertContains(response, 'method="post" action="/setup/complete/"')
+            self.assertContains(response, 'csrfmiddlewaretoken')
+            self.assertContains(response, f'name="lang" value="{lang}"')
+            self.assertContains(response, f'name="activity" value="{activity}"')
+            self.assertContains(response, f'name="sub_activity" value="{sub_activity}"')
+            self.assertContains(response, f'name="modules" value="{modules}"')
+            self.assertNotContains(response, 'href="/setup/complete/')
 
-    def test_complete_placeholder_renders_safely(self):
-        english = self.client.get('/setup/complete/?lang=en')
-        arabic = self.client.get('/setup/complete/?lang=ar')
+    def test_complete_sends_an_unfinished_setup_back_to_review(self):
+        """Nothing saved means nothing to confirm.
 
-        self.assertEqual(english.status_code, 200)
-        self.assertContains(english, 'Setup complete')
-        self.assertContains(english, 'safe placeholder')
-        self.assertContains(english, 'No production setup activation or final database decision has been saved.')
-        self.assertEqual(arabic.status_code, 200)
-        self.assertContains(arabic, 'تم إنهاء الإعداد')
-        self.assertContains(arabic, 'لم يتم تفعيل أي إعدادات إنتاجية أو حفظ أي قرار نهائي في قاعدة البيانات.')
+        The old placeholder rendered a "Setup complete" page regardless, which is
+        how a visitor could believe setup had finished when it had not.
+        """
+
+        for lang in ('en', 'ar'):
+            response = self.client.get(f'/setup/complete/?lang={lang}')
+
+            self.assertEqual(response.status_code, 302)
+            self.assertTrue(response['Location'].startswith('/setup/review/'))
+            self.assertIn(f'lang={lang}', response['Location'])
 
     def test_review_shell_reuses_117a_visual_lock(self):
         template_path = settings.BASE_DIR / 'templates' / 'setup' / 'review_setup.html'
@@ -425,7 +451,7 @@ class ReviewSetupScreenTests(TestCase):
         self.assertIn('activity-bg-frame', template)
         self.assertIn('activity-ui-layer', template)
         self.assertIn('activity-panel', template)
-        self.assertIn('activity-stepper', template)
+        self.assertIn('partials/setup_stepper.html', template)  # DEMO-FIRST-RUN §7: the one stepper partial
         self.assertIn('activity-footer', template)
         self.assertIn('activity-action', template)
         self.assertIn('setup_gate_logo_approved.png', template)

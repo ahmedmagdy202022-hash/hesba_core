@@ -1,0 +1,20 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}<div data-online-settings>
+<section class="op-title-row"><div><a class="op-back" href="{% url 'appointments:agenda' %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ words.back }}</a><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-online-settings-error>{{ error }}</div>{% endif %}
+<form method="post" data-online-settings-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<section class="op-form">
+  <h2>{{ words.server }}</h2>
+  <div class="op-field"><label for="on-base">{{ words.server_label }}</label><input id="on-base" name="base_url" type="url" dir="ltr" maxlength="200" placeholder="{{ default_base }}" value="{{ values.base_url }}" autocomplete="off"><small class="op-muted">{{ words.server_hint }}</small></div>
+  <p class="op-message" data-jitsi-note>{{ words.jitsi_note }}</p>
+</section>
+<section class="op-form">
+  <h2>{{ words.rules }}</h2>
+  <div class="op-field"><label class="op-check"><input type="checkbox" name="prepaid" value="1"{% if values.prepaid %} checked{% endif %} data-online-prepaid> {{ words.prepaid }}</label><small class="op-muted">{{ words.prepaid_hint }}</small></div>
+  <div class="op-field"><label class="op-check"><input type="checkbox" name="public_booking" value="1"{% if values.public_booking %} checked{% endif %} data-online-public> {{ words.public }}</label><small class="op-muted">{{ words.public_hint }}</small></div>
+  <p class="op-muted">{{ words.window }}</p>
+  <p class="op-muted">{{ words.scope }}</p>
+</section>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ words.save }}</button></div>
+</form>
+</div>{% endblock %}

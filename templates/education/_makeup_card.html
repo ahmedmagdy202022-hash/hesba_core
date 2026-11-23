@@ -1,0 +1,9 @@
+{% load hesba_format %}{# E8 (HG-105): the student's makeup seats, newest class first, two lines a record. Notes are escaped. A booked seat can be cancelled by whoever may take the home or the target group's attendance. #}
+<section class="op-detail-meta mk-card" id="makeup" data-makeup-card><h2>{{ mw.title }}</h2>
+<ul class="mk-list" data-makeup-list>{% for seat in makeup_rows %}<li class="mk-row" data-makeup="{{ seat.pk }}" data-makeup-status="{{ seat.status }}"><div class="mk-text"><strong><bdi>{{ seat.day|day_text:lang }}</bdi>{% if seat.group.start_time %}{% if lang == 'en' %}, {% else %}، {% endif %}<bdi dir="ltr">{{ seat.group.start_time|time:"H:i" }}</bdi>{% endif %}</strong>
+<span class="mk-sub"><a href="{% url 'education:group' seat.group.pk %}?lang={{ lang }}"><bdi>{{ seat.group.course.name }} — {{ seat.group.name }}</bdi></a></span>
+<span class="mk-sub">{{ mw.from_group }} <bdi>{{ seat.home_group.name }}</bdi></span>{% if seat.note %}<span class="mk-sub" data-makeup-note><bdi>{{ seat.note }}</bdi></span>{% endif %}</div>
+<span class="mk-chip mk-chip--{{ seat.status }}" data-makeup-label>{{ seat.status_label }}</span>
+{% if seat.can_cancel %}<form method="post" class="edu-inline" action="{% url 'education:makeup_cancel' seat.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><button class="op-secondary mk-btn" type="submit" data-makeup-cancel>{{ mw.cancel }}</button></form>{% endif %}</li>
+{% empty %}<li class="mk-empty" data-makeup-none>{{ mw.none }}</li>{% endfor %}</ul>
+{% if makeup_can_book %}<div class="op-form-actions"><a class="op-primary mk-btn" href="{% url 'education:makeup_new' student.pk %}?lang={{ lang }}" data-makeup-book>{{ mw.book }}</a></div>{% endif %}</section>

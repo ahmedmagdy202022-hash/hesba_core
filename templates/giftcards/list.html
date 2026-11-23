@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+<div class="op-summary-grid op-summary-grid--compact"><article data-outstanding><small>{{ words.outstanding }}</small><strong><bdi>{{ outstanding|money }}</bdi></strong></article></div>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input name="q" value="{{ query }}" dir="ltr" autocomplete="off" aria-label="{{ words.find }}" placeholder="{{ words.find }}"><span></span><button type="submit">{{ words.find_go }}</button></form>
+<div class="op-table-wrap"><table class="op-table" data-giftcards><thead><tr><th>{{ words.number }}</th><th>{{ words.code }}</th><th>{{ words.face }}</th><th>{{ words.balance }}</th><th>{{ words.holder }}</th><th>{{ words.expires }}</th><th>{{ words.status }}</th><th></th></tr></thead><tbody>
+{% for row in rows %}<tr data-card="{{ row.card.pk }}"><td><bdi>{{ row.card.number }}</bdi></td><td><bdi dir="ltr">{{ row.code }}</bdi></td><td>{{ row.card.face_value|money }}</td><td data-balance>{{ row.balance|money }}</td>
+<td class="op-cell-text">{{ row.card.holder_name|default:"—" }}{% if row.card.holder_phone %} · <bdi dir="ltr">{{ row.card.holder_phone }}</bdi>{% endif %}</td>
+<td><bdi>{{ row.card.expires_on|date:"Y-m-d"|default:"—" }}</bdi>{% if row.expired %} <span class="op-status op-status-draft">{{ words.expired }}</span>{% endif %}</td>
+<td><span class="op-status{% if row.card.status == 'cancelled' %} op-status-cancelled{% else %} op-status-posted{% endif %}">{% for key, label in statuses.items %}{% if key == row.card.status %}{{ label }}{% endif %}{% endfor %}</span></td>
+<td><a href="{% url 'giftcards:detail' row.card.pk %}?lang={{ lang }}">{{ words.open }}</a></td></tr>
+{% empty %}<tr><td colspan="8" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+<form class="op-form" method="post" data-sell-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<h2>{{ words.sell }}</h2><div class="op-form-grid">
+<div class="op-field"><label for="id_face_value">{{ words.value }}</label><input id="id_face_value" name="face_value" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="id_cashbox">{{ words.cashbox }}</label><select id="id_cashbox" name="cashbox" required>{% for box in cashboxes %}<option value="{{ box.pk }}"{% if box.is_default %} selected{% endif %}>{{ box }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_holder_name">{{ words.holder }}</label><input id="id_holder_name" name="holder_name" maxlength="120"></div>
+<div class="op-field"><label for="id_holder_phone">{{ words.phone }}</label><input id="id_holder_phone" name="holder_phone" maxlength="50" dir="ltr" inputmode="tel"></div>
+<div class="op-field"><label for="id_buyer">{{ words.buyer }}</label><select id="id_buyer" name="buyer"><option value="">{{ words.nobody }}</option>{% for customer in customers %}<option value="{{ customer.pk }}">{{ customer.name }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="id_expires_on">{{ words.expires }}</label><input id="id_expires_on" name="expires_on" type="date"></div>
+</div><div class="op-form-actions"><button class="op-primary" type="submit" data-sell>{{ words.save_sell }}</button></div></form>
+{% endblock %}

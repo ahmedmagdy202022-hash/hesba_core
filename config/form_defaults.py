@@ -1,0 +1,111 @@
+"""UI-TRACK: the choices a form can make for you, so nobody types what is obvious.
+
+- ``preselect(form, *names)``: a warehouse or cashbox list starts on the one
+  marked default, or on the only one there is.
+- ``ZeroWhenBlank``: an amount that is normally zero (invoice discount, tax,
+  paid now) is not marked required; left empty it counts as 0.
+- ``item_choice_label(item)``: how an item reads in an invoice line's list.
+"""
+
+from decimal import Decimal
+
+#: UX Wave 2: an empty choice reads «اختار …», never Django's «---------».
+CHOOSE = {"ar": "اختار …", "en": "Choose …"}
+_DASHES = "---------"
+
+
+def choose_labels(form, lang="ar"):
+    """Give every choice list whose empty option is Django's dashes a plain «اختار …» instead.
+
+    A list that already has its own empty wording (``empty_label`` set by the form) keeps it."""
+
+    from django import forms
+
+    word = CHOOSE["en" if lang == "en" else "ar"]
+    for field in form.fields.values():
+        if isinstance(field, forms.ModelChoiceField):
+            if field.empty_label == _DASHES:
+                field.empty_label = word
+        elif isinstance(field, forms.ChoiceField):
+            choices = list(field.choices)
+            if any(value == "" and label == _DASHES for value, label in choices):
+                field.choices = [(value, word if value == "" and label == _DASHES else label) for value, label in choices]
+    return form
+
+
+#: UX Wave 2: the payment forms say what is missing in plain words.
+PAYMENT_ERRORS = {
+    "ar": {
+        "customer": {"required": "اختار العميل اللي هتحصّل منه.", "invalid_choice": "اختار عميل من القائمة."},
+        "supplier": {"required": "اختار المورد اللي هتدفعله.", "invalid_choice": "اختار مورد من القائمة."},
+        "cashbox": {"required": "اختار الخزنة.", "invalid_choice": "اختار خزنة من القائمة."},
+        "amount": {"required": "اكتب المبلغ.", "invalid": "اكتب المبلغ بالأرقام.", "min_value": "المبلغ لازم يكون أكبر من صفر."},
+        "payment_date": {"required": "اكتب التاريخ.", "invalid": "التاريخ مش مظبوط."},
+    },
+    "en": {
+        "customer": {"required": "Choose the customer you are collecting from.", "invalid_choice": "Choose a customer from the list."},
+        "supplier": {"required": "Choose the supplier you are paying.", "invalid_choice": "Choose a supplier from the list."},
+        "cashbox": {"required": "Choose the cashbox.", "invalid_choice": "Choose a cashbox from the list."},
+        "amount": {"required": "Type the amount.", "invalid": "Type the amount in figures.", "min_value": "The amount must be more than zero."},
+        "payment_date": {"required": "Type the date.", "invalid": "That date is not valid."},
+    },
+}
+
+
+def plain_errors(form, lang="ar", table=None):
+    """Put the plain-words error messages of ``table`` (default: PAYMENT_ERRORS) on the form's fields."""
+
+    for name, messages in (table or PAYMENT_ERRORS)["en" if lang == "en" else "ar"].items():
+        field = form.fields.get(name)
+        if field is not None:
+            field.error_messages.update(messages)
+    return form
+
+
+def preselect(form, *names):
+    """Start each named choice on its default record (``is_default``), or on the only record."""
+
+    if form.is_bound:
+        return form
+    for name in names:
+        field = form.fields.get(name)
+        if field is None or form.initial.get(name) or getattr(field, "queryset", None) is None:
+            continue
+        queryset = field.queryset
+        pick = None
+        if any(f.name == "is_default" for f in queryset.model._meta.fields):
+            pick = queryset.filter(is_default=True).first()
+        if pick is None:
+            only = list(queryset[:2])
+            pick = only[0] if len(only) == 1 else None
+        if pick is not None:
+            form.initial[name] = pick.pk
+    return form
+
+
+class ZeroWhenBlank:
+    """Form mixin: ``zero_when_blank = ("discount_amount", ...)`` are optional and 0 when empty."""
+
+    zero_when_blank = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in self.zero_when_blank:
+            if name in self.fields:
+                self.fields[name].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        for name in self.zero_when_blank:
+            if name in self.fields and cleaned.get(name) in (None, ""):
+                cleaned[name] = Decimal("0")
+        return cleaned
+
+
+def item_choice_label(item):
+    """UI-TRACK grocery G05: an invoice line shows the start of the choice, so lead with the name.
+
+    Size and colour stay right after it (Codex #234): they are what tells one variant from another.
+    """
+
+    return " · ".join(part for part in (item.item_name, item.size, item.color, item.item_code) if part)

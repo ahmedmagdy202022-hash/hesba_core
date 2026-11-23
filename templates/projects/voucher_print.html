@@ -1,0 +1,58 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ heading }} {{ reference }} — {{ project.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
+<link rel="stylesheet" href="{% static 'hesba/css/projects.css' %}?v=c1-vo1">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{# Contracting C12 (HG-127): one issue or return voucher on A4, signed by the storekeeper and the site engineer. #}
+<nav class="pr-toolbar" aria-label="{{ vw.print }}">
+  <a class="pr-button pr-button--ghost" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ vw.back }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ vw.print }}</button>
+  <p class="pr-toolbar__hint">{{ vw.hint }}</p>
+</nav>
+<article class="pr-sheet" data-kind="material_voucher" data-voucher-kind="{{ kind }}">
+  {% if cancelled %}<div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ vw.cancelled }}</div>{% endif %}
+  <header class="pr-head">
+    <div class="pr-company">
+      {% if company.logo %}<img class="pr-company__logo" src="{{ company.logo }}" alt="{{ company.name }}">{% endif %}
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+      {% if company.address %}<p>{{ company.address|linebreaksbr }}</p>{% endif %}
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title" data-print-heading>{{ heading }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ vw.number }}</dt><dd data-print-reference><bdi>{{ reference }}</bdi></dd></div>
+        <div><dt>{{ vw.date }}</dt><dd data-print-day>{{ day|day_text:lang }}</dd></div>
+        <div><dt>{{ vw.project }}</dt><dd><bdi>{{ project.code }}</bdi> — {{ project.name }}</dd></div>
+        {% if project.site %}<div><dt>{{ vw.site }}</dt><dd>{{ project.site }}</dd></div>{% endif %}
+      </dl>
+    </div>
+  </header>
+  <section class="pr-party"><span class="pr-party__label">{{ location_label }}</span><strong class="pr-party__name" data-print-location>{{ location }}</strong></section>
+  <table class="pr-lines" data-print-lines>
+    <thead><tr><th>{{ vw.n }}</th><th>{{ vw.code }}</th><th>{{ vw.item }}</th><th>{{ vw.unit }}</th><th class="pr-num">{{ vw.qty }}</th>{% if show_cost %}<th class="pr-num">{{ vw.unit_cost }}</th><th class="pr-num">{{ vw.value }}</th>{% endif %}</tr></thead>
+    <tbody>{% for row in rows %}<tr data-print-line="{{ row.n }}"><td>{{ row.n }}</td><td><bdi>{{ row.op.item.item_code }}</bdi></td><td class="pr-item">{{ row.op.item.item_name }}{% if row.op.status != 'posted' %} — {{ vw.cancelled }}{% endif %}</td><td>{{ row.op.item.unit|unit_label:lang }}</td><td class="pr-num" dir="ltr">{{ row.op.quantity|qty }}</td>{% if show_cost %}<td class="pr-num">{{ row.op.unit_cost|unit_cost }}</td><td class="pr-num">{{ row.value|money }}</td>{% endif %}</tr>{% endfor %}</tbody>
+  </table>
+  <section class="pr-totals">
+    <dl>
+      <div><dt>{{ vw.lines }}</dt><dd data-print-count>{{ rows|length }}</dd></div>
+      {% if show_cost %}<div class="pr-totals__grand"><dt>{{ vw.total }}</dt><dd data-print-total>{{ total|money }} <small>{{ company.currency }}</small></dd></div>{% endif %}
+    </dl>
+  </section>
+  {% if kind == 'return' %}<p class="sr-p-author" data-print-note>{{ vw.return_note }}</p>{% endif %}
+  <p class="sr-p-author" data-print-recorder>{{ vw.by }}: {{ recorder.get_full_name|default:recorder.username }}</p>
+  <section class="pr-signatures" data-print-signatures>
+    {% if kind == 'return' %}<div data-sign="engineer">{{ vw.engineer }} ({{ vw.handed_by }})</div><div data-sign="storekeeper">{{ vw.storekeeper }} ({{ vw.received_by }})</div>
+    {% else %}<div data-sign="storekeeper">{{ vw.storekeeper }} ({{ vw.handed_by }})</div><div data-sign="engineer">{{ vw.engineer }} ({{ vw.received_by }})</div>{% endif %}
+  </section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{{ printed }}</p>{% if company.show_hesba_brand %}<p class="pr-foot__brand"><img src="{% static 'hesba/brand/hesba-logo.png' %}" alt="Hesba"></p>{% endif %}</footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+/* M2 (HG-086): «الأدوية» on the visit form, and the medicines on the printed prescription's screen preview.
+   Tokens only: no colour literals. The sheet itself is drug_picker.css (R1), loaded unchanged beside this file. */
+.rx-wide{grid-column:1/-1}
+.rx-hint{color:var(--hs-muted);font-size:var(--hs-text-xs);line-height:1.6}
+
+.rx{margin:var(--hs-space-6) 0 var(--hs-space-5);padding:var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-lg);background:var(--hs-ground)}
+.rx__head{display:flex;align-items:center;gap:var(--hs-space-2);margin:0 0 var(--hs-space-3)}
+.rx .rx__head h2{margin:0;font-size:var(--hs-text-lg);color:var(--hs-navy)}
+.rx__count{min-width:24px;padding:2px 8px;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-xs);font-weight:700;text-align:center}
+.rx__count[hidden],.rx__empty[hidden],.rx-alert[hidden],.rx-add[hidden],.rx-hand[hidden]{display:none}
+.rx__empty,.rx__nolist{margin:0 0 var(--hs-space-3);color:var(--hs-muted);font-size:var(--hs-text-sm);line-height:1.6}
+.rx__nolist{padding:var(--hs-space-2) var(--hs-space-3);border:1px dashed var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+
+.rx__add{display:flex;flex-wrap:wrap;gap:var(--hs-space-2)}
+.rx-add,.rx-hand{display:inline-flex;align-items:center;justify-content:center;gap:var(--hs-space-2);min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);font:inherit;font-weight:700;cursor:pointer}
+.rx-add{border:0;background:var(--hs-teal);color:var(--hs-on-teal)}
+.rx-hand{border:1px solid var(--hs-line-strong);background:var(--hs-surface);color:var(--hs-teal-deep)}
+.rx-add:disabled,.rx-hand:disabled{opacity:.5;cursor:not-allowed}
+.rx-add:focus-visible,.rx-hand:focus-visible,.rx-icon:focus-visible,.rx-chip:focus-visible,.rx-done:focus-visible,.rx-line:focus-visible,.rx-more summary:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+
+/* one line: number, name, strength · form · ingredient, then dose · frequency · duration */
+.rx-list{display:flex;flex-direction:column;gap:var(--hs-space-2);margin:0 0 var(--hs-space-3);padding:0;list-style:none}
+.rx-line{border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface)}
+.rx-line__head{display:flex;align-items:flex-start;gap:var(--hs-space-3);padding:var(--hs-space-2) var(--hs-space-2) var(--hs-space-2) var(--hs-space-3);padding-inline:var(--hs-space-3) var(--hs-space-2)}
+.rx-line__no{flex:none;display:grid;place-items:center;width:28px;height:28px;margin-top:8px;border-radius:var(--hs-radius-pill);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-size:var(--hs-text-sm);font-weight:700}
+.rx-line__title{display:flex;flex-direction:column;flex:1;min-width:0;padding-top:6px;gap:1px}
+.rx-line__name{font-size:var(--hs-text-base);color:var(--hs-ink);line-height:1.5;overflow-wrap:anywhere}
+.rx-line__label{display:block;margin:-4px 0 2px}
+.rx-line__input{box-sizing:border-box;width:100%;min-height:var(--hs-control-height);padding:0 12px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-weight:600}
+.rx-line__sub{font-size:var(--hs-text-sm);color:var(--hs-muted);line-height:1.5}
+.rx-line__sub:empty,.rx-line__ing:empty,.rx-line__how:empty{display:none}
+.rx-line__sub bdi{white-space:nowrap}
+.rx-line__ing{font-size:var(--hs-text-xs);color:var(--hs-muted);text-align:end;line-height:1.5}
+[dir="ltr"] .rx-line__ing{text-align:start}
+.rx-line__how{font-size:var(--hs-text-sm);color:var(--hs-teal-deep);font-weight:600;line-height:1.5;text-align:start}
+#rx-picker-q::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}  /* the sheet's own close and Esc are enough; the native clear sat on the search icon */
+.rx-line__tools{display:flex;flex:none;gap:2px}
+.rx-icon{display:inline-grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:0;border-radius:var(--hs-radius-sm);background:transparent;color:var(--hs-muted);cursor:pointer}
+.rx-icon:hover{background:var(--hs-neutral-wash);color:var(--hs-ink)}
+.rx-icon--remove:hover{background:var(--hs-danger-wash);color:var(--hs-danger)}
+.rx-icon:disabled{opacity:.35;cursor:default;background:transparent}
+
+/* the allergy advice: a sign and words, never colour alone; it never stops the save */
+.rx-alert{display:flex;gap:var(--hs-space-2);align-items:flex-start;margin:0 var(--hs-space-3) var(--hs-space-2);padding:var(--hs-space-2) var(--hs-space-3);border:1px solid var(--hs-danger-line);border-radius:var(--hs-radius-sm);background:var(--hs-danger-wash);color:var(--hs-danger);font-size:var(--hs-text-sm);font-weight:600;line-height:1.6}
+.rx-alert .hs-drug-ico{margin-top:2px}
+
+.rx-line__body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--hs-space-3) var(--hs-space-4);padding:var(--hs-space-1) var(--hs-space-3) var(--hs-space-3);border-top:1px solid var(--hs-line)}
+.rx--ready .rx-line.is-collapsed .rx-line__body{display:none}
+.rx-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.rx-field label,label.rx-field{display:flex;flex-direction:column;gap:6px}
+.rx-field__label{font-weight:700;color:var(--hs-navy);font-size:var(--hs-text-sm)}
+.rx-field input{box-sizing:border-box;width:100%;min-height:var(--hs-control-height);padding:0 12px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-sm);background:var(--hs-surface);color:var(--hs-ink);font:inherit}
+.rx-field input:focus,.rx-line__input:focus{outline:0;border-color:var(--hs-teal-deep);box-shadow:var(--hs-focus-ring)}
+
+/* quick picks: one tap fills the box (44px targets) */
+.rx-chips{display:flex;flex-wrap:wrap;gap:6px}
+.rx-chips:empty{display:none}
+.rx-chip{display:inline-flex;align-items:center;min-height:var(--hs-control-height);padding:0 12px;border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-pill);background:var(--hs-surface);color:var(--hs-ink);font:inherit;font-size:var(--hs-text-sm);white-space:nowrap;cursor:pointer}
+.rx-chip:hover{border-color:var(--hs-teal-deep)}
+.rx-chip[aria-pressed="true"]{border-color:var(--hs-teal-deep);background:var(--hs-teal-wash);color:var(--hs-teal-deep);font-weight:700}
+.hs-drug-chip.rx-chip--allergy{border-color:var(--hs-danger-line);background:var(--hs-danger-wash);color:var(--hs-danger)}
+
+.rx-more{grid-column:1/-1}
+.rx-more summary{display:inline-flex;align-items:center;min-height:var(--hs-control-height);color:var(--hs-teal-deep);font-weight:600;font-size:var(--hs-text-sm);cursor:pointer}
+.rx-more__grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:var(--hs-space-3) var(--hs-space-4)}
+.rx-line__foot{grid-column:1/-1;display:flex;align-items:center;gap:2px}
+.rx-done{margin-inline-start:auto;min-height:var(--hs-control-height);min-width:96px;padding:0 var(--hs-space-4);border:1px solid var(--hs-teal-deep);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-teal-deep);font:inherit;font-weight:700;cursor:pointer}
+.rx-done:hover{background:var(--hs-teal-wash)}
+
+@media (max-width:760px){
+  .rx{margin-inline:calc(-1 * var(--hs-space-2));padding:var(--hs-space-3)}
+  .rx-line__body{grid-template-columns:minmax(0,1fr)}
+  .rx-more__grid{grid-template-columns:minmax(0,1fr)}
+  .rx-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:calc(-1 * var(--hs-space-3));padding-inline:var(--hs-space-3)}
+  .rx-chips::-webkit-scrollbar{display:none}
+  .rx__add > button{flex:1 1 auto}
+}

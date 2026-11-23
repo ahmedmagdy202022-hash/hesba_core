@@ -1,0 +1,243 @@
+"""I18N-001: service error messages, in Arabic on Arabic screens.
+
+The business services raise English ValidationErrors (tests and logs rely on
+that wording), and the screens used to show them as-is to Arabic users. This
+translates them at display time only: exact sentences first, then the few that
+carry numbers or names. Unknown text passes through unchanged, so a message
+nobody listed is still shown, just untranslated.
+"""
+
+import re
+
+
+EXACT = {
+    # A0 (HG-078): the AI provider layer's refusals (ai/services.py).
+    "AI features are switched off for this company.": "مزايا الذكاء الاصطناعي متوقفة للشركة دي.",
+    "This AI feature is not switched on.": "ميزة الذكاء الاصطناعي دي مش متشغّلة.",
+    "The AI service is not connected on this server.": "خدمة الذكاء الاصطناعي مش موصّلة على السيرفر ده.",
+    "There is no text to read aloud.": "مفيش نص يتقري بالصوت.",
+    "The AI service did not answer. Try again later.": "خدمة الذكاء الاصطناعي مردّتش. جرّب تاني بعد شوية.",
+    # A1 (HG-079): the voice summary (ai/voice_summary.py, ai/views.py).
+    "The audio for this summary is being prepared. Try again in a moment.": "صوت الملخص بيتجهّز دلوقتي. جرّب تاني كمان شوية.",
+    "There is nothing to summarise for you yet.": "لسه مفيش أرقام نلخّصها لك.",
+    # A2 (HG-080): «اسأل حسبة» (ai/services.py).
+    "There is no question to answer.": "اكتب سؤالك الأول.",
+    # A3 (HG-081): the invoice photo (ai/services.py).
+    "There is no photo to read.": "مفيش صورة نقراها. صوّر الفاتورة الأول.",
+    "The photo must be a JPEG, PNG or WebP image.": "الصورة لازم تكون JPG أو PNG أو WebP.",
+    # HG-071 (S6) D7: a card-paid invoice is not returned until a return-to-card path exists.
+    "This invoice was paid partly by gift card, and a return to the card is not possible yet. Cancel the card payment or the whole invoice instead.":
+        "الفاتورة دي اتدفع جزء منها بكارت هدية، والمرتجع على الكارت لسه مش متاح. ألغِ دفعة الكارت أو الفاتورة كلها بدل كده.",
+    "This is a gift-card payment on a walk-in sale; cancel the whole invoice instead, and the card gets its money back.":
+        "دي دفعة بكارت هدية على بيع لعميل نقدي؛ ألغِ الفاتورة كلها بدل كده، والكارت هيرجع له رصيده.",
+    # R2b (HG-110): a walk-in invoice paid several ways is cancelled whole, never returned or partly undone.
+    "This walk-in invoice was paid several ways; a return would leave the part paid into another cashbox as a credit nobody can use. Cancel the whole invoice instead.":
+        "فاتورة العميل النقدي دي اتدفعت بأكتر من طريقة؛ المرتجع هيسيب الجزء اللي اتدفع في خزنة تانية رصيد محدش يقدر يستخدمه. ألغِ الفاتورة كلها بدل كده.",
+    "This payment is part of a walk-in invoice paid several ways; cancel the whole invoice instead, and every part goes back.":
+        "الدفعة دي جزء من فاتورة عميل نقدي اتدفعت بأكتر من طريقة؛ ألغِ الفاتورة كلها بدل كده، وكل جزء هيرجع لخزنته.",
+    # HG-071 (S6): a held box (cheques, couriers, gift cards) is not changed from an import file.
+    "This cashbox is moved only by its own screen (cheques, couriers or gift cards); it cannot be changed from an import file.":
+        "الخزنة دي بتتحرك من شاشتها بس (شيكات أو شحن أو كروت هدايا)؛ مينفعش تتغير من ملف استيراد.",
+    # HG-069 (S5): a deposit already applied to an invoice is released by cancelling that invoice.
+    "This payment is a deposit applied to an invoice; cancel that invoice first.":
+        "الدفعة دي عربون اتخصم من فاتورة؛ ألغِ الفاتورة دي الأول.",
+    # HG-038: a project's contract figures stay possible.
+    "This would leave more retention released than is held on the project; reverse the release first.":
+        "كده الإفراج عن ضمان الأعمال هيبقى أكبر من المحتجز في المشروع؛ ألغِ الإفراج الأول.",
+    "Certificates on this project already recovered this advance; cancel or return those certificates first.":
+        "مستخلصات المشروع خصمت من الدفعة المقدمة دي بالفعل؛ ألغِ المستخلصات دي أو اعملها مرتجع الأول.",
+    "This would leave more subcontractor retention released than is held; reverse the release first.":
+        "كده الإفراج عن ضمان أعمال مقاول الباطن هيبقى أكبر من المحتجز؛ ألغِ الإفراج الأول.",
+    "Retention from this certificate was released at some point (even if that release was reversed later). A cancellation is dated back to the invoice and would rewrite that history, so it is not allowed: make a sales return instead.":
+        "ضمان الأعمال في المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مبيعات بدله.",
+    "Retention from this bill was released at some point (even if that release was reversed later). A cancellation is dated back to the bill and would rewrite that history, so it is not allowed: make a purchase return instead.":
+        "ضمان الأعمال في المستخلص ده اتفرج عنه قبل كده (حتى لو الإفراج اتلغى بعدها). الإلغاء بيرجع لتاريخ الفاتورة وهيغيّر اللي حصل، فمش مسموح: اعمل مرتجع مشتريات بدله.",
+    "A cancellation reason is required.": "اكتب سبب الإلغاء.",
+    # HG-065: selling without stock.
+    "A cost settlement of this sale is in a closed period; reopen it to cancel the sale.":
+        "تسوية تكلفة البيعة دي في فترة مقفولة؛ افتح الفترة الأول علشان تلغي البيعة.",
+    "A cash operation with this reference already exists.": "فيه حركة نقدية بنفس رقم المرجع ده.",
+    "A customer collection with this number already exists.": "فيه تحصيل بنفس الرقم ده.",
+    "A destination cashbox is required.": "اختار الخزنة المستلمة.",
+    "A purchase invoice with posted return documents cannot be cancelled.": "فاتورة الشراء دي عليها مرتجعات نهائية، فمينفعش تتلغي.",
+    "A purchase line discount cannot exceed its gross amount.": "خصم السطر أكبر من قيمته.",
+    "A purchase return must contain at least one line.": "مرتجع الشراء لازم يكون فيه سطر واحد على الأقل.",
+    "A purchase return with this number already exists.": "فيه مرتجع شراء بنفس الرقم.",
+    "A sales invoice with posted return documents cannot be cancelled.": "فاتورة البيع دي عليها مرتجعات نهائية، فمينفعش تتلغي.",
+    "A sales invoice with this number already exists.": "فيه فاتورة بيع بنفس الرقم ده. سيبه فاضي وهيتعمل رقم جديد لوحده.",
+    "A purchase invoice with this number already exists.": "فيه فاتورة شراء بنفس الرقم ده. لو مش رقم المورد سيبه فاضي وهيتعمل رقم جديد لوحده.",
+    "A sales line discount cannot exceed its gross amount.": "خصم السطر أكبر من قيمته.",
+    "A sales return must contain at least one line.": "مرتجع البيع لازم يكون فيه سطر واحد على الأقل.",
+    "A sales return with this number already exists.": "فيه مرتجع بيع بنفس الرقم.",
+    "A source line may appear only once in a return document.": "كل سطر من الفاتورة يتكتب مرة واحدة بس في المرتجع.",
+    "A stock operation with this reference already exists.": "فيه حركة مخزون بنفس رقم المرجع.",
+    "A supplier payment with this number already exists.": "فيه سداد مورد بنفس الرقم.",
+    "A transfer cannot have an adjustment direction.": "التحويل مالوش اتجاه تسوية.",
+    "A transfer requires source and destination cashboxes.": "التحويل محتاج خزنة مصدر وخزنة مستلمة.",
+    "A transfer requires source and destination locations.": "التحويل محتاج مخزن مصدر ومخزن مستلم.",
+    "Add at least one purchase line.": "ضيف سطر شراء واحد على الأقل.",
+    "Add at least one purchase return line.": "ضيف سطر مرتجع واحد على الأقل.",
+    "Add at least one sales line.": "ضيف سطر بيع واحد على الأقل.",
+    "Add at least one sales return line.": "ضيف سطر مرتجع واحد على الأقل.",
+    "Adjustment amount cannot be zero.": "قيمة التسوية مينفعش تكون صفر.",
+    "Adjustment direction must be in or out.": "اتجاه التسوية لازم يكون زيادة أو نقص.",
+    "Adjustment quantity must be greater than zero.": "كمية التسوية لازم تكون أكبر من صفر.",
+    "Adjustment reason is required.": "اكتب سبب التسوية.",
+    "An adjustment direction is required.": "اختار اتجاه التسوية.",
+    "An adjustment requires exactly one location.": "التسوية محتاجة مخزن واحد بس.",
+    "An expense needs a description.": "اكتب بيان المصروف.",
+    "Cancel reason is required.": "اكتب سبب الإلغاء.",
+    "Cash operation amount must be greater than zero.": "المبلغ لازم يكون أكبر من صفر.",
+    "Cash operation reason is required.": "اكتب سبب الحركة.",
+    "Cash operation reversal reason is required.": "اكتب سبب العكس.",
+    "Cash operations require active cashboxes.": "الحركة محتاجة خزنة نشطة.",
+    "Cashbox transfers require the same currency.": "التحويل بين الخزن لازم يكون بنفس العملة.",
+    "Choose an active expense category.": "اختار بند مصروف نشط.",
+    "Customer payment cancellation reason is required.": "اكتب سبب إلغاء التحصيل.",
+    "Direct cash in requires only a destination cashbox.": "الإيداع محتاج خزنة مستلمة بس.",
+    "Direct cash out requires only a source cashbox.": "الصرف محتاج خزنة مصدر بس.",
+    "Every return line must belong to the source invoice.": "كل سطر في المرتجع لازم يكون من نفس الفاتورة.",
+    "Expense amount must be greater than zero.": "مبلغ المصروف لازم يكون أكبر من صفر.",
+    "Invoice discount cannot make the total negative.": "خصم الفاتورة أكبر من إجماليها.",
+    "No period found for this date, and future months are not opened automatically.": "مفيش فترة محاسبية للتاريخ ده، والشهور الجاية مش بتتفتح لوحدها. افتحها من شاشة الفترات.",
+    "No period found for this date.": "مفيش فترة محاسبية للتاريخ ده.",
+    "Only closed periods can be reopened.": "مينفعش تعيد فتح غير فترة مقفولة.",
+    "Only draft purchase invoices can be posted.": "الفاتورة دي مترحّلة قبل كده.",
+    "Only draft sales invoices can be posted.": "الفاتورة دي مترحّلة قبل كده.",
+    "Only posted cashbox operations can be reversed.": "الحركة دي اتعكست قبل كده.",
+    "Only posted customer payments can be cancelled.": "التحصيل ده اتلغى قبل كده.",
+    "Only posted opening-balance adjustments can be reversed.": "التسوية دي اتعكست قبل كده.",
+    "Only posted purchase invoices can be cancelled.": "الفاتورة دي مش نهائية أو اتلغت قبل كده.",
+    "Only posted purchase returns can be reversed.": "المرتجع ده اتعكس قبل كده.",
+    "Only posted sales invoices can be cancelled.": "الفاتورة دي مش نهائية أو اتلغت قبل كده.",
+    "Only posted sales returns can be reversed.": "المرتجع ده اتعكس قبل كده.",
+    "Only posted stock operations can be reversed.": "حركة المخزون دي اتعكست قبل كده.",
+    "Only posted supplier payments can be cancelled.": "السداد ده اتلغى قبل كده.",
+    "Opening-balance correction cannot make the cashbox negative.": "التسوية دي هتخلّي الخزنة بالسالب.",
+    "Period is already closed.": "الفترة دي مقفولة بالفعل.",
+    "Period must be open for posting.": "تاريخ الحركة جوّه فترة مقفولة. افتح الفترة الأول أو غيّر التاريخ.",
+    "Posted purchase invoice has no lines to reverse.": "الفاتورة مفيهاش سطور.",
+    "Posted sales invoice has no lines to reverse.": "الفاتورة مفيهاش سطور.",
+    "Purchase invoice must have at least one line before posting.": "الفاتورة لازم يكون فيها سطر واحد على الأقل قبل الترحيل.",
+    "Purchase invoice must have at least one line.": "الفاتورة لازم يكون فيها سطر واحد على الأقل.",
+    "Purchase return reason is required.": "اكتب سبب المرتجع.",
+    "Purchase return reversal reason is required.": "اكتب سبب عكس المرتجع.",
+    "Purchase returns cannot exceed the source invoice total.": "المرتجع أكبر من إجمالي الفاتورة.",
+    "Purchase returns require a posted source invoice.": "المرتجع محتاج فاتورة نهائية.",
+    "Reopen reason is required.": "اكتب سبب إعادة الفتح.",
+    "Return line must belong to the source invoice.": "السطر ده مش من نفس الفاتورة.",
+    "Return quantity must be greater than zero.": "كمية المرتجع لازم تكون أكبر من صفر.",
+    "Reversal reason is required.": "اكتب سبب العكس.",
+    "Sales invoice must have at least one line before posting.": "الفاتورة لازم يكون فيها سطر واحد على الأقل قبل الترحيل.",
+    "Sales invoice must have at least one line.": "الفاتورة لازم يكون فيها سطر واحد على الأقل.",
+    "Sales return reason is required.": "اكتب سبب المرتجع.",
+    "Sales return reversal reason is required.": "اكتب سبب عكس المرتجع.",
+    "Sales returns cannot exceed the source invoice total.": "المرتجع أكبر من إجمالي الفاتورة.",
+    "Sales returns require a posted source invoice.": "المرتجع محتاج فاتورة نهائية.",
+    "Stock adjustment reason is required.": "اكتب سبب تسوية المخزون.",
+    "Stock operation reversal reason is required.": "اكتب سبب العكس.",
+    "Stock transfer reason is required.": "اكتب سبب التحويل.",
+    "Supplier payment cancellation reason is required.": "اكتب سبب إلغاء السداد.",
+    "The cashbox cannot become negative for this sales return refund.": "الخزنة مفيهاش رصيد كفاية لرد مبلغ المرتجع.",
+    "The cashbox cannot become negative when reversing this cash in.": "عكس الإيداع ده هيخلّي الخزنة بالسالب.",
+    "The cashbox cannot become negative when reversing this return.": "عكس المرتجع ده هيخلّي الخزنة بالسالب.",
+    "The destination cashbox cannot become negative when reversing this transfer.": "عكس التحويل هيخلّي الخزنة المستلمة بالسالب.",
+    "The destination no longer has enough stock to reverse this transfer.": "المخزن المستلم مابقاش فيه كمية كفاية لعكس التحويل.",
+    "The location no longer has enough stock to reverse this adjustment.": "المخزن مابقاش فيه كمية كفاية لعكس التسوية.",
+    "The selected opening-balance target is required.": "اختار الحساب اللي هتتعمله التسوية.",
+    "The source cashbox cannot become negative.": "الخزنة مفيهاش رصيد كفاية للمبلغ ده.",
+    "This category already exists.": "البند ده موجود بالفعل.",
+    "This invoice is registered with the e-invoice portal. Cancel it on the e-invoice page first, then cancel it here.": "الفاتورة دي متسجلة في منظومة الفاتورة الإلكترونية؛ الغيها الأول من صفحة الفاتورة الإلكترونية، وبعدين الغيها هنا.",
+    "This return's credit note is registered with the e-invoice portal, so the return cannot be reversed here.": "إشعار خصم المرتجع ده متسجل في منظومة الفاتورة الإلكترونية، فالمرتجع مينفعش يتلغي من هنا.",
+    "This date falls inside closed books; no new period can be opened there.": "التاريخ ده جوّه فترة اتقفلت؛ مينفعش تتسجل فيه حركة.",
+    "This expense is already cancelled.": "المصروف ده اتلغى قبل كده.",
+    "This record has no operational use yet; edit its opening balance directly.": "الحساب ده لسه ما اتستخدمش؛ عدّل رصيده الافتتاحي مباشرة.",
+    "Transfer cashboxes must be different.": "الخزنتين لازم يكونوا مختلفين.",
+    "A bank fee requires only the bank account it was taken from.": "المصروفات البنكية بتتسجل على الحساب البنكي اللي اتخصمت منه بس.",
+    "Bank fees are taken from a bank account only.": "المصروفات البنكية بتتخصم من حساب بنكي بس، مش من خزنة.",
+    "This payment is a cheque; cancel or bounce it from the cheques screen.": "الدفعة دي شيك؛ الغيه أو سجّله مرتد من شاشة الشيكات.",
+    "This payment was collected by a courier; undo the delivery from the shipments screen.": "الدفعة دي حصّلتها شركة الشحن؛ لغي التسليم من شاشة الشحن.",
+    "This invoice has a parcel with a courier; mark it came back or lost on the shipments screen first.": "الفاتورة دي ليها شحنة لسه مع شركة الشحن؛ سجّل إنها رجعت أو ضاعت من شاشة الشحن الأول.",
+    "This expense belongs to a courier settlement or a lost shipment.": "المصروف ده تابع لتسوية شركة شحن أو لشحنة ضاعت؛ مينفعش يتلغي من هنا.",
+    "Transfer locations must be different.": "المخزنين لازم يكونوا مختلفين.",
+    "Transfer quantity must be greater than zero.": "كمية التحويل لازم تكون أكبر من صفر.",
+    "Unknown cash operation type.": "نوع حركة غير معروف.",
+    "Paid now cannot exceed invoice total.": "المدفوع أكبر من إجمالي الفاتورة.",
+    "Value cannot be negative.": "القيمة مينفعش تكون بالسالب.",
+    "This field is required.": "الخانة دي مطلوبة.",
+    "This field is required for a sales line.": "الخانة دي مطلوبة في سطر البيع.",
+    "This field is required for a purchase line.": "الخانة دي مطلوبة في سطر الشراء.",
+    "Customer ledger entry cannot increase and decrease due at the same time.": "قيد العميل مينفعش يزوّد وينقّص في نفس الوقت.",
+    "Supplier ledger entry cannot increase and decrease due at the same time.": "قيد المورد مينفعش يزوّد وينقّص في نفس الوقت.",
+    "Related period must be closed.": "الفترة المرتبطة لازم تكون مقفولة.",
+    "Post-closing adjustment must reference a closed period.": "تسوية ما بعد الإقفال لازم تكون على فترة مقفولة.",
+    "Only draft post-closing adjustments can be posted.": "التسوية دي مترحّلة قبل كده.",
+    "Only posted post-closing adjustments can be cancelled.": "التسوية دي اتلغت قبل كده.",
+    "Return total must equal cash plus due reversal.": "إجمالي المرتجع لازم يساوي المردود نقدًا + المخصوم من الآجل.",
+    "An opening-balance adjustment must reference exactly one target.": "التسوية لازم تكون على حساب واحد بس.",
+    "Unknown opening-balance target type.": "نوع الحساب غير معروف.",
+}
+
+PATTERNS = (
+    (r"^Not enough stock for item (?P<item>.+)\. Available: (?P<available>[^,]+), required: (?P<required>.+)\.$", "الكمية مش كفاية للصنف {item}: المتاح {available} والمطلوب {required}."),
+    (r"^Not enough stock to (?:adjust out|transfer)\. Available: (?P<available>[^,]+), required: (?P<required>.+)\.$", "الكمية مش كفاية: المتاح {available} والمطلوب {required}."),
+    (r"^Not enough stock to return item (?P<item>.+?)\. ?(?:Available: (?P<available>.+)\.)?$", "مفيش كمية كفاية لإرجاع الصنف {item}."),
+    (r"^Not enough returned stock to reverse item (?P<item>.+?)\. ?(?:Available: (?P<available>.+)\.)?$", "مفيش كمية كفاية لعكس مرتجع الصنف {item}."),
+    (r"^Return quantity exceeds the remaining quantity for line (?P<line>\d+)\.$", "كمية المرتجع أكبر من الباقي في السطر {line}."),
+    (r"^Payment status must be (?P<status>\w+)\.$", "حالة السداد مش متطابقة مع المبالغ."),
+    (r"^This screen needs the (?P<perm>[\w.]+) permission\.$", "الشاشة دي محتاجة صلاحية مش عندك."),
+    # Manufacturing F11b (HG-102): a production run's or order's operation is not reversed from the stock operations screen.
+    (r"^This operation belongs to production run (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
+     r"Cancel the run from its own page: its product leaves stock and all of its materials come back, together\.$",
+     "الحركة دي تابعة لتشغيلة الإنتاج {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ التشغيلة من صفحتها، والمنتج بيخرج من المخزن وكل خاماته بترجع مع بعض."),
+    (r"^This operation is a material issue of production order (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
+     r"Cancel the order from its own page: all of its materials come back together\.$",
+     "الحركة دي صرف خامات لأمر الإنتاج {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ الأمر من صفحته، وكل خاماته بترجع المخزن مع بعض."),
+    # Manufacturing F10 (HG-141): a spare part taken for a maintenance job is returned from the job's own page.
+    (r"^This operation is a spare part of maintenance job (?P<number>\S+) and cannot be reversed from the transfers and adjustments screen\. "
+     r"Return the part from the job's own page\.$",
+     "الحركة دي قطعة غيار لأمر الصيانة {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. رجّع القطعة من صفحة أمر الصيانة."),
+    # HG-107: a kitchen preparation's operation is cancelled from the dish's page.
+    (r"^This operation belongs to the kitchen preparation (?P<number>\S+) of “(?P<dish>.+?)” and cannot be reversed from the transfers and adjustments screen\. "
+     r"Cancel the preparation from the dish's page: its plates leave stock and all of their ingredients come back, together\.$",
+     "الحركة دي تابعة لتحضير «{dish}» رقم {number}، ومينفعش تتعكس من شاشة التحويلات والتسويات. ألغِ التحضير من صفحة الطبق، والأطباق بتخرج من المخزن وكل مكوّناتها بترجع مع بعض."),
+    # HG-127: a project issue that part of already came back from the site is not reversed before its return.
+    (r"^This operation is a material issue to project (?P<code>\S+) and (?P<returned>\S+) of it came back from the site after it\. "
+     r"Reverse those returns first, then the issue\.$",
+     "الحركة دي صرف خامات لمشروع {code}، ورجع من الصنف ده {returned} من الموقع بعدها. اعكس الارتجاع ده الأول، وبعدين الصرف."),
+    # A0 (HG-078): the AI layer's daily cap and text size.
+    (r"^Today's AI call limit is reached \((?P<cap>\d+) calls\)\. Try again tomorrow\.$", "وصلت لحد مكالمات الذكاء الاصطناعي النهارده ({cap} مكالمة). جرّب تاني بكرة."),
+    # A1 (HG-079): one person's daily voicings of the summary.
+    (r"^You have reached today's voice summary limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
+     "وصلت لحد تشغيل ملخص الصوت النهارده ({cap} مرات للشخص). جرّب تاني بكرة."),
+    (r"^The text is too long to read aloud \(at most (?P<limit>\d+) characters\)\.$", "النص طويل أوي على القراية بالصوت (الحد {limit} حرف)."),
+    # A2 (HG-080): «اسأل حسبة»'s question size and one person's daily questions.
+    (r"^The question is too long \(at most (?P<limit>\d+) characters\)\.$", "السؤال طويل أوي (الحد {limit} حرف). اختصره شوية."),
+    (r"^You have reached today's question limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
+     "وصلت لحد الأسئلة النهارده ({cap} سؤال للشخص). جرّب تاني بكرة."),
+    # A3 (HG-081): the invoice photo's size and one person's daily photos.
+    (r"^The photo is too large \(at most (?P<limit>\d+) MB\)\.$", "الصورة كبيرة أوي (الحد {limit} ميجا). صوّرها تاني بحجم أصغر."),
+    (r"^You have reached today's invoice photo limit \((?P<cap>\d+) per person\)\. Try again tomorrow\.$",
+     "وصلت لحد صور الفواتير النهارده ({cap} صور للشخص). جرّب تاني بكرة."),
+)
+_COMPILED = tuple((re.compile(pattern), template) for pattern, template in PATTERNS)
+
+
+def translate(text, lang="ar"):
+    """One message in the screen's language (Arabic by default)."""
+
+    text = str(text or "")
+    if lang == "en" or not text:
+        return text
+    parts = [part.strip() for part in text.split("; ")]
+    return "؛ ".join(_one(part) for part in parts)
+
+
+def _one(text):
+    if text in EXACT:
+        return EXACT[text]
+    for pattern, template in _COMPILED:
+        match = pattern.match(text)
+        if match:
+            return template.format(**{key: value or "" for key, value in match.groupdict().items()})
+    return text

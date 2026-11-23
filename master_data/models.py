@@ -12,6 +12,8 @@ class Location(models.Model):
     is_receiving_location = models.BooleanField(default=True)
     is_selling_location = models.BooleanField(default=True)
     active = models.BooleanField(default=True)
+    # ENT-001 (HG-031): the entity whose stock and books this location belongs to.
+    entity = models.ForeignKey("entities.Entity", on_delete=models.PROTECT, null=True, blank=True, related_name="locations")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -21,7 +23,17 @@ class Location(models.Model):
         verbose_name_plural = "Locations"
 
     def __str__(self):
-        return f"{self.location_code} - {self.name_ar}"
+        # AN2 (F33): screens name a place; the code is only for search and the code column.
+        return self.name_ar or self.location_code
+
+    def save(self, *args, **kwargs):
+        # ENT-001: a record made without an entity belongs to the main one, so
+        # every caller written before entities existed keeps working unchanged.
+        if self.entity_id is None:
+            from entities.services import main_entity
+
+            self.entity = main_entity()
+        super().save(*args, **kwargs)
 
 
 class Category(models.Model):
@@ -45,7 +57,7 @@ class Category(models.Model):
         verbose_name_plural = "Categories"
 
     def __str__(self):
-        return f"{self.category_code} - {self.name_ar}"
+        return self.name_ar or self.category_code  # AN2 (F33)
 
 
 class Item(models.Model):
@@ -91,11 +103,18 @@ class Item(models.Model):
 
     @property
     def search_label(self):
-        parts = [self.item_code, self.item_name, self.size, self.color]
-        return " - ".join(part for part in parts if part)
+        """Everything a search box matches: the name first, then size, colour and the code (AN2)."""
+
+        return " · ".join(part for part in (self.item_name, self.size, self.color, self.item_code) if part)
+
+    @property
+    def display_name(self):
+        """AN2 (F33): how screens name an item: its name, and the size and colour that tell a variant apart."""
+
+        return " · ".join(part for part in (self.item_name, self.size, self.color) if part)
 
     def __str__(self):
-        return self.search_label
+        return self.display_name or self.item_code
 
 
 class Customer(models.Model):
@@ -107,6 +126,14 @@ class Customer(models.Model):
     address = models.TextField(blank=True)
     opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     credit_limit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    # PERF-001 (HG-035): the rep or distributor who looks after this customer.
+    sales_rep = models.ForeignKey(
+        "staff.Employee",
+        on_delete=models.SET_NULL,
+        related_name="customers",
+        null=True,
+        blank=True,
+    )
     notes = models.TextField(blank=True)
     active = models.BooleanField(default=True)
     import_batch_id = models.CharField(max_length=120, blank=True)
@@ -124,7 +151,7 @@ class Customer(models.Model):
         verbose_name_plural = "Customers"
 
     def __str__(self):
-        return f"{self.customer_code} - {self.name}"
+        return self.name or self.customer_code  # AN2 (F33)
 
 
 class Supplier(models.Model):
@@ -152,4 +179,4 @@ class Supplier(models.Model):
         verbose_name_plural = "Suppliers"
 
     def __str__(self):
-        return f"{self.supplier_code} - {self.name}"
+        return self.name or self.supplier_code  # AN2 (F33)

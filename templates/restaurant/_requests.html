@@ -1,0 +1,13 @@
+{# R5a (HG-115): what guests asked from the tables' QR pages, waiting for staff. An order is accepted or declined; a call or a bill is marked «تمام». #}
+{% if qr_rows %}<section class="rq-panel" aria-labelledby="rq-title" data-table-requests-panel>
+<h2 id="rq-title">{{ qw.requests }} <span class="rq-count" data-requests-total>{{ qr_rows|length }}</span></h2>
+<ul class="rq-list">{% for row in qr_rows %}<li class="rq-item rq-item--{{ row.request.kind }}" data-table-request="{{ row.request.pk }}" data-request-kind="{{ row.request.kind }}">
+<div class="rq-head"><strong>{{ row.title }}</strong><span class="rq-kind">{{ row.kind_label }}</span><small>{{ row.at }}</small></div>
+{% if row.is_order %}<ul class="rq-lines">{% for line in row.lines %}<li><span dir="ltr">{{ line.quantity }} ×</span> {{ line.name }}{% if line.options %} <small>({{ line.options|join:" · " }})</small>{% endif %}{% if line.note %} <small>· {{ line.note }}</small>{% endif %}</li>{% endfor %}</ul>
+{% if row.request.note %}<p class="rq-note"><strong>{{ qw.note }}:</strong> {{ row.request.note }}</p>{% endif %}
+{% if can_act_requests %}<p class="op-muted rq-hint">{{ qw.unsent_hint }}</p>{% endif %}{% endif %}
+{% if can_act_requests %}<div class="rq-actions">
+<form method="post" action="{% url 'restaurant:request_act' row.request.pk %}">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">{% if requests_order %}<input type="hidden" name="order" value="{{ requests_order }}">{% endif %}{% if row.is_order %}<button class="op-primary" type="submit" name="action" value="accept" data-request-accept>{{ qw.accept }}</button><button class="op-secondary" type="submit" name="action" value="decline" data-request-decline>{{ qw.decline }}</button>{% else %}<button class="op-primary" type="submit" name="action" value="done" data-request-done>{{ qw.done }}</button>{% endif %}</form>
+</div>{% endif %}
+</li>{% endfor %}</ul>
+</section>{% endif %}

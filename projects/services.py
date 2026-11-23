@@ -1,0 +1,270 @@
+"""CONTRACT-001: projects for contractors: progress bills, materials, costs, margin.
+
+Rules, stated once:
+
+* a progress bill is a *draft* sales invoice made through
+  ``create_sales_draft_with_tax`` for the project's customer; it is posted,
+  collected and printed from the sales screen like any other invoice;
+* materials for a site leave stock through the inventory engine's own
+  ``adjust_stock`` (direction out, at the authoritative average cost), under
+  its own permission and period rules; the project records which operation;
+* an expense (a subcontractor, transport, a daily worker) is recorded on the
+  expenses screen and then linked here;
+* every link is one-to-one: an invoice, expense or stock operation belongs to
+  at most one project;
+* the figures only read posted documents: billed is before tax and after
+  posted returns, collected is what the posted invoices no longer owe, cost is
+  posted materials plus posted expenses plus linked service purchases
+  (CONTRACT-002). Nothing here moves money or stock.
+
+CONTRACT-002 (HG-038) adds the bill of quantities, progress certificates,
+retention and advances (``contract.py``) and subcontractors, service
+purchases and the budget (``costs.py``).
+"""
+
+from decimal import Decimal, InvalidOperation
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import Sum
+
+from audit.models import AuditEventType, AuditLog
+from config.money import money_round
+
+from .models import Project, ProjectExpense, ProjectInvoice, ProjectStatus
+from entities import scope as entity_scope
+
+
+BILLING_ITEM_CODE = "PRJ-BILL"
+OPEN = (ProjectStatus.PLANNED, ProjectStatus.ACTIVE, ProjectStatus.ON_HOLD)
+MESSAGES = {
+    "ar": {
+        "name": "اكتب اسم المشروع.", "customer": "اختار العميل.", "value": "اكتب قيمة العقد رقم صفر أو أكبر.", "dates": "تاريخ النهاية قبل البداية.",
+        "closed": "المشروع ده خلص أو اتلغى.", "certificate_link": "دي فاتورة مستخلص؛ مينفعش تتفك من المشروع. اسحب المسودة من شاشة المستخلصات أو اعمل مرتجع.", "instalments_linked": "أقساط الفاتورة دي متربطة بالمشروع كتحصيلات؛ فكّها من «التحصيلات» الأول.", "amount": "المبلغ لازم أكبر من صفر.", "description": "اكتب وصف المستخلص.", "setup": "لازم يكون فيه مخزن بيع نشط.",
+        "other_customer": "الفاتورة دي لعميل تاني.", "linked": "ده مربوط بمشروع بالفعل.", "not_posted": "اربط الفواتير أو المصروفات النهائية بس.",
+        "qty": "الكمية لازم أكبر من صفر.", "item": "اختار الصنف.", "customer_locked": "المشروع عليه فواتير أو تحصيلات؛ مينفعش يتغير صاحبه.", "location": "اختار المخزن.", "stock_item": "الصنف ده مش متتبع في المخزون.",
+        "value_locked": "قيمة العقد اتعدّلت بأوامر تغيير معتمدة؛ أي تعديل جديد في القيمة يتم بأمر تغيير.",
+        "labour_link": "ده مصروف كشف عمالة يومية؛ مينفعش يتفك من المشروع. لو فيه غلط الغي المصروف من شاشة المصروفات، وأيامه بترجع لكشف جديد.",
+    },
+    "en": {
+        "name": "Enter the project name.", "customer": "Choose the customer.", "value": "Type the contract value as a number, 0 or more.", "dates": "The end date is before the start.",
+        "closed": "This project is done or cancelled.", "certificate_link": "This is a certificate's invoice; it cannot be unlinked from the project. Withdraw the draft on the certificates tab, or make a return.", "instalments_linked": "Instalments of this invoice are linked to the project as collections; unlink them under collections first.", "amount": "The amount must be above zero.", "description": "Describe the progress bill.", "setup": "An active selling location is needed.",
+        "other_customer": "This invoice is for another customer.", "linked": "This is already linked to a project.", "not_posted": "Only posted invoices or expenses can be linked.",
+        "qty": "The quantity must be above zero.", "item": "Choose the item.", "customer_locked": "The project has invoices or payments; its owner cannot change.", "location": "Choose the location.", "stock_item": "This item is not stock-tracked.",
+        "value_locked": "Approved variation orders changed the contract value; any further change in value goes through a variation order.",
+        "labour_link": "This is a daily-labour pay sheet's expense; it cannot be unlinked from the project. If it is wrong, cancel the expense on the expenses screen and its days go back for a new sheet.",
+    },
+}
+
+
+def _audit(project, user, action, after, before=None, event=AuditEventType.UPDATE):
+    AuditLog.objects.create(event_type=event, actor=user, module="projects", action=action, object_type="projects.Project",
+                            object_id=str(project.pk), before_data=before or {}, after_data=after)
+
+
+def _amount(value, words, key="value", allow_zero=True):
+    try:
+        number = Decimal(str(value if value not in (None, "") else "0").strip().replace(",", ""))
+    except InvalidOperation:
+        raise ValidationError(words[key])
+    if not number.is_finite() or number < 0 or (number == 0 and not allow_zero):
+        raise ValidationError(words[key])
+    return money_round(number)
+
+
+def _next_code():
+    number = Project.objects.count() + 1
+    while Project.objects.filter(code=f"P-{number:04d}").exists():
+        number += 1
+    return f"P-{number:04d}"
+
+
+@transaction.atomic
+def save_project(data, user, project=None, lang="ar"):
+    words = MESSAGES[lang]
+    name = (data.get("name") or "").strip()[:255]
+    if not name:
+        raise ValidationError(words["name"])
+    if data.get("customer") is None:
+        raise ValidationError(words["customer"])
+    start, end = data.get("start_date"), data.get("end_date")
+    if start and end and end < start:
+        raise ValidationError(words["dates"])
+    values = {"name": name, "customer": data["customer"], "site": (data.get("site") or "").strip()[:255],
+              "contract_value": _amount(data.get("contract_value"), words), "start_date": start, "end_date": end,
+              "notes": (data.get("notes") or "").strip()[:255]}
+    status = data.get("status")
+    if status in ProjectStatus.values:
+        values["status"] = status
+    created = project is None
+    if not created:
+        project = Project.objects.select_for_update().get(pk=project.pk)
+        # CONTRACT-002: invoices, payments and retention belong to the owner they were made for.
+        if values["customer"].pk != project.customer_id and (project.invoices.exists() or project.payments.exists()
+                                                              or project.certificates.exists() or project.retention_releases.exists()):
+            raise ValidationError(words["customer_locked"])
+        # Contracting C1 (HG-103): once a variation order is approved, the typed value moves only through another order,
+        # so the original value plus the approved orders stays the contract value.
+        if values["contract_value"] != project.contract_value and project.variation_orders.filter(status="approved").exists():
+            raise ValidationError(words["value_locked"])
+    before = {} if created else {key: str(getattr(project, key)) for key in values}
+    project = project or Project(code=_next_code(), created_by=user)
+    for key, value in values.items():
+        setattr(project, key, value)
+    project.save()
+    _audit(project, user, "create_project" if created else "change_project", {key: str(value) for key, value in values.items()}, before,
+           AuditEventType.CREATE if created else AuditEventType.UPDATE)
+    return project
+
+
+def _open(project, words):
+    project = Project.objects.select_for_update().select_related("customer").get(pk=project.pk)
+    if project.status not in OPEN:
+        raise ValidationError(words["closed"])
+    return project
+
+
+def service_item(code, name):
+    """A reserved service line, never a stock item: the item with ``code`` when
+    it is an active non-stock service, else the first such ``code-2``,
+    ``code-3``… (made when missing). A catalog item that took the code and
+    tracks stock is left alone, so a bill never moves stock or books its value
+    to inventory."""
+
+    from master_data.models import Item
+
+    from django.db import IntegrityError
+
+    candidate, number = code, 1
+    while True:
+        try:
+            with transaction.atomic():  # two first bills at once: the loser reads the winner's row
+                item, _ = Item.objects.get_or_create(item_code=candidate, defaults={"item_name": name, "is_stock_tracked": False, "default_sale_price": 0})
+        except IntegrityError:
+            item = Item.objects.get(item_code=candidate)
+        if item.active and not item.is_stock_tracked:
+            return item
+        number += 1
+        candidate = f"{code}-{number}"
+
+
+def billing_item():
+    """The service line a progress bill uses unless another service is chosen."""
+
+    return service_item(BILLING_ITEM_CODE, "مستخلص أعمال")
+
+
+@transaction.atomic
+def bill_progress(project, user, *, amount, description, item=None, lang="ar"):
+    """A lump-sum progress certificate (no bill of quantities). Returns its draft invoice.
+
+    CONTRACT-002: it is a certificate like any other, so the project's
+    retention and advance recovery apply to it too.
+    """
+
+    from .contract import create_certificate
+
+    return create_certificate(project, user, amount=amount, description=description, item=item, lang=lang).invoice
+
+
+@transaction.atomic
+def link_invoice(project, invoice, user, lang="ar"):
+    words = MESSAGES[lang]
+    project = Project.objects.select_for_update().get(pk=project.pk)
+    if invoice.customer_id != project.customer_id:
+        raise ValidationError(words["other_customer"])
+    if invoice.status == "cancelled":
+        raise ValidationError(words["not_posted"])
+    if ProjectInvoice.objects.filter(invoice=invoice).exists():
+        raise ValidationError(words["linked"])
+    from entities import scope as entity_scope
+    from sales.models import SalesInvoice
+
+    from . import contract
+
+    if not entity_scope.scope(SalesInvoice.objects, entity_scope.SALES_INVOICE).filter(pk=invoice.pk).exists():
+        raise ValidationError(contract.MESSAGES[lang]["entity"])  # another entity's invoice never anchors the project
+    established = contract.project_entity(project)
+    if established is not None and contract.entity_of(invoice.selling_location) != established:
+        raise ValidationError(contract.MESSAGES[lang]["entity"])  # one entity per project: its collections stay linkable
+    link = ProjectInvoice.objects.create(project=project, invoice=invoice, label=invoice.invoice_number, created_by=user)
+    _audit(project, user, "link_project_invoice", {"invoice": invoice.invoice_number})
+    return link
+
+
+@transaction.atomic
+def link_expense(project, expense, user, lang="ar", heading=None):
+    from cashboxes.models import CashboxOperationStatus
+
+    words = MESSAGES[lang]
+    project = Project.objects.select_for_update().get(pk=project.pk)
+    if expense.cashbox_operation.status != CashboxOperationStatus.POSTED:
+        raise ValidationError(words["not_posted"])
+    if ProjectExpense.objects.filter(expense=expense).exists():
+        raise ValidationError(words["linked"])
+    from .models import CostHeading
+
+    heading = heading if heading in CostHeading.values else CostHeading.OTHER  # CONTRACT-002: the budget heading
+    link = ProjectExpense.objects.create(project=project, expense=expense, heading=heading, created_by=user)
+    _audit(project, user, "link_project_expense", {"expense": expense.expense_number, "amount": str(expense.amount)})
+    return link
+
+
+@transaction.atomic
+def unlink(project, link, user, lang="ar"):
+    """Take an invoice or expense off the project. The document itself is untouched.
+    A certificate's invoice stays: its deductions and guards belong to the project."""
+
+    if isinstance(link, ProjectInvoice) and hasattr(link.invoice, "project_certificate"):
+        raise ValidationError(MESSAGES[lang]["certificate_link"])
+    if isinstance(link, ProjectInvoice) and project.payments.filter(payment__instalment_link__plan__invoice_id=link.invoice_id).exists():
+        raise ValidationError(MESSAGES[lang]["instalments_linked"])  # its instalments count as this project's collections
+    if isinstance(link, ProjectExpense) and hasattr(link.expense, "labour_sheet"):
+        # Contracting C5 (HG-130): a pay sheet's days stay paid while its expense is posted, so the expense stays on the project.
+        raise ValidationError(MESSAGES[lang]["labour_link"])
+    kind = type(link).__name__
+    label = link.invoice.invoice_number if isinstance(link, ProjectInvoice) else link.expense.expense_number
+    link.delete()
+    _audit(project, user, "unlink_project_document", {"kind": kind, "document": label})
+
+
+@transaction.atomic
+def issue_materials(project, user, *, item, location, quantity, operation_date=None, lang="ar"):
+    """Take materials out of stock for the site, through the inventory engine: a voucher of one line (C12, ``returns.py``)."""
+
+    from .returns import issue_voucher
+
+    return issue_voucher(project, user, location=location, lines=[{"item": item, "quantity": quantity}], operation_date=operation_date, lang=lang)[0]
+
+
+def summary(project):
+    """What the project earned, collected and cost, from posted documents only."""
+
+    from appointments.services import net_sales
+    from cashboxes.models import CashboxOperationStatus
+
+    # As the entity being worked in sees it (HG-034): its own documents only.
+    invoices = entity_scope.scope(project.invoices.select_related("invoice"), "invoice__" + entity_scope.SALES_INVOICE)
+    posted = [link.invoice for link in invoices.filter(invoice__status="posted")]
+    billed = money_round(sum((net_sales(invoice) for invoice in posted), Decimal("0")))
+    invoiced = money_round(sum((Decimal(invoice.total_amount) for invoice in posted), Decimal("0")))
+    due = money_round(sum((Decimal(invoice.remaining_due) for invoice in posted), Decimal("0")))
+    drafts = invoices.filter(invoice__status="draft").aggregate(total=Sum("invoice__total_amount"))["total"] or Decimal("0")
+    from .returns import materials_cost
+
+    materials = materials_cost(project)  # Contracting C12 (HG-127): issues less returns from the site
+    expenses = entity_scope.scope(project.expenses.filter(expense__cashbox_operation__status=CashboxOperationStatus.POSTED), "expense__" + entity_scope.EXPENSE)
+    expenses = money_round(expenses.aggregate(total=Sum("expense__amount"))["total"] or 0)
+    from .contract import contract_value
+    from .costs import purchases_cost
+
+    purchases = purchases_cost(project)  # CONTRACT-002: subcontractor bills and other service purchases
+    cost = money_round(materials + expenses + purchases)
+    contract = contract_value(project)
+    return {
+        "contract": contract, "billed": billed, "invoiced": invoiced, "collected": money_round(invoiced - due), "due": due, "drafts": money_round(drafts),
+        "remaining": money_round(max(contract - billed, Decimal("0"))), "over": money_round(max(billed - contract, Decimal("0"))),
+        "progress": int(min(billed / contract * 100, Decimal("999"))) if contract > 0 else 0,
+        "materials": materials, "expenses": expenses, "purchases": purchases, "cost": cost, "profit": money_round(billed - cost),
+        "margin": int((billed - cost) / billed * 100) if billed > 0 else 0,
+    }

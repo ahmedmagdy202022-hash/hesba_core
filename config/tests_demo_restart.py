@@ -1,0 +1,137 @@
+"""DEMO-RESTART: the showcase starts over from choosing the activity."""
+
+from django.test import TestCase, override_settings
+from django.urls import reverse
+
+from settings_core.models import ClientProfile
+
+
+def seeded_counts():
+    from entities.models import Entity
+    from expenses.models import ExpenseCategory
+    from permissions.models import Permission, Role, RolePermission
+    from taxes.models import TaxRate
+
+    return {model.__name__: model.objects.count() for model in (Permission, Role, RolePermission, TaxRate, ExpenseCategory, Entity)}
+
+
+@override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1")
+class DemoRestartTests(TestCase):
+    def test_restart_empties_the_business_and_restores_every_seed(self):
+        from django.core.management import call_command
+
+        from master_data.models import Item
+        from sales.models import SalesInvoice
+
+        seeds = seeded_counts()
+        self.assertTrue(all(seeds.values()), seeds)
+        call_command("prepare_demo", verbosity=0)
+        self.assertTrue(SalesInvoice.objects.exists())
+        self.assertTrue(ClientProfile.get_active().setup_is_complete)
+
+        response = self.client.post(reverse("demo_restart"), {"lang": "ar"})
+        self.assertRedirects(response, "/setup/activity/?lang=ar", fetch_redirect_response=False)
+        self.assertFalse(SalesInvoice.objects.exists())
+        self.assertFalse(Item.objects.exists())
+        self.assertEqual(seeded_counts(), seeds)
+        profile = ClientProfile.get_active()
+        self.assertFalse(profile.setup_is_complete)
+        # Signed in as the owner, straight onto the first wizard step.
+        page = self.client.get("/setup/activity/?lang=ar")
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(self.client.get(reverse("after_login")).url, reverse("setup_gate"))
+        # The demo logins still work with the demo password.
+        self.client.logout()
+        self.assertTrue(self.client.login(username="cashier", password="Demo-pass-1"))
+
+    def test_the_login_page_no_longer_offers_it_and_get_does_nothing(self):
+        # DEMO-FIRST-RUN: the login page leads to the activity tiles instead; the endpoint stays for the wizard path.
+        from django.core.management import call_command
+
+        call_command("prepare_demo", verbosity=0)
+        login = self.client.get(reverse("login"))
+        self.assertNotContains(login, "data-demo-restart")
+        self.assertContains(login, "data-demo-try")
+        self.client.get(reverse("demo_restart"))
+        self.assertTrue(ClientProfile.get_active().setup_is_complete)
+
+    def test_after_choosing_an_activity_sample_data_is_one_click(self):
+        from sales.models import SalesInvoice
+        from settings_core import setup_catalog as catalog
+        from settings_core.setup_services import complete_setup
+
+        self.client.post(reverse("demo_restart"), {"lang": "ar"})
+        complete_setup(ClientProfile.get_active(), "medical", "clinic", ",".join(catalog.MODULE_SLUGS))
+        page = self.client.get(reverse("setup_complete"), {"lang": "ar"})
+        self.assertContains(page, "data-demo-sample")
+        self.assertContains(page, "ادخل لوحة القيادة بالبيانات التجريبية")  # DM1 (S17): sample data is the main way in
+        self.assertContains(page, "data-start-empty")  # and starting empty is still one click
+        response = self.client.post(reverse("demo_sample"), {"lang": "ar"})
+        self.assertRedirects(response, "/dashboard/?lang=ar", fetch_redirect_response=False)
+        self.assertTrue(SalesInvoice.objects.filter(status="posted").exists())
+        self.assertEqual(ClientProfile.get_active().activity_slug, "medical")
+        self.assertEqual(ClientProfile.get_active().display_name, "عيادة حِسبة التجريبية")  # TRACK-ACTS W02: not "محل"
+        self.assertEqual(self.client.get("/dashboard/?lang=ar").status_code, 200)
+
+    def test_the_sample_shop_is_named_for_its_activity(self):
+        from config.demo import DEMO_NAME, demo_name
+
+        self.assertEqual(demo_name("commercial", "pharmacy"), "صيدلية حِسبة التجريبية")
+        self.assertEqual(demo_name("commercial", "fashion"), "حِسبة للملابس والأحذية (تجريبي)")  # DEMO-FIRST-RUN: a tile of its own
+        self.assertEqual(demo_name("commercial", "other"), DEMO_NAME)
+        self.assertEqual(demo_name("restaurants", "fast_food"), "مطعم حِسبة التجريبي")
+        self.assertEqual(demo_name("other", "general"), DEMO_NAME)
+
+    def test_pressing_sample_data_twice_adds_it_once(self):
+        # FEEDBACK-R1: the second press used to fail on duplicate invoice numbers.
+        from sales.models import SalesInvoice
+        from settings_core import setup_catalog as catalog
+        from settings_core.setup_services import complete_setup
+
+        self.client.post(reverse("demo_restart"), {"lang": "ar"})
+        complete_setup(ClientProfile.get_active(), "commercial", "pharmacy", ",".join(catalog.default_modules("commercial")))
+        self.assertContains(self.client.get(reverse("setup_complete")), "data-busy=")
+        first = self.client.post(reverse("demo_sample"), {"lang": "ar"})
+        invoices = SalesInvoice.objects.count()
+        self.assertGreater(invoices, 0)
+        second = self.client.post(reverse("demo_sample"), {"lang": "ar"})
+        self.assertRedirects(first, "/dashboard/?lang=ar", fetch_redirect_response=False)
+        self.assertRedirects(second, "/dashboard/?lang=ar", fetch_redirect_response=False)
+        self.assertEqual(SalesInvoice.objects.count(), invoices)
+
+
+class DemoRestartOffTests(TestCase):
+    def test_a_real_install_cannot_be_wiped(self):
+        response = self.client.post(reverse("demo_restart"))
+        self.assertEqual(response.status_code, 404)
+        self.assertNotContains(self.client.get(reverse("login")), "data-demo-restart")
+
+
+@override_settings(DEMO_MODE=True, DEMO_PASSWORD="Demo-pass-1")
+class DemoMenuFollowsActivityTests(TestCase):
+    """NAV-ACT: flipping the demo's activity switches its modules the way the
+    wizard would, so the menu only shows what that business uses."""
+
+    def test_switching_the_activity_switches_the_menu(self):
+        from django.core.management import call_command
+
+        from reports.tests_shell import sidebar_links
+
+        call_command("prepare_demo", verbosity=0)
+        self.client.login(username="owner", password="Demo-pass-1")
+        shop = sidebar_links(self.client.get("/dashboard/?lang=ar"))
+        self.assertIn(reverse("purchases:list"), shop)
+        self.assertNotIn(reverse("restaurant:board"), shop)
+        self.assertNotIn(reverse("manufacturing:home"), shop)
+
+        self.client.post(reverse("demo_activity"), {"activity": "medical:clinic", "lang": "ar"})
+        clinic = sidebar_links(self.client.get("/dashboard/?lang=ar"))
+        self.assertIn(reverse("appointments:agenda"), clinic)
+        for hidden in ("purchases:list", "restaurant:board", "manufacturing:home", "projects:list", "inventory:stock"):
+            with self.subTest(hidden=hidden):
+                self.assertNotIn(reverse(hidden), clinic)
+
+        self.client.post(reverse("demo_activity"), {"activity": "manufacturing:food", "lang": "ar"})
+        self.assertIn(reverse("manufacturing:home"), sidebar_links(self.client.get("/dashboard/?lang=ar")))
+        self.client.post(reverse("demo_activity"), {"activity": "restaurants:restaurant", "lang": "ar"})
+        self.assertIn(reverse("restaurant:board"), sidebar_links(self.client.get("/dashboard/?lang=ar")))

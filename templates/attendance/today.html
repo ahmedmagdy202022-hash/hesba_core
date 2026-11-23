@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p><p class="op-muted"><bdi>{{ today|date:"Y-m-d" }}</bdi></p></div></section>
+{% include "attendance/_tabs.html" %}
+{% if error %}<div class="op-message op-message-error" role="alert">{{ error }}</div>{% endif %}
+<section class="op-summary-grid">
+<article><small>{{ words.present_now }}</small><strong data-count-in>{{ counts.in }}</strong></article>
+<article><small>{{ labels.late }}</small><strong data-count-late>{{ counts.late }}</strong></article>
+<article><small>{{ words.missing }}</small><strong data-count-missing>{{ counts.missing }}</strong></article>
+<article><small>{{ words.on_leave }}</small><strong data-count-leave>{{ counts.leave }}</strong></article>
+</section>
+<div class="op-table-wrap"><table class="op-table" data-attendance-today><thead><tr><th>{{ words.employee }}</th><th>{{ words.hours }}</th><th>{{ words.state }}</th><th>{{ words.in }}</th><th>{{ words.out }}</th><th>{{ words.late }}</th>{% if can_manage %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in rows %}<tr data-employee="{{ row.employee.pk }}"><td class="op-cell-text"><a href="{% url 'attendance:month' %}?lang={{ lang }}&employee={{ row.employee.pk }}">{{ row.employee.name }}</a>{% if row.employee.title %} <small class="op-muted">{{ row.employee.title }}</small>{% endif %}</td>
+<td><bdi>{{ row.schedule.start_time|time:"H:i" }}–{{ row.schedule.end_time|time:"H:i" }}</bdi></td>
+<td>{% with state=row.state %}{% include "attendance/_state.html" %}{% endwith %}{% if row.leave %} <small class="op-muted">{% for key, label in kinds.items %}{% if key == row.leave.kind %}{{ label }}{% endif %}{% endfor %}</small>{% endif %}{% if row.holiday %} <small class="op-muted">{{ row.holiday.name }}</small>{% endif %}</td>
+<td><bdi>{{ row.check_in|time:"H:i"|default:"—" }}</bdi></td><td><bdi>{{ row.check_out|time:"H:i"|default:"—" }}</bdi></td>
+<td>{% if row.late %}<span data-late>{{ row.late }} {{ words.minutes }}</span>{% else %}—{% endif %}</td>
+{% if can_manage %}<td>{% if row.state == 'missing' or row.state == 'present' or row.state == 'late' or row.state == 'absent' %}<div class="op-form-actions">
+<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="check"><input type="hidden" name="employee" value="{{ row.employee.pk }}"><button class="op-secondary" type="submit" data-check="{{ row.employee.pk }}">{% if row.check_in %}{{ words.check_out }}{% else %}{{ words.check_in }}{% endif %}</button></form>
+{% if row.state == 'missing' %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="absent"><input type="hidden" name="employee" value="{{ row.employee.pk }}"><button class="op-danger" type="submit" data-absent="{{ row.employee.pk }}">{{ words.absent }}</button></form>{% endif %}
+</div>{% endif %}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="7" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

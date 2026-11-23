@@ -1,0 +1,59 @@
+{% load static hesba_format %}<!doctype html>
+<html lang="{{ lang }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ words.p_analysis_title }} — {{ t.name }}</title>
+{% include "partials/brand_icons.html" %}
+<link rel="stylesheet" href="{% static 'hesba/css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'hesba/css/print.css' %}?v=print-004">
+<link rel="stylesheet" href="{% static 'hesba/css/tenders.css' %}?v=c8-1">
+</head>
+<body class="pr-body pr-a4" data-format="a4">
+{# Contracting C8 (HG-126): the internal price analysis (reports.view_profit_report): each item's cost lines, direct cost, markups and rate, and the cost by heading. Not for submission. #}
+<nav class="pr-toolbar" aria-label="{{ words.p_print }}">
+  <a class="pr-button pr-button--ghost" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ words.p_back }}</a>
+  <button class="pr-button pr-button--primary" type="button" data-print>{{ words.p_print }}</button>
+  <p class="pr-toolbar__hint">{{ words.p_hint }}</p>
+</nav>
+<article class="pr-sheet" data-kind="tender_analysis">
+  <div class="pr-watermark pr-watermark--status" aria-hidden="true">{{ words.p_internal }}</div>
+  <header class="pr-head">
+    <div class="pr-company">
+      <h1 class="pr-company__name">{{ company.name }}</h1>
+    </div>
+    <div class="pr-doc">
+      <h2 class="pr-doc__title" data-print-heading>{{ words.p_analysis_title }}</h2>
+      <dl class="pr-meta">
+        <div><dt>{{ words.name }}</dt><dd>{{ t.name }}</dd></div>
+        <div><dt>{{ words.party }}</dt><dd>{{ party }}</dd></div>
+        <div><dt>{{ words.status }}</dt><dd>{{ status.label }}</dd></div>
+        <div><dt>{{ words.overhead }}</dt><dd dir="ltr">{{ t.overhead_percent|floatformat:"-2u" }}%</dd></div>
+        <div><dt>{{ words.profit }}</dt><dd dir="ltr">{{ t.profit_percent|floatformat:"-2u" }}%</dd></div>
+        <div><dt>{{ words.p_date }}</dt><dd>{{ printed }}</dd></div>
+      </dl>
+    </div>
+  </header>
+  <p class="td-p-internal" data-print-internal>{{ words.p_internal }}</p>
+  <table class="pr-lines td-p-analysis" data-print-lines>
+    <thead><tr><th>{{ words.code }}</th><th>{{ words.description }}</th><th>{{ words.heading }}</th><th class="pr-num">{{ words.unit_cost }}</th><th class="pr-num">{{ words.qty }}</th><th class="pr-num">{{ words.amount }}</th></tr></thead>
+    {% for row in rows %}{% with line=row.item %}<tbody data-print-item="{{ line.line_number }}">
+      <tr class="td-p-item"><td><bdi>{{ line.code|default:line.line_number }}</bdi></td><td class="pr-item" colspan="3">{{ line.description }}</td><td class="pr-num">{{ line.quantity|qty }} <bdi>{{ line.unit }}</bdi></td><td></td></tr>
+      {% for c in row.cost_rows %}<tr><td></td><td>{{ c.c.description }}</td><td>{{ c.heading }}</td><td class="pr-num">{{ c.c.unit_cost|money }}</td><td></td><td></td></tr>{% endfor %}
+      <tr class="td-p-sum"><td></td><td colspan="2">{{ words.direct }}</td><td class="pr-num">{{ row.direct|money }}</td><td></td><td></td></tr>
+      <tr class="td-p-sum"><td></td><td colspan="2">{{ words.after_overhead }}</td><td class="pr-num">{{ row.with_overhead|money }}</td><td></td><td></td></tr>
+      <tr class="td-p-sum td-p-rate"><td></td><td colspan="2">{{ words.rate }}</td><td class="pr-num">{{ row.rate|money }}</td><td></td><td class="pr-num">{{ row.total|money }}</td></tr>
+    </tbody>{% endwith %}{% endfor %}
+  </table>
+  <section class="pr-totals"><dl>
+    {% for h in figures.headings %}<div data-print-heading-amount="{{ h.heading }}"><dt>{{ h.label }} (<bdi dir="ltr">{{ h.share|stringformat:"s" }}%</bdi>)</dt><dd>{{ h.amount|money }}</dd></div>{% endfor %}
+    <div><dt>{{ words.direct_total }}</dt><dd data-print-direct>{{ figures.direct|money }}</dd></div>
+    <div><dt>{{ words.overhead_amount }}</dt><dd>{{ figures.overhead|money }}</dd></div>
+    <div><dt>{{ words.profit_amount }}</dt><dd>{{ figures.profit|money }}</dd></div>
+    <div class="pr-totals__grand"><dt>{{ words.total }}</dt><dd data-print-total>{{ figures.total|money }} <small>{{ company.currency }}</small></dd></div>
+  </dl></section>
+  <footer class="pr-foot"><p class="pr-foot__meta">{{ printed }}</p></footer>
+</article>
+<script>document.querySelector('[data-print]').addEventListener('click', function(){ window.print(); });</script>
+</body>
+</html>

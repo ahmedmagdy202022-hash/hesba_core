@@ -1,0 +1,6 @@
+<nav class="op-form-actions wo-tabs" aria-label="{{ words.title }}" data-pharmacy-tabs>
+{% if lang == 'en' %}{% firstof "Drugs" as drugs_label %}{% firstof "Prescriptions" as rx_label %}{% firstof "+ New prescription" as new_label %}{% else %}{% firstof "الأدوية" as drugs_label %}{% firstof "الروشتات" as rx_label %}{% firstof "+ روشتة جديدة" as new_label %}{% endif %}
+<a class="{% if tab == 'drugs' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'pharmacy:lookup' %}?lang={{ lang }}"{% if tab == 'drugs' %} aria-current="page"{% endif %}>{{ drugs_label }}</a>
+{% if can_rx %}<a class="{% if tab == 'rx' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'pharmacy:prescriptions' %}?lang={{ lang }}"{% if tab == 'rx' %} aria-current="page"{% endif %} data-rx-link>{{ rx_label }}</a>{% endif %}
+{% if can_rx and can_manage %}<a class="{% if tab == 'new' %}op-primary{% else %}op-secondary{% endif %}" href="{% url 'pharmacy:new' %}?lang={{ lang }}"{% if tab == 'new' %} aria-current="page"{% endif %} data-new-rx>{{ new_label }}</a>{% endif %}
+</nav>

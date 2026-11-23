@@ -1,0 +1,26 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/education_exams.css' %}?v=e2-1">{% endblock %}
+{% block operation_content %}
+{# E2: the mark sheet, built like the attendance sheet: a row per student, a numeric box, «غايب» and a note. The hidden digest is what the page showed; a save from an older page is refused. #}
+<section class="op-title-row hs-head"><div><a class="op-back" href="{% url 'education:exams' group.pk %}?lang={{ lang }}">{% include "partials/back_arrow.html" %}{{ xw.back_exams }}</a><h1>{{ exam.title }}</h1>
+<p>{{ group.course.name }} — {{ group.name }} · <bdi>{{ exam.held_on|day_text:lang }}</bdi> · {{ kind_label }} · {{ xw.out_of }} <bdi dir="ltr">{{ out_text }}</bdi> · <span class="op-status {% if exam.published %}op-status-open{% else %}op-status-draft{% endif %}" data-published="{{ exam.published|yesno:'1,0' }}">{% if exam.published %}{{ xw.published }}{% else %}{{ xw.draft }}{% endif %}</span></p></div></section>
+{% if error %}<div class="op-message op-message-error" role="alert" data-form-error>{{ error }}</div>{% endif %}
+{% if future %}<div class="op-message" role="status" data-future>{{ xw.future }}</div>{% endif %}
+<form class="op-form ex-sheet" method="post" data-marks-form>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="marks"><input type="hidden" name="sheet_version" value="{{ version }}" data-sheet-version>
+<div class="ex-rows">
+{% for row in roster %}<div class="ex-row" role="group" aria-labelledby="ex-n-{{ row.student_id }}" data-mark-row="{{ row.student_id }}"><strong class="ex-name" id="ex-n-{{ row.student_id }}">{{ row.student.name }}</strong>
+<div class="ex-score"><input class="ex-box" id="ex-s-{{ row.student_id }}" name="s_{{ row.student_id }}" type="text" inputmode="decimal" dir="ltr" autocomplete="off" enterkeyhint="next" maxlength="10" value="{{ row.score_text }}" aria-label="{{ xw.score }}: {{ row.student.name }}" data-score{% if future %} disabled{% endif %}><span class="ex-of" dir="ltr">/ {{ out_text }}</span></div>
+<label class="ex-absent"><input type="checkbox" name="a_{{ row.student_id }}" value="1"{% if row.absent %} checked{% endif %}{% if future %} disabled{% endif %} data-absent><span>{{ xw.absent }}</span></label>
+<input class="ex-note" name="n_{{ row.student_id }}" value="{{ row.note }}" maxlength="255" aria-label="{{ xw.note }}: {{ row.student.name }}" placeholder="{{ xw.note }}"{% if future %} disabled{% endif %}>
+</div>{% empty %}<p class="op-empty" data-no-roster>{{ xw.no_roster }}</p>{% endfor %}
+</div>
+{% if roster and not future %}<div class="ex-bar" data-save-bar><span class="ex-count" data-entered-count data-template="{{ xw.entered_of }}" role="status">{{ count_text }}</span><button class="op-primary" type="submit" data-save-marks>{{ xw.save_marks }}</button></div>{% endif %}
+</form>
+{% if can_publish %}<section class="op-detail-meta" data-publish><h2>{{ xw.published }}</h2><p class="op-muted">{{ xw.publish_hint }}</p>
+<form method="post" class="op-form-actions">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="{% if exam.published %}unpublish{% else %}publish{% endif %}"><button class="op-secondary" type="submit" data-toggle-publish>{% if exam.published %}{{ xw.unpublish }}{% else %}{{ xw.publish }}{% endif %}</button></form></section>{% endif %}
+<details class="op-form"{% if post %} open{% endif %}><summary><h2>{{ xw.edit_exam }}</h2></summary>
+<form method="post" data-exam-edit>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="edit"><div class="op-form-grid">{% include "education/_exam_fields.html" %}</div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ xw.save_exam }}</button></div></form></details>
+<script src="{% static 'hesba/js/edu_marks.js' %}?v=e2-1" defer></script>
+{% endblock %}

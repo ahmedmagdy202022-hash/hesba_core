@@ -1,0 +1,34 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/visit_templates.css' %}?v=m1-2">{% endblock %}
+{% block operation_content %}
+{# M1 (HG-089): add or change a template. The medicine lines are the visit form's own section (_rx_lines.html), so they post rx_* and are checked as a visit's lines are. #}
+<section class="op-title-row"><div><a class="op-back" href="{{ back }}">{% include "partials/back_arrow.html" %}{{ tw.back }}</a><h1>{% if template %}{{ tw.edit }}{% else %}{{ tw.new }}{% endif %}</h1><p>{{ tw.no_patient }}</p></div></section>
+{% if errors %}<div class="op-message op-message-error" role="alert" data-vt-errors>{% for e in errors %}{{ e }}{% if not forloop.last %} {% endif %}{% endfor %}</div>{% endif %}
+{% if read_only %}<p class="vt-notice" data-vt-readonly>{{ tw.shared_note }}</p>{% endif %}
+<form class="op-form vt-form" method="post" data-vt-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}">
+<fieldset{% if read_only %} disabled{% endif %}>
+<div class="op-form-grid">
+<div class="op-field vt-wide"><label for="vt-name">{{ tw.name }}</label><input id="vt-name" name="name" required maxlength="120" placeholder="{{ tw.name_hint }}" dir="auto" value="{{ shown.name }}"></div>
+<div class="op-field"><label for="vt-specialty">{{ tw.specialty }}</label><select id="vt-specialty" name="specialty">{% for s in specialties %}<option value="{{ s.code }}"{% if shown.specialty == s.code %} selected{% endif %}>{{ s.label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="vt-text-lang">{{ tw.text_lang }}</label><select id="vt-text-lang" name="text_lang"><option value="ar"{% if shown.lang == 'ar' %} selected{% endif %}>{{ tw.lang_ar }}</option><option value="en"{% if shown.lang == 'en' %} selected{% endif %}>{{ tw.lang_en }}</option></select></div>
+{% if manager %}<div class="op-field vt-wide"><label for="vt-scope">{{ tw.scope }}</label><select id="vt-scope" name="scope"><option value="mine"{% if shown.scope != 'shared' %} selected{% endif %}>{% if owner_name %}{{ owner_name }}{% else %}{{ tw.scope_mine_opt }}{% endif %}</option><option value="shared"{% if shown.scope == 'shared' %} selected{% endif %}>{{ tw.scope_shared_opt }}</option></select></div>{% endif %}
+</div>
+<h2>{{ tw.texts }}</h2>
+<p class="rx-hint">{{ tw.texts_hint }}</p>
+<div class="op-form-grid">
+<div class="op-field vt-wide"><label for="vt-complaint">{{ words.complaint }}</label><textarea id="vt-complaint" name="complaint" dir="auto">{{ shown.complaint }}</textarea></div>
+<div class="op-field vt-wide"><label for="vt-examination">{{ words.examination }}</label><textarea id="vt-examination" name="examination" dir="auto">{{ shown.examination }}</textarea></div>
+<div class="op-field vt-wide"><label for="vt-diagnosis">{{ words.diagnosis }}</label><textarea id="vt-diagnosis" name="diagnosis" dir="auto">{{ shown.diagnosis }}</textarea></div>
+</div>
+{% include "medical/_rx_lines.html" %}
+<p class="rx-hint">{{ tw.meds_hint }}</p>
+<div class="op-form-grid">
+<div class="op-field vt-wide"><label for="vt-treatment">{{ tw.instructions }}</label><textarea id="vt-treatment" name="treatment" dir="auto">{{ shown.treatment }}</textarea></div>
+<label class="vt-check vt-wide"><input type="checkbox" name="active" value="1"{% if shown.active %} checked{% endif %}> {{ tw.active }}</label>
+</div>
+</fieldset>
+<div class="op-form-actions hs-sticky-save">{% if not read_only %}<button class="op-primary" type="submit">{{ tw.save }}</button>{% endif %}<a class="op-secondary" href="{{ back }}">{{ tw.cancel }}</a></div>
+</form>
+{% if read_only %}<form class="vt-copy" method="post" action="{% url 'medical:visit_template_action' template.pk 'copy' %}?lang={{ lang }}">{% csrf_token %}<button class="op-secondary" type="submit" data-vt-copy>{{ tw.copy }}</button></form>{% endif %}
+{% endblock %}

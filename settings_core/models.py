@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -40,6 +41,13 @@ class ClientProfile(models.Model):
         choices=ActivityType.choices,
         default=ActivityType.STORE,
     )
+    # The setup wizard speaks its own vocabulary ("commercial" where activity_type
+    # says "store") and offers a sub-activity that activity_type has no room for,
+    # so both choices are stored as the wizard made them and activity_type is
+    # derived from activity_slug. See settings_core.setup_catalog.
+    activity_slug = models.CharField(max_length=40, blank=True)
+    sub_activity_slug = models.CharField(max_length=40, blank=True)
+    setup_completed_at = models.DateTimeField(null=True, blank=True)
     edition_code = models.CharField(max_length=100, default="HESBA_LITE_STORE_SERVICES")
     default_currency = models.CharField(max_length=10, default="EGP")
     default_language = models.CharField(max_length=10, default="ar")
@@ -60,6 +68,29 @@ class ClientProfile(models.Model):
 
     def __str__(self):
         return f"{self.client_code} - {self.display_name}"
+
+    @classmethod
+    def get_active(cls):
+        """Return this installation's profile, or None before bootstrap.
+
+        One database holds one client installation, so callers that need the
+        current client should read it through here instead of querying the
+        table and guessing which row is authoritative.
+        """
+
+        return cls.objects.filter(is_active=True).order_by("pk").first()
+
+    @property
+    def setup_is_complete(self):
+        return self.setup_completed_at is not None
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and type(self).objects.exists():
+            raise ValidationError(
+                "Hesba Core keeps one client installation per database. "
+                "A client profile already exists; update it instead of adding another."
+            )
+        return super().save(*args, **kwargs)
 
 
 class SystemSetting(models.Model):

@@ -1,0 +1,48 @@
+{% extends "operations/base.html" %}
+{% load static %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/technician.css' %}?v=s9-1">{% endblock %}
+{% block operation_content %}
+<div class="tc" data-my-day>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="tc-i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="tc-i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></symbol>
+<symbol id="tc-i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+<symbol id="tc-i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3 3 0 000-6H9a3 3 0 010-6h7"/></symbol>
+</defs></svg>
+
+<header class="tc-head">
+<h1>{{ words.title }}</h1>
+<p class="tc-sub">{{ day.employee.name }} · <bdi>{{ day.today|date:"Y-m-d" }}</bdi></p>
+<p class="tc-sub" data-my-day-count>{% with visits=day.visits orders=day.orders %}{% if lang == 'en' %}{{ visits }} appointments and visits · {{ orders }} open work orders{% else %}{{ visits }} ميعاد وزيارة · {{ orders }} أمر شغل مفتوح{% endif %}{% endwith %}</p>
+{% if day.visits %}<div class="tc-prog"><div class="tc-prog__bar"><i data-progress="{{ day.visits_done }}/{{ day.visits }}" style="width:{% widthratio day.visits_done day.visits 100 %}%"></i></div>
+<div class="tc-prog__lbl">{% if lang == 'en' %}Done {{ day.visits_done }} of {{ day.visits }} appointments{% else %}خلّصت {{ day.visits_done }} من {{ day.visits }} مواعيد{% endif %}</div></div>{% endif %}
+</header>
+
+{% if not day.cards %}<p class="tc-empty" data-empty>{{ words.empty }}</p>{% endif %}
+
+{% if day.visit_cards %}<section class="tc-section" aria-labelledby="tc-visits-h" data-section="visits">
+<h2 id="tc-visits-h">{{ words.visits }}</h2>
+<div class="tc-jobs">{% for card in day.visit_cards %}{% include "staff/_my_day_card.html" %}{% endfor %}</div>
+</section>{% endif %}
+
+{% if day.order_cards %}<section class="tc-section" aria-labelledby="tc-orders-h" data-section="orders">
+<h2 id="tc-orders-h">{{ words.orders }}</h2>
+<div class="tc-jobs">{% for card in day.order_cards %}{% include "staff/_my_day_card.html" %}{% endfor %}</div>
+</section>{% endif %}
+
+{% if day.visits %}<section class="tc-routebox" aria-labelledby="tc-route-h" data-route>
+<h2 id="tc-route-h">{{ words.route }}</h2>
+{% if day.stops %}
+<ol class="tc-route">{% for stop in day.stops %}
+<li class="tc-stop" data-stop>
+<span class="tc-no">{{ forloop.counter }}</span>
+<div class="tc-stopbody"><div class="tc-stopline"><span class="tc-stoptime"><bdi>{{ stop.time }}</bdi></span><span class="tc-cust">{{ stop.customer }}</span></div>
+<div class="tc-addr"><svg class="tc-ico" aria-hidden="true"><use href="#tc-i-pin"></use></svg><span>{{ stop.address }}</span></div></div>
+</li>{% endfor %}</ol>
+<a class="op-primary tc-mapsbtn" href="{{ day.route }}" target="_blank" rel="noopener noreferrer" data-route-link><svg class="tc-ico" aria-hidden="true"><use href="#tc-i-route"></use></svg>{{ words.route_open }}</a>
+{% if day.route_cut %}<p class="tc-hint">{% if lang == 'en' %}Maps takes up to {{ max_stops }} stops; the button covers the first {{ max_stops }} only.{% else %}الخرايط بتقبل لحد {{ max_stops }} محطات؛ الزرار بيشمل أول {{ max_stops }} بس.{% endif %}</p>{% endif %}
+<p class="tc-hint">{{ words.route_hint }}</p>
+{% else %}<p class="tc-empty" data-route-empty>{{ words.route_empty }}</p>{% endif %}
+</section>{% endif %}
+</div>
+{% endblock %}

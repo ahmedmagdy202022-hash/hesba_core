@@ -1,0 +1,15 @@
+{% load hesba_format %}{# C10 (HG-135): one variation order as the owner's page shows it: what the printed order shows, no staff names #}
+<p class="op-order-title" data-order-title>{{ row.order.title }}</p>
+{% if row.lines %}<ul class="op-list op-lines">{% for item in row.lines %}<li class="op-line" data-order-line>
+  <div class="op-line__head"><bdi class="op-code">{{ item.line.code }}</bdi> <span>{{ item.line.description }}</span> <small class="op-kind">{{ item.kind }}</small></div>
+  <dl class="op-line__nums">
+    <div><dt>{{ pw.vo_change }}</dt><dd dir="ltr">{{ item.change_text }} <bdi>{{ item.line.unit }}</bdi></dd></div>
+    <div><dt>{{ pw.rate }}</dt><dd><bdi>{{ item.rate|money }}</bdi></dd></div>
+    <div><dt>{{ pw.vo_value }}</dt><dd dir="ltr">{{ item.amount_text }}</dd></div>
+  </dl>
+</li>{% endfor %}</ul>{% endif %}
+<dl class="op-figures">
+  <div class="op-figures__grand"><dt>{{ pw.vo_value }}</dt><dd dir="ltr" data-order-value>{{ row.value_text }}</dd></div>
+  {% if row.days_text %}<div><dt>{{ pw.vo_days }}</dt><dd data-order-days>{{ row.days_text }}</dd></div>{% endif %}
+</dl>
+{% if row.order.reason %}<h3 class="op-sub">{{ pw.vo_reason }}</h3><p class="op-text">{{ row.order.reason|linebreaksbr }}</p>{% endif %}

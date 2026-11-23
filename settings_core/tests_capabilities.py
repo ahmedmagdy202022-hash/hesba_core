@@ -1,0 +1,173 @@
+"""CAP-001: capabilities suggested per activity, chosen at setup, switchable later."""
+
+from unittest.mock import patch
+
+from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
+
+from audit.models import AuditLog
+from hesba_testing.factories import make_seeded_role, make_user, make_user_profile
+from permissions.models import RoleCode
+from reports.tests_dashboard import prepared_client
+from settings_core import capabilities as caps
+from settings_core.models import ClientProfile, FeatureFlag
+from reports.navigation import nav_items
+from settings_core.setup_services import complete_setup, usable_modules
+
+
+CAPS = reverse("settings_core:capabilities")
+
+# Every capability on the roadmap has shipped; a test-only one keeps the
+# "listed but not available yet" path covered.
+FUTURE = {"ar": "قدرة جاية", "en": "Coming capability", "about_ar": "لسه.", "about_en": "Not yet.", "available": False, "paths": ()}
+
+
+def with_future_capability(test):
+    test = patch.object(caps, "CAPABILITY_SLUGS", caps.CAPABILITY_SLUGS + ("future_cap",))(test)
+    return patch.dict(caps.CAPABILITIES, {"future_cap": FUTURE})(test)
+
+
+def sign_in(test, role_code=RoleCode.OWNER, username="caps_owner"):
+    user = make_user(username=username)
+    make_user_profile(user=user, role=make_seeded_role(role_code))
+    test.client.force_login(user)
+    return user
+
+
+class CatalogTests(SimpleTestCase):
+    def test_each_commercial_activity_has_its_own_suggestions(self):
+        # AN4: wherever there is a till, a sale waits for an open shift.
+        self.assertEqual(caps.suggested("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "loyalty", "units", "batches_expiry", "drugs"))
+        self.assertEqual(caps.suggested("commercial", "fashion"), ("pos", "shift_required", "barcode", "promotions", "loyalty", "variants"))
+        # MARKET-PARITY: selling online suggests the store file, the courier and coupons.
+        self.assertEqual(caps.suggested("commercial", "online"), ("barcode", "online_store", "shipping", "promotions", "variants"))
+        self.assertEqual(caps.suggested("commercial", "electronics"), ("pos", "shift_required", "barcode", "serials", "installments"))
+        self.assertNotIn("shift_required", caps.suggested("commercial", "wholesale"))
+        self.assertIn("price_lists", caps.suggested("commercial", "wholesale"))
+        self.assertNotIn("pos", caps.suggested("commercial", "wholesale"))
+        self.assertEqual(caps.suggested("services", "clinic"), ())
+
+    @with_future_capability
+    def test_only_shipped_capabilities_are_ticked_or_accepted(self):
+        self.assertEqual(caps.default_selection("commercial", "pharmacy"), ("pos", "shift_required", "barcode", "loyalty", "units", "batches_expiry", "drugs"))
+        self.assertEqual(caps.parse("pos, future_cap, bogus,barcode, fixed_assets"), ("pos", "barcode", "fixed_assets"))
+        # A1 (HG-079): the AI voice summary, registered in A0, is available now (still off by default).
+        self.assertTrue(all(caps.is_available(slug) for slug in caps.CAPABILITY_SLUGS if slug != "future_cap"))
+        self.assertFalse(caps.is_available("future_cap"))
+
+    def test_every_capability_is_described_in_both_languages(self):
+        for slug, entry in caps.CAPABILITIES.items():
+            with self.subTest(slug=slug):
+                for key in ("ar", "en", "about_ar", "about_en"):
+                    self.assertTrue(entry[key])
+
+
+class SetupChoiceTests(TestCase):
+    def profile(self):
+        return ClientProfile.objects.create(client_code="C", legal_name="L", display_name="D")
+
+    def test_installation_from_before_capabilities_keeps_its_screens(self):
+        self.assertEqual(caps.enabled_capabilities(), ("pos", "barcode"))
+
+    @with_future_capability
+    def test_setup_applies_the_preset_when_nothing_is_sent(self):
+        complete_setup(self.profile(), "commercial", "wholesale", "")
+        self.assertEqual(caps.enabled_capabilities(), ("barcode", "price_lists", "quotations", "units", "vat", "e_invoice"))  # T1: wholesalers quote
+        self.assertFalse(FeatureFlag.objects.get(code="capability.pos").enabled)
+        self.assertFalse(FeatureFlag.objects.get(code="capability.fixed_assets").enabled)  # optional for wholesale
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.future_cap").exists())  # not shipped yet
+
+    def test_setup_stores_what_the_owner_ticked(self):
+        complete_setup(self.profile(), "commercial", "retail", "", capabilities_raw="barcode")
+        self.assertEqual(caps.enabled_capabilities(), ("barcode",))
+        log = AuditLog.objects.filter(action="complete_setup").latest("pk")
+        self.assertEqual(log.after_data["capabilities"], ["barcode"])
+
+
+class ReviewStepTests(TestCase):
+    @with_future_capability
+    def test_review_ticks_the_suggestions_and_shows_what_is_coming(self):
+        sign_in(self)
+        page = self.client.get(reverse("setup_review"), {"activity": "commercial", "sub_activity": "pharmacy", "modules": "inventory"})
+        rows = {row["slug"]: row for row in page.context["capability_rows"]}
+        self.assertTrue(rows["pos"]["checked"])
+        self.assertTrue(rows["batches_expiry"]["suggested"])
+        self.assertTrue(rows["batches_expiry"]["checked"])
+        self.assertNotIn("variants", rows)  # SETTINGS-TRACK: a pharmacy sells no sizes and colours
+        self.assertContains(page, "خصائص مقترحة لنشاطك")  # TRACK-START S02
+        self.assertContains(page, 'value="pos" form="setup-complete-form" checked')
+        self.assertContains(page, "قريبًا")
+
+    def test_completing_setup_saves_the_ticked_capabilities(self):
+        ClientProfile.objects.create(client_code="C", legal_name="L", display_name="D")
+        sign_in(self)
+        self.client.post(reverse("setup_complete"), {"lang": "ar", "activity": "commercial", "sub_activity": "retail", "modules": "inventory", "capabilities_sent": "1", "capability": ["barcode"]})
+        self.assertEqual(caps.enabled_capabilities(), ("barcode",))
+        # Nothing ticked is a real answer too: every capability off.
+        self.client.post(reverse("setup_complete"), {"lang": "ar", "activity": "commercial", "sub_activity": "retail", "modules": "inventory", "capabilities_sent": "1"})
+        self.assertEqual(caps.enabled_capabilities(), ())
+
+
+class SwitchedOffCapabilityTests(TestCase):
+    def setUp(self):
+        profile = prepared_client()
+        complete_setup(profile, "commercial", "retail", "customers,items_services,sales_operations,inventory,cashboxes,reports", capabilities_raw="")
+        self.user = sign_in(self)
+
+    def test_its_screens_close_and_its_links_disappear(self):
+        page = self.client.get(reverse("sales:pos"))
+        self.assertEqual(page.status_code, 403)
+        self.assertContains(page, "الكاشير السريع", status_code=403)
+        self.assertEqual(self.client.get(reverse("barcode:labels")).status_code, 403)
+        sales = self.client.get(reverse("sales:list"))
+        self.assertNotContains(sales, reverse("sales:pos"))
+        self.assertNotIn("pos", {item["key"] for item in nav_items(self.user, "ar", set(usable_modules()))})
+        self.assertNotContains(self.client.get(reverse("master_data:items")), reverse("barcode:labels"))
+
+    def test_switching_it_back_on_reopens_everything(self):
+        self.client.post(CAPS, {"capability": "pos", "enabled": "1"})
+        self.assertEqual(self.client.get(reverse("sales:pos")).status_code, 200)
+        self.assertContains(self.client.get(reverse("sales:list")), reverse("sales:pos"))
+
+
+class CapabilitySettingsTests(TestCase):
+    def setUp(self):
+        prepared_client()  # retail: pos and barcode on
+
+    @with_future_capability
+    def test_owner_sees_state_suggestion_and_coming_soon(self):
+        sign_in(self)
+        page = self.client.get(CAPS)
+        states = {row["slug"]: row["state"] for row in page.context["rows"]}
+        self.assertEqual((states["pos"], states["barcode"], states["price_lists"], states["fixed_assets"], states["future_cap"]), ("on", "on", "off", "off", "soon"))
+        self.assertContains(page, "مقترح لنشاطك")
+        self.assertContains(self.client.get(reverse("settings_core:overview")), CAPS)
+
+    @with_future_capability
+    def test_switch_is_audited_and_unshipped_ones_are_refused(self):
+        user = sign_in(self)
+        self.client.post(CAPS, {"capability": "barcode", "enabled": "0"})
+        self.assertFalse(caps.capability_enabled("barcode"))
+        log = AuditLog.objects.filter(action="disable_capability").latest("pk")
+        self.assertEqual((log.actor, log.object_id), (user, "capability.barcode"))
+        self.client.post(CAPS, {"capability": "future_cap", "enabled": "1"})
+        self.assertFalse(FeatureFlag.objects.filter(code="capability.future_cap").exists())
+
+    def test_only_settings_managers_switch(self):
+        sign_in(self, RoleCode.CASHIER, "caps_cashier")
+        self.assertIn(self.client.post(CAPS, {"capability": "pos", "enabled": "0"}).status_code, (403,))
+        self.assertTrue(caps.capability_enabled("pos"))
+
+
+class VatSwitchWarningTests(TestCase):
+    def test_vat_card_and_switch_warn_about_mid_month_changes(self):
+        prepared_client()
+        sign_in(self, username="caps_vat_owner")
+        page = self.client.get(CAPS)
+        self.assertContains(page, "من أول الشهر")
+        self.assertContains(page, "data-capability-note", count=1)  # only the VAT card
+        switched = self.client.post(CAPS, {"capability": "vat", "enabled": "1"}, follow=True)
+        self.assertTrue(caps.capability_enabled("vat"))
+        self.assertIn("إقرار الشهر يبقى مخلوط", [str(m) for m in switched.context["messages"]][-1])
+        english = self.client.get(CAPS, {"lang": "en"})
+        self.assertContains(english, "start of a month")

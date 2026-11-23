@@ -1,0 +1,8 @@
+{# Contracting C2a / C2b: one file of a project (a document or a report photo), in the attachments card's own row look. #}
+<li class="att-item" data-attachment="{{ item.row.pk }}" data-kind="{{ item.row.kind }}">
+<a class="att-item-thumb" href="{{ item.url }}" target="_blank" rel="noopener" aria-label="{{ aw.open }} {{ item.row.original_filename }}">{% if item.row.content_type_name|slice:":6" == "image/" %}<img src="{{ item.url }}" alt="{{ item.category|default:aw.photo_of }}" loading="lazy" decoding="async">{% else %}<span class="att-pdf" aria-hidden="true"><svg class="att-ico" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/></svg><b>{{ aw.pdf }}</b></span>{% endif %}</a>
+<div class="att-item-body">{% if item.category %}<span class="att-cat">{{ item.category }}</span>{% endif %}
+<a class="att-item-name" href="{{ item.url }}" target="_blank" rel="noopener"><bdi>{{ item.row.original_filename }}</bdi></a>
+<small class="att-item-meta">{{ item.when }}{% if item.who %} · {{ aw.by }} <bdi>{{ item.who }}</bdi>{% endif %}</small></div>
+{% if item.can_delete %}<button class="att-x att-item-x" type="button" data-att-delete data-url="{{ item.delete_url }}" aria-label="{{ aw.delete }} {{ item.row.original_filename }}"><span><svg class="att-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button>{% endif %}
+</li>

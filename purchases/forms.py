@@ -1,0 +1,314 @@
+from decimal import Decimal
+
+from django import forms
+from django.forms import BaseFormSet, formset_factory
+from django.utils import timezone
+
+from cashboxes.models import Cashbox
+from config.form_defaults import ZeroWhenBlank, choose_labels, item_choice_label, plain_errors, preselect
+from config.form_sections import Sectioned
+from config.numbering import AutoNumbered
+from master_data.models import Item, Location, Supplier
+
+from .models import PurchaseInvoice, PurchaseLine, PurchaseReturn, SupplierPayment
+from entities import scope as entity_scope
+
+
+PURCHASE_LABELS = {
+    "ar": {
+        "invoice_number": "رقم الفاتورة",
+        "invoice_date": "تاريخ الفاتورة",
+        "supplier": "المورد",
+        "receiving_location": "موقع الاستلام",
+        "cashbox": "الخزنة (عند الدفع الآن)",
+        "discount_amount": "خصم على الفاتورة",
+        "tax_amount": "ضريبة الفاتورة",
+        "paid_now": "المدفوع الآن",
+        "notes": "ملاحظات",
+        "item": "الصنف / الخدمة",
+        "description": "الوصف",
+        "quantity": "الكمية",
+        "unit_purchase_price": "سعر الشراء للوحدة",
+        "line_discount_amount": "خصم السطر",
+    },
+    "en": {
+        "invoice_number": "Invoice number",
+        "invoice_date": "Invoice date",
+        "supplier": "Supplier",
+        "receiving_location": "Receiving location",
+        "cashbox": "Cashbox (when paying now)",
+        "discount_amount": "Invoice discount",
+        "tax_amount": "Invoice tax",
+        "paid_now": "Paid now",
+        "notes": "Notes",
+        "item": "Item / service",
+        "description": "Description",
+        "quantity": "Quantity",
+        "unit_purchase_price": "Unit purchase price",
+        "line_discount_amount": "Line discount",
+    },
+}
+
+
+class PurchaseDraftForm(ZeroWhenBlank, AutoNumbered, forms.Form):
+    # UI-TRACK F12: the supplier's own number when there is one, else the next PI- number.
+    auto_number = ("invoice_number", PurchaseInvoice, "invoice_number", "PI-")
+    zero_when_blank = ("discount_amount", "tax_amount", "paid_now")  # UI-TRACK F14
+    invoice_number = forms.CharField(max_length=80)
+    invoice_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    receiving_location = forms.ModelChoiceField(queryset=Location.objects.none())
+    cashbox = forms.ModelChoiceField(queryset=Cashbox.objects.none(), required=False)
+    discount_amount = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0, initial=0)
+    tax_amount = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0, initial=0)
+    paid_now = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0, initial=0)
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = PURCHASE_LABELS[lang]
+        for name, field in self.fields.items():
+            field.label = labels[name]
+        self.fields["supplier"].queryset = Supplier.objects.filter(active=True)
+        self.fields["receiving_location"].queryset = entity_scope.locations(Location.objects).filter(
+            active=True, is_receiving_location=True
+        )
+        self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+        if not self.is_bound:
+            self.initial.setdefault("invoice_date", timezone.localdate())
+        self.fields["invoice_number"].help_text = (
+            "The supplier's invoice number, if there is one." if lang == "en" else "رقم فاتورة المورد لو موجود؛ لو مفيش سيبه فاضي."
+        )
+        preselect(self, "receiving_location", "cashbox")  # UI-TRACK F13
+        self.offer_auto_number(lang)
+        choose_labels(self, lang)  # UX Wave 2: «اختار …», not «---------»
+
+    def clean_invoice_number(self):
+        number = (self.cleaned_data.get("invoice_number") or "").strip()
+        if number and PurchaseInvoice.objects.filter(invoice_number=number).exists():
+            raise forms.ValidationError("A purchase invoice with this number already exists.")
+        return number
+
+
+class PurchaseLineInputForm(forms.Form):
+    item = forms.ModelChoiceField(queryset=Item.objects.none(), required=False)
+    description = forms.CharField(max_length=255, required=False)
+    quantity = forms.DecimalField(max_digits=14, decimal_places=3, min_value=0, required=False)
+    unit_purchase_price = forms.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False)
+    line_discount_amount = forms.DecimalField(
+        max_digits=14, decimal_places=2, min_value=0, required=False, initial=0
+    )
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = PURCHASE_LABELS[lang]
+        for name, field in self.fields.items():
+            field.label = labels[name]
+        self.fields["item"].queryset = Item.objects.filter(active=True)
+        # UI-TRACK grocery G05: a narrow line shows the start of the choice; let that be the item's name, not its code.
+        self.fields["item"].label_from_instance = item_choice_label
+        choose_labels(self, lang)  # UX Wave 2
+        # UNITS-001: optional bigger unit (carton, box...) when the shop uses units.
+        from units.models import ItemUnit
+        from units.services import units_enabled
+
+        if units_enabled():
+            self.fields["unit"] = forms.ModelChoiceField(
+                queryset=ItemUnit.objects.filter(active=True), required=False,
+                label="Unit" if lang == "en" else "الوحدة", empty_label="Base unit" if lang == "en" else "الوحدة الأساسية",
+            )
+        # SERIAL-001: serial / IMEI numbers of the units on this line.
+        from serials.services import serials_enabled
+
+        if serials_enabled():
+            self.fields["serials"] = forms.CharField(
+                max_length=20000, required=False, label="Serial / IMEI numbers" if lang == "en" else "السيريال / IMEI",
+                widget=forms.TextInput(attrs={"placeholder": "Comma separated" if lang == "en" else "افصل بينهم بفاصلة", "autocomplete": "off"}),
+            )
+        # BATCH-001: batch number and expiry date of what is received.
+        from batches.services import batches_enabled
+
+        if batches_enabled():
+            from batches.words import expiry_only
+
+            if not expiry_only():  # AN8: a supermarket reads the expiry date, not a lot number
+                self.fields["batch_no"] = forms.CharField(max_length=60, required=False, label="Batch no." if lang == "en" else "رقم التشغيلة")
+            self.fields["expiry_date"] = forms.DateField(required=False, label="Expiry date" if lang == "en" else "تاريخ الصلاحية",
+                                                         widget=forms.DateInput(attrs={"type": "date"}))
+
+
+class BasePurchaseLineFormSet(BaseFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        complete_lines = 0
+        for form in self.forms:
+            data = form.cleaned_data
+            supplied = any(
+                data.get(name) not in (None, "")
+                for name in ("item", "description", "quantity", "unit_purchase_price")
+            )
+            if not supplied:
+                continue
+            complete_lines += 1
+            for name in ("item", "quantity", "unit_purchase_price"):
+                if data.get(name) in (None, ""):
+                    form.add_error(name, "This field is required for a purchase line.")
+        if complete_lines == 0:
+            raise forms.ValidationError("Add at least one purchase line.")
+
+
+PurchaseLineFormSet = formset_factory(
+    PurchaseLineInputForm,
+    formset=BasePurchaseLineFormSet,
+    extra=1,  # R2: one line to start; "+ سطر جديد" adds more
+    max_num=20,
+    validate_max=True,
+)
+
+
+class SupplierPaymentForm(Sectioned, AutoNumbered, forms.Form):
+    sections_spec = (  # AN3
+        ("main", "المورد والمبلغ", "Supplier and amount", "", "", ("supplier", "amount", "cashbox", "payment_date")),
+        ("more", "تفاصيل", "Details", "", "", ("payment_number", "notes")),
+    )
+    auto_number = ("payment_number", SupplierPayment, "payment_number", "SP-")  # UI-TRACK F08: like CP- collections
+    payment_number = forms.CharField(max_length=80)
+    payment_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    supplier = forms.ModelChoiceField(queryset=Supplier.objects.none())
+    cashbox = forms.ModelChoiceField(queryset=Cashbox.objects.none())
+    amount = forms.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0.01"))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    LABELS = {
+        "ar": {"payment_number": "رقم السداد", "payment_date": "تاريخ السداد", "supplier": "المورد", "cashbox": "الخزنة", "amount": "المبلغ", "notes": "ملاحظات"},
+        "en": {"payment_number": "Payment number", "payment_date": "Payment date", "supplier": "Supplier", "cashbox": "Cashbox", "amount": "Amount", "notes": "Notes"},
+    }
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        self.fields["supplier"].queryset = Supplier.objects.filter(active=True)
+        self.fields["cashbox"].queryset = entity_scope.cashboxes(Cashbox.objects).filter(active=True)
+        if not self.is_bound:
+            self.initial.setdefault("payment_date", timezone.localdate())
+        preselect(self, "cashbox")  # UI-TRACK F13
+        self.offer_auto_number(lang)
+        self.lang = "en" if lang == "en" else "ar"
+        choose_labels(self, lang)  # UX Wave 2: «اختار …» and plain-words errors
+        plain_errors(self, lang)
+
+    def clean_payment_number(self):
+        number = (self.cleaned_data["payment_number"] or "").strip()
+        if number and SupplierPayment.objects.filter(payment_number=number).exists():
+            raise forms.ValidationError("A supplier payment with this number already exists.")
+        return number
+
+
+class PurchaseReturnForm(AutoNumbered, forms.Form):
+    auto_number = ("return_number", PurchaseReturn, "return_number", "PR-")  # UI-TRACK F09: like SR- sales returns
+    return_number = forms.CharField(max_length=80)
+    return_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+
+    LABELS = {
+        "ar": {"return_number": "رقم المرتجع", "return_date": "تاريخ المرتجع", "reason": "سبب المرتجع"},
+        "en": {"return_number": "Return number", "return_date": "Return date", "reason": "Return reason"},
+    }
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        if not self.is_bound:
+            self.initial["return_date"] = timezone.localdate()
+        self.offer_auto_number(lang)
+
+    def clean_return_number(self):
+        number = (self.cleaned_data["return_number"] or "").strip()
+        if number and PurchaseReturn.objects.filter(return_number=number).exists():
+            raise forms.ValidationError("A purchase return with this number already exists.")
+        return number
+
+
+class PurchaseReturnLineForm(forms.Form):
+    source_line = forms.ModelChoiceField(queryset=PurchaseLine.objects.none(), required=False)
+    quantity = forms.DecimalField(
+        max_digits=14, decimal_places=3, min_value=Decimal("0.001"), required=False
+    )
+
+    LABELS = {
+        "ar": {"source_line": "بند الفاتورة الأصلي", "quantity": "كمية المرتجع"},
+        "en": {"source_line": "Source invoice line", "quantity": "Return quantity"},
+    }
+
+    def __init__(self, *args, invoice=None, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        if invoice is not None:
+            self.fields["source_line"].queryset = invoice.lines.select_related("item")
+
+
+class BasePurchaseReturnLineFormSet(BaseFormSet):
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        selected = 0
+        for form in self.forms:
+            line = form.cleaned_data.get("source_line")
+            quantity = form.cleaned_data.get("quantity")
+            if line or quantity:
+                selected += 1
+                if not line:
+                    form.add_error("source_line", "Source line is required.")
+                if not quantity:
+                    form.add_error("quantity", "Return quantity is required.")
+        if not selected:
+            raise forms.ValidationError("Add at least one purchase return line.")
+
+
+PurchaseReturnLineFormSet = formset_factory(
+    PurchaseReturnLineForm,
+    formset=BasePurchaseReturnLineFormSet,
+    extra=5,
+    max_num=20,
+    validate_max=True,
+)
+
+
+class PurchaseReturnTableBase(BaseFormSet):
+    """UI-TRACK F15: one row per invoice line; a row without a quantity is simply not returned."""
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        for form in self.forms:
+            if form.cleaned_data.get("quantity") and not form.cleaned_data.get("source_line"):
+                form.add_error("source_line", "Source line is required.")
+        if not any(form.cleaned_data.get("quantity") for form in self.forms):
+            raise forms.ValidationError("Add at least one purchase return line.")
+
+
+PurchaseReturnTableFormSet = formset_factory(PurchaseReturnLineForm, formset=PurchaseReturnTableBase, extra=0, max_num=500, validate_max=True)
+
+
+class PurchaseReturnReversalForm(forms.Form):
+    reversal_date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 2}))
+
+    LABELS = {
+        "ar": {"reversal_date": "تاريخ العكس", "reason": "سبب العكس"},
+        "en": {"reversal_date": "Reversal date", "reason": "Reversal reason"},
+    }
+
+    def __init__(self, *args, lang="ar", **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.label = self.LABELS[lang][name]
+        if not self.is_bound:
+            self.initial["reversal_date"] = timezone.localdate()

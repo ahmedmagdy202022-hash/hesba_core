@@ -1,0 +1,404 @@
+{% extends "base_app.html" %}
+{% load static hesba_format %}
+
+{% block body_class %}dashboard-page{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{% static 'hesba/css/dashboard.css' %}?v=w4-2">
+<link rel="stylesheet" href="{% static 'hesba/css/shell.css' %}?v=w4-1">
+{% if demo_bar or demo_tour %}<link rel="stylesheet" href="{% static 'hesba/css/demo_first_run.css' %}?v=fr-2">{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="hs-app">
+{% include "partials/app_shell.html" %}
+<div class="hs-main">
+<div class="dash-shell">
+<svg width="0" height="0" class="dash-defs" aria-hidden="true" focusable="false">
+  <symbol id="dm-net_sales" viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></symbol>
+  <symbol id="dm-avg_invoice" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></symbol>
+  <symbol id="dm-gross_profit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.6-3-1.6M12 6.5v11"/></symbol>
+  <symbol id="dm-expenses" viewBox="0 0 24 24"><path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/></symbol>
+  <symbol id="dm-net_profit" viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></symbol>
+  <symbol id="dm-cash" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></symbol>
+  <symbol id="dm-receivables" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M17 8h4m-2-2v4"/></symbol>
+  <symbol id="dm-payables" viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></symbol>
+  <symbol id="dm-alert-urgent" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.5h.01"/></symbol>
+  <symbol id="dm-alert-soon" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2.5h6"/></symbol>
+  <symbol id="dm-alert-watch" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/></symbol>
+  <symbol id="dm-chevron" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+</svg>
+
+  <header class="dash-header">
+    <div class="dash-header__lead">
+      <h1 class="dash-screen-title">{{ screen_title }}</h1>
+      <p class="dash-hello" data-phone-hello>{# UX Wave 4: the phone band's calm greeting; the desktop hero carries its own #}
+        <span class="dash-hello__meta"><span class="dash-hello__date">{{ now_parts.date }}</span>{% if client_name %}<span class="dash-hello__client" title="{{ client_name }}">{{ client_name }}</span>{% endif %}</span>
+        <span class="dash-hello__greet">{{ greeting }}{% if display_name %}{{ name_separator }}{{ display_name }}{% endif %}</span>
+      </p>
+    </div>
+
+    <div class="dash-header__trail">
+      <time class="dash-clock" datetime="{{ now|date:'c' }}">
+        <span class="dash-clock__date">{{ now_parts.date }}</span>
+        <span class="dash-clock__time">{{ now_parts.time }}</span>
+      </time>
+      <button class="dash-lang" type="button" data-lang-toggle data-dash-lang>{{ language }}</button>
+      <div class="dash-bell-wrap" data-bell>
+        <button class="dash-icon-button" type="button" aria-label="{{ notifications }}{% if alerts %} ({{ alerts|length }}){% endif %}" aria-expanded="false" aria-controls="dash-bell-panel" data-bell-toggle>
+          <svg class="dash-bell-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
+          {% if alerts %}<span class="dash-bell-count" aria-hidden="true">{{ alerts|length }}</span>{% endif %}
+        </button>
+        <div class="dash-bell-panel" id="dash-bell-panel" role="dialog" aria-label="{{ notifications }}" hidden data-bell-panel>
+          <p class="dash-bell-panel__title">{{ notifications }}</p>
+          {% if alerts %}
+            <ul class="dash-bell-list">
+              {% for alert in alerts %}
+                <li class="is-{{ alert.severity }}">{% if alert.path %}<a href="{{ alert.path }}?lang={{ lang }}" data-bell-alert="{{ alert.key }}">{% else %}<span data-bell-alert="{{ alert.key }}">{% endif %}
+                  <span class="dash-bell-list__title">{{ alert.title }}</span>
+                  <span class="dash-bell-list__detail">{{ alert.detail }}{% if alert.amount %} · {{ alert.amount }}{% endif %}</span>
+                {% if alert.path %}</a>{% else %}</span>{% endif %}</li>
+              {% endfor %}
+            </ul>
+            <a class="dash-bell-panel__all" href="#dash-alerts" data-bell-all>{{ bell_all }}</a>
+          {% else %}
+            <p class="dash-empty-note">{{ bell_empty }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="dash-main" id="hs-main" tabindex="-1">
+  {% include "partials/entity_bar.html" %}
+  {% with sale=hero_cards.sales_today count=hero_cards.invoice_count_today cash=hero_cards.cashbox_balance %}{% if sale or headline or cash and hero_shows_cash %}
+  {% comment %}UX Wave 4 (part 2): the phone's money card, inside the navy band. Shown on phones only (the desktop hero below is hidden
+     there), it repeats no figure on the page at the same time: today's sales and their invoice count, today against the
+     average day (analytics.hero.pct) and the period's trend line (analytics.hero), exactly as the desktop hero has them.
+     Without today's sales it shows the period's net sales, or the cash in hand, like the hero. No data-kpi here: those
+     name the one place a figure lives, and tests count them.{% endcomment %}
+  <section class="dash-phero" aria-labelledby="dash-phero-label" data-phone-hero>
+    <div class="dash-phero__card">
+      <div class="dash-phero__top">
+        {% if sale %}{% with shown=sale.value %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ sale.label }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}{% if sale.is_zero %} is-zero{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}
+        {% elif headline %}{% with shown=headline.value|money %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ hero_headline_text }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}
+        {% else %}{% with shown=cash.value %}<p class="dash-phero__figure"><span class="dash-phero__label" id="dash-phero-label">{{ cash.label }}</span><span class="dash-phero__amount{% if shown|length > 11 %} is-xlong{% elif shown|length > 9 %} is-long{% endif %}" data-phone-amount><bdi>{{ shown }}</bdi>{% if currency %}<small>{{ currency }}</small>{% endif %}</span></p>{% endwith %}{% endif %}
+        {% if analytics.available and analytics.hero.line and not sale.is_zero %}<svg class="dash-phero__spark" viewBox="0 0 {{ analytics.hero.width }} {{ analytics.hero.height }}" preserveAspectRatio="none" role="img" aria-label="{{ hero_trend }}: {% if analytics.hero.fallback %}{{ hero_last_7_days }}{% else %}{{ hero_headline_text }}{% endif %}"><path class="dash-phero__area" d="{{ analytics.hero.area }}"/><path class="dash-phero__line" d="{{ analytics.hero.line }}"/>{% if analytics.hero.last %}<circle class="dash-phero__dot" cx="{{ analytics.hero.last.0 }}" cy="{{ analytics.hero.last.1 }}" r="5"/>{% endif %}</svg>{% endif %}
+      </div>
+      {% if sale and sale.is_zero %}<p class="dash-phero__note">{{ phero_none }}</p>{% endif %}
+      {% if not sale.is_zero or cash and hero_shows_cash %}{# a quiet day keeps the cash in hand: on a phone this card is the only place it shows #}
+      <ul class="dash-phero__chips">
+        {% if sale.is_zero %}
+        {% elif sale %}
+          {% if analytics.available and analytics.hero.pct is not None %}<li class="dash-phero__chip is-accent"><bdi>{{ analytics.hero.pct }}%</bdi> {{ hero_vs_avg }}</li>{% endif %}
+          {% if count %}<li class="dash-phero__chip"><bdi>{{ count.value }}</bdi> {{ invoices_word }}</li>{% endif %}
+        {% elif headline %}{% with d=headline_shown %}{% if d.delta is not None %}<li class="dash-phero__chip{% if d.good %} is-good{% elif d.good is False %} is-bad{% endif %}">{% if d.flat %}<span aria-hidden="true">—</span> {{ flat }}{% else %}<span aria-hidden="true">{% if d.trend == 'down' %}▼{% else %}▲{% endif %}</span> {% if d.huge %}{% if d.trend == 'down' %}{{ huge_down }}{% else %}{{ huge_up }}{% endif %}{% else %}<bdi>{{ d.delta_abs }}%</bdi> {{ vs_previous }}{% endif %}{% endif %}</li>{% endif %}{% endwith %}{% endif %}
+        {% if cash and hero_shows_cash %}{% if sale or headline %}<li class="dash-phero__chip">{{ cash.label }} <bdi>{{ cash.value }}</bdi>{% if currency %} {{ currency }}{% endif %}</li>{% endif %}{% endif %}
+      </ul>{% endif %}
+    </div>
+  </section>
+  {% endif %}{% endwith %}
+  {% include "partials/demo_bar.html" %}{# UX Wave 4: under the page head on every screen size; on a phone under the money card and shortcuts #}
+  {% include "partials/demo_tour.html" %}{# DEMO-FIRST-RUN (D3): what to try first, before the figures #}
+
+      <section class="dash-hero is-{{ day_part }}" aria-label="{{ greeting }}">
+        <div class="dash-hero__fx" aria-hidden="true"><span class="dash-hero__glow dash-hero__glow--a"></span><span class="dash-hero__glow dash-hero__glow--b"></span><span class="dash-hero__glow dash-hero__glow--c"></span><span class="dash-hero__grid"></span></div>
+        <div class="dash-hero__copy">
+          <p class="dash-hero__eyebrow"><span class="dash-hero__sky" aria-hidden="true">{% if day_part == 'morning' or day_part == 'afternoon' %}<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>{% else %}<svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>{% endif %}</span>{{ now_parts.date }}<span class="dash-hero__live"><span aria-hidden="true"></span>{{ hero_live }}</span></p>
+          <p class="dash-greeting">{{ greeting }}{% if display_name %}{{ name_separator }}<span class="dash-greeting__name">{{ display_name }}</span>{% endif %}</p>
+          <p class="dash-hero__line">{{ hero_line }}{% if client_name %} <span class="dash-hero__client">{{ client_name }}</span>{% endif %}</p>
+          <div class="dash-hero__pills">
+            {% if headline %}
+            <div class="dash-hstat dash-hstat--lead dash-hero__stat" data-hero-stat>
+              <span class="dash-hstat__label">{{ hero_headline_text }}</span>
+              <span class="dash-hstat__value">{{ headline.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
+              {% with d=headline_shown %}{% if d.delta is not None %}<span class="dash-hstat__delta {% if d.flat %}is-flat{% elif d.good %}is-good{% elif d.good is False %}is-bad{% endif %}">{% if d.flat %}<span aria-hidden="true">—</span> {{ flat }}{% else %}<span aria-hidden="true">{% if d.trend == 'down' %}▼{% else %}▲{% endif %}</span> {% if d.huge %}{% if d.trend == 'down' %}{{ huge_down }}{% else %}{{ huge_up }}{% endif %}{% else %}<bdi>{{ d.delta_abs }}%</bdi> {{ vs_previous }}{% endif %}{% endif %}</span>{% endif %}{% endwith %}
+            </div>
+            {% endif %}
+            {% with c=hero_cards.sales_today %}{% if c %}<div class="dash-hstat" data-kpi="sales_today"><span class="dash-hstat__label">{{ c.label }}</span><span class="dash-hstat__value">{{ c.value }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>{% with n=hero_cards.invoice_count_today %}{% if n %}<span class="dash-hstat__sub">{{ n.value }} {{ hero_invoices }}</span>{% endif %}{% endwith %}</div>{% endif %}{% endwith %}
+            {% with c=hero_cards.cashbox_balance %}{% if c and hero_shows_cash %}<div class="dash-hstat" data-kpi="cashbox_balance"><span class="dash-hstat__label">{{ c.label }}</span><span class="dash-hstat__value">{{ c.value }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span></div>{% endif %}{% endwith %}
+          </div>
+        </div>
+        <div class="dash-hero__art">
+          {% if analytics.available and analytics.hero.line %}
+          <div class="dash-glass dash-glass--trend">
+            <p class="dash-glass__title">{{ hero_trend }} <small>{% if analytics.hero.fallback %}{{ hero_last_7_days }}{% else %}{{ hero_headline_text }}{% endif %}</small></p>
+            <svg class="dash-glass__chart" viewBox="0 0 {{ analytics.hero.width }} {{ analytics.hero.height }}" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="dh-area" x1="0" y1="0" x2="0" y2="1"><stop class="dh-stop" offset="0"/><stop class="dh-stop dh-stop--end" offset="1"/></linearGradient></defs>
+              <path class="dash-glass__area" d="{{ analytics.hero.area }}" fill="url(#dh-area)"/>
+              <path class="dash-glass__line" d="{{ analytics.hero.line }}"/>
+              {% if analytics.hero.last %}<circle class="dash-glass__dot" cx="{{ analytics.hero.last.0 }}" cy="{{ analytics.hero.last.1 }}" r="4"/>{% endif %}
+            </svg>
+          </div>
+          {% if analytics.hero.pct is not None %}
+          <div class="dash-glass dash-glass--ring">
+            <svg viewBox="0 0 76 76" aria-hidden="true"><circle class="dash-ring__track" cx="38" cy="38" r="30"/><circle class="dash-ring__value" cx="38" cy="38" r="30" stroke-dasharray="{{ analytics.hero.ring }}" transform="rotate(-90 38 38)"/></svg>
+            <span class="dash-ring__pct">{{ analytics.hero.pct }}%</span>
+            <span class="dash-ring__label">{{ hero_today }}<br>{{ hero_vs_avg }}</span>
+          </div>
+          {% endif %}
+          {% else %}
+          <img class="dash-hero__img" src="{% static 'hesba/img/dashboard-hero.svg' %}?v=hero-2" alt="" width="480" height="300" decoding="async">
+          {% endif %}
+        </div>
+      </section>
+
+      {% if top_actions %}<nav class="dash-top-actions" aria-label="{{ top_actions_title }}" data-top-actions>{% for action in top_actions %}<a class="dash-top-action{% if forloop.first %} is-primary{% endif %}" href="{{ action.url }}?lang={{ lang }}{{ action.fragment }}" data-top-action="{{ action.key }}"><span class="hs-ichip dash-top-action__chip hs-ichip--{% if action.key == 'collect' %}gold{% elif action.key == 'new_purchase' %}info{% elif action.key == 'new_item' %}success{% else %}teal{% endif %}" aria-hidden="true"><svg class="hs-icon"><use href="#hs-i-{{ action.icon }}"></use></svg></span><span class="dash-top-action__label">{{ action.label }}</span></a>{% endfor %}</nav>{% endif %}
+
+      {% if voice_summary %}{% include "ai/voice_summary_card.html" %}{% endif %}
+      {% if ask_link %}<a class="dash-ask" href="{{ ask_link.url }}" data-ask-link><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5M12 16.5h.01"/></svg><span class="dash-ask__text"><strong>{{ ask_link.label }}</strong><small>{{ ask_link.hint }}</small></span></a>{% endif %}
+
+      {% if activity_panel %}
+      <section class="dash-section dash-activity dash-activity--{{ activity_panel.kind }}" aria-label="{{ activity_panel.title }}" data-activity-panel="{{ activity_panel.kind }}">
+        <div class="dash-section__head"><h2 class="dash-section__title">{{ activity_panel.title }}</h2><a class="dash-activity__open" href="{{ activity_panel.link }}?lang={{ lang }}">{{ activity_panel.open }} ←</a></div>
+        <div class="dash-activity__tiles">
+          {% for t in activity_panel.tiles %}
+          {% if t.url %}<a class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" href="{{ t.url }}?lang={{ lang }}" data-tile="{{ t.key }}">{% else %}<article class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" data-tile="{{ t.key }}">{% endif %}
+            <span class="dash-atile__label">{{ t.label }}</span>
+            <span class="dash-atile__value">{% if t.kind == 'money' %}{{ t.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}{% else %}{{ t.value }}{% endif %}</span>
+            {% if t.sub %}<span class="dash-atile__sub">{{ t.sub }}</span>{% endif %}
+          {% if t.url %}</a>{% else %}</article>{% endif %}
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if option_panel %}
+      <section class="dash-section dash-activity dash-activity--options" aria-label="{{ option_panel.title }}" data-option-panel>
+        <h2 class="dash-section__title">{{ option_panel.title }}</h2>
+        <div class="dash-activity__tiles">
+          {% for t in option_panel.tiles %}<a class="dash-atile{% if t.tone %} is-{{ t.tone }}{% endif %}" href="{{ t.url }}?lang={{ lang }}" data-tile="{{ t.key }}">
+            <span class="dash-atile__label">{{ t.label }}</span>
+            <span class="dash-atile__value">{% if t.kind == 'money' %}{{ t.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}{% else %}{{ t.value }}{% endif %}</span>
+            {% if t.sub %}<span class="dash-atile__sub">{{ t.sub }}</span>{% endif %}
+          </a>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if analytics.available %}
+      <section class="dash-section dash-analytics" aria-label="{{ analytics_title }}" data-period="{{ analytics.period }}">
+        <div class="dash-section__head">
+          <h2 class="dash-section__title">{{ analytics_title }} <small class="dash-range"><bdi>{{ analytics.start|day_text:lang }}</bdi> – <bdi>{{ analytics.end|day_text:lang }}</bdi></small></h2>
+          <nav class="dash-periods" aria-label="{{ analytics_title }}">
+            {% for key, label in periods %}<a class="dash-period{% if analytics.period == key %} is-current{% endif %}" href="?lang={{ lang }}&period={{ key }}"{% if analytics.period == key %} aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}
+          </nav>
+        </div>
+        <div class="dash-metrics">
+          {% if headline and hero_cards.sales_today %}{% with m=headline_shown %}{# UX Wave 4: phones only; the desktop hero shows it #}
+          <article class="dash-metric dash-metric--phone" data-phone-metric="net_sales">
+            <span class="dash-metric__head"><span class="hs-ichip hs-ichip--sm dash-metric__icon hs-ichip--teal" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24"><use href="#dm-net_sales"/></svg></span><span class="dash-metric__label">{{ hero_headline_text }}</span></span>
+            <span class="dash-metric__value">{{ m.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
+            {% if m.delta is not None %}<span class="dash-delta {% if m.flat %}is-flat{% elif m.good %}is-good{% elif m.good is False %}is-bad{% endif %}">{% if m.flat %}<span aria-hidden="true">—</span> <small>{{ flat }}</small>{% else %}<span aria-hidden="true">{% if m.trend == 'down' %}▼{% else %}▲{% endif %}</span> {% if m.huge %}<small>{% if m.trend == 'down' %}{{ huge_down }}{% else %}{{ huge_up }}{% endif %}</small>{% else %}<bdi>{{ m.delta_abs }}%</bdi> <small>{{ vs_previous }}</small>{% endif %}{% endif %}</span>{% endif %}
+            {% if analytics.spark.net_sales %}<svg class="dash-spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ analytics.spark.net_sales }}"/></svg>{% endif %}
+            <details class="dash-how"><summary>{{ how_label }}</summary><p>{{ m.how }}</p></details>
+          </article>
+          {% endwith %}{% endif %}
+          {% for m in shown_metrics %}
+          <article class="dash-metric" data-metric="{{ m.key }}">
+            <span class="dash-metric__head"><span class="hs-ichip hs-ichip--sm dash-metric__icon hs-ichip--{% if m.key == 'gross_profit' or m.key == 'net_profit' %}success{% elif m.key == 'expenses' or m.key == 'payables' %}danger{% elif m.key == 'cash' %}gold{% elif m.key == 'receivables' %}info{% else %}teal{% endif %}" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24"><use href="#dm-{{ m.key }}"/></svg></span><span class="dash-metric__label">{{ m.label }}</span></span>
+            <span class="dash-metric__value">{{ m.value|money }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>
+            {% if m.delta is not None %}<span class="dash-delta {% if m.flat %}is-flat{% elif m.good %}is-good{% elif m.good is False %}is-bad{% endif %}" title="{{ vs_previous }}">{% if m.flat %}<span aria-hidden="true">—</span> <small>{{ flat }}</small>{% else %}<span aria-hidden="true">{% if m.trend == 'down' %}▼{% else %}▲{% endif %}</span> {% if m.huge %}<small>{% if m.trend == 'down' %}{{ huge_down }}{% else %}{{ huge_up }}{% endif %}</small>{% else %}<bdi>{{ m.delta_abs }}%</bdi> <small>{{ vs_previous }}</small>{% endif %}{% endif %}</span>{% endif %}
+            {% if m.margin is not None and m.key == 'gross_profit' %}<span class="dash-metric__sub">{{ margin }} <bdi>{{ m.margin|percent }}</bdi></span>{% endif %}
+            {% if m.overdue %}<span class="dash-metric__sub is-bad">{{ overdue_word }} {{ m.overdue|money }}</span>{% endif %}
+            {% if m.count is not None and m.key == 'avg_invoice' %}<span class="dash-metric__sub">{{ m.count }} {{ invoices_word }}</span>{% endif %}
+            {% if m.key == 'net_sales' and analytics.spark.net_sales %}<svg class="dash-spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ analytics.spark.net_sales }}"/></svg>{% endif %}
+            {% if m.key == 'gross_profit' and analytics.spark.gross_profit %}<svg class="dash-spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ analytics.spark.gross_profit }}"/></svg>{% endif %}
+            <details class="dash-how"><summary>{{ how_label }}</summary><p>{{ m.how }}</p></details>
+          </article>
+          {% endfor %}
+        </div>
+
+        {% if today_cards %}
+        <div class="dash-today" data-today-cards>
+          {% if analytics.period != 'today' %}<h3 class="dash-today__title">{{ today_more }}</h3>{% endif %}
+          <div class="dash-kpi-grid">
+            {% for card in today_cards %}
+              <article class="dash-kpi{% if card.sensitive %} is-sensitive{% endif %}" data-kpi="{{ card.key }}" data-scope="{{ card.scope }}">
+                <span class="dash-kpi__label">{{ card.label }}</span>
+                <span class="dash-kpi__value{% if card.is_zero %} is-zero{% endif %}">
+                  {{ card.value }}{% if card.is_money and currency %}<small class="dash-kpi__unit">{{ currency }}</small>{% endif %}
+                </span>
+              </article>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        <div class="dash-charts">
+          <figure class="dash-chart dash-insights" aria-labelledby="insights-title" data-insights>
+            <figcaption class="dash-insights__head">
+              <span id="insights-title" class="dash-chart__title">{{ insights_title }}</span>
+              <span class="dash-tabs" role="tablist" aria-labelledby="insights-title">
+                <button class="dash-tab is-current" type="button" role="tab" id="tab-sales" aria-controls="panel-sales" aria-selected="true" data-tab="sales">{{ tab_sales }}</button>
+                {% if analytics.profit_daily %}<button class="dash-tab" type="button" role="tab" id="tab-profit" aria-controls="panel-profit" aria-selected="false" tabindex="-1" data-tab="profit">{{ tab_profit }}</button>{% endif %}
+                {% if analytics.weekdays %}<button class="dash-tab" type="button" role="tab" id="tab-weekdays" aria-controls="panel-weekdays" aria-selected="false" tabindex="-1" data-tab="weekdays">{{ tab_weekdays }}</button>{% endif %}
+                {% if analytics.hours %}<button class="dash-tab" type="button" role="tab" id="tab-hours" aria-controls="panel-hours" aria-selected="false" tabindex="-1" data-tab="hours">{{ tab_hours }}</button>{% endif %}
+              </span>
+              <button class="dash-rotate" type="button" data-rotate-toggle data-label-pause="{{ pause }}" data-label-play="{{ play }}" aria-label="{{ pause }}" title="{{ pause }}"><span aria-hidden="true" data-rotate-icon>❚❚</span></button>
+            </figcaption>
+            <div class="dash-progress" aria-hidden="true"><span data-progress></span></div>
+
+            <div class="dash-panel" role="tabpanel" id="panel-sales" aria-labelledby="tab-sales" data-panel="sales">
+              <p class="dash-panel__title" id="daily-title">{{ daily_title }}
+                <span class="dash-legend"><span class="dash-key dash-key--now" aria-hidden="true"></span>{{ daily_legend_now }} <span class="dash-key dash-key--prev" aria-hidden="true"></span>{{ daily_legend_prev }}{% if previous_range_text %} <small>({{ previous_range_text }})</small>{% endif %}</span>
+              </p>
+              {% if analytics.daily.empty %}<p class="dash-empty-note">{{ no_sales_chart }}</p>{% else %}
+              <div class="dash-plot" data-plot>
+              <svg class="dash-bars" dir="ltr" viewBox="0 0 {{ analytics.daily.width }} {{ analytics.daily.height }}" role="img" aria-label="{{ daily_title }}">
+                {% for g in analytics.daily.grid %}<line class="dash-grid" x1="{{ analytics.daily.left }}" x2="{{ analytics.daily.width }}" y1="{{ g.y }}" y2="{{ g.y }}"/><text class="dash-axis" x="{{ analytics.daily.label_x }}" y="{{ g.y }}" dy="4" text-anchor="end">{{ g.text }}</text>{% endfor %}
+                {% for b in analytics.daily.bars %}<g class="dash-bar" tabindex="0" data-tip="{{ b.day|date:'d/m' }} · {{ daily_legend_now }}: {{ b.value|money }}{% if b.previous is not None %} · {{ daily_legend_prev }}: {{ b.previous|money }}{% endif %}"><rect class="dash-bar__hit" x="{{ b.hit_x }}" y="0" width="{{ b.hit_w }}" height="{{ analytics.daily.height }}"/>{% if b.path %}<path class="dash-bar__mark" d="{{ b.path }}"/>{% endif %}<title>{{ b.day|date:"Y-m-d" }}: {{ b.value|money }}{% if b.previous is not None %} · {{ daily_legend_prev }}: {{ b.previous|money }}{% endif %}</title></g>{% endfor %}
+                {% if analytics.daily.previous_points %}<polyline class="dash-prev-line" points="{{ analytics.daily.previous_points }}"/>{% for d in analytics.daily.prev_dots %}<circle class="dash-prev-dot" cx="{{ d.x }}" cy="{{ d.y }}" r="4"/>{% endfor %}{% endif %}
+                {% for t in analytics.daily.ticks %}<text class="dash-axis" x="{{ t.x }}" y="{{ analytics.daily.tick_y }}" text-anchor="middle">{{ t.label|date:"d/m" }}</text>{% endfor %}
+              </svg>
+              <span class="dash-tip" role="status" hidden data-tip-box></span>
+              </div>
+              <p class="dash-chart__note">{{ best_day }}: <bdi>{{ analytics.daily.best.day|day_text:lang }}</bdi> · <bdi>{{ analytics.daily.best.value|money }}{% if currency %} {{ currency }}{% endif %}</bdi></p>
+              <details class="dash-table-view"><summary>{{ table_view }}</summary><table><thead><tr><th>{{ date_col }}</th><th>{{ value_col }}</th><th>{{ daily_legend_prev }}</th></tr></thead><tbody>{% for b in analytics.daily.bars %}<tr><td>{{ b.day|day_text:lang }}</td><td>{{ b.value|money }}</td><td>{% if b.previous is not None %}{{ b.previous|money }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></details>
+              {% endif %}
+            </div>
+
+            {% if analytics.profit_daily %}
+            <div class="dash-panel" role="tabpanel" id="panel-profit" aria-labelledby="tab-profit" data-panel="profit" hidden>
+              <p class="dash-panel__title">{{ profit_daily_title }}</p>
+              {% if analytics.profit_daily.empty %}<p class="dash-empty-note">{{ no_sales_chart }}</p>{% else %}
+              <div class="dash-plot" data-plot>
+              <svg class="dash-profit-bars" dir="ltr" viewBox="0 0 {{ analytics.profit_daily.width }} {{ analytics.profit_daily.height }}" role="img" aria-label="{{ profit_daily_title }}">
+                {% for g in analytics.profit_daily.grid %}<line class="dash-grid" x1="{{ analytics.profit_daily.left }}" x2="{{ analytics.profit_daily.width }}" y1="{{ g.y }}" y2="{{ g.y }}"/><text class="dash-axis" x="{{ analytics.profit_daily.label_x }}" y="{{ g.y }}" dy="4" text-anchor="end">{{ g.text }}</text>{% endfor %}
+                {% for b in analytics.profit_daily.bars %}<g class="dash-bar" tabindex="0" data-tip="{{ b.day|date:'d/m' }} · {{ b.value|money }}"><rect class="dash-bar__hit" x="{{ b.hit_x }}" y="0" width="{{ b.hit_w }}" height="{{ analytics.profit_daily.height }}"/>{% if b.path %}<path class="dash-bar__mark" d="{{ b.path }}"/>{% endif %}<title>{{ b.day|date:"Y-m-d" }}: {{ b.value|money }}</title></g>{% endfor %}
+                {% for t in analytics.profit_daily.ticks %}<text class="dash-axis" x="{{ t.x }}" y="{{ analytics.profit_daily.tick_y }}" text-anchor="middle">{{ t.label|date:"d/m" }}</text>{% endfor %}
+              </svg>
+              <span class="dash-tip" role="status" hidden data-tip-box></span>
+              </div>
+              <p class="dash-chart__note">{{ best_day }}: <bdi>{{ analytics.profit_daily.best.day|day_text:lang }}</bdi> · <bdi>{{ analytics.profit_daily.best.value|money }}{% if currency %} {{ currency }}{% endif %}</bdi></p>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            {% if analytics.weekdays %}<div class="dash-panel" role="tabpanel" id="panel-weekdays" aria-labelledby="tab-weekdays" data-panel="weekdays" hidden>
+              <p class="dash-panel__title">{{ weekdays_title }}</p>
+              {% if analytics.weekdays.empty %}<p class="dash-empty-note">{{ no_sales_chart }}</p>{% else %}
+              <ul class="dash-hbars">
+                {% for row in analytics.weekdays.rows %}<li class="{% if row.best %}is-best{% endif %}"><span class="dash-hbars__label">{{ row.label }}</span><span class="dash-hbars__track"><span class="dash-hbars__fill" style="width:{{ row.pct }}%"></span></span><span class="dash-hbars__value">{{ row.value|money }}</span></li>{% endfor %}
+              </ul>
+              {% endif %}
+            </div>{% endif %}
+
+            {% if analytics.hours %}<div class="dash-panel" role="tabpanel" id="panel-hours" aria-labelledby="tab-hours" data-panel="hours" hidden>
+              <p class="dash-panel__title" id="hours-title">{{ hours_title }}</p>
+              <div class="dash-hours" role="list">{% for c in analytics.hours.cells %}<div class="dash-hour lvl-{{ c.level }}" role="listitem" title="{{ c.hour }}:00 · {{ c.count }} {{ invoices_word }}"><span class="dash-hour__count">{{ c.count }}</span><span class="dash-hour__label">{{ c.hour }}:00</span></div>{% endfor %}</div>
+              {% if analytics.hours.peak is not None %}<p class="dash-chart__note">{{ hours_peak }}: {{ analytics.hours.peak }}:00</p>{% endif %}
+            </div>{% endif %}
+          </figure>
+
+          <div class="dash-side">
+            {% if analytics.split %}<figure class="dash-chart dash-split-card" aria-labelledby="split-title" data-split>
+              <figcaption id="split-title" class="dash-chart__title">{{ split_title }}</figcaption>
+              {% if analytics.split.empty %}<p class="dash-empty-note">{{ split_empty }}</p>{% else %}
+              <div class="dash-donut">
+                <svg viewBox="0 0 140 140" role="img" aria-label="{{ split_paid }} {{ analytics.split.paid_pct }}% · {{ split_credit }} {{ analytics.split.credit_pct }}%">
+                  <circle class="dash-donut__track" cx="70" cy="70" r="{{ analytics.split.r }}"/>
+                  <circle class="dash-donut__paid" cx="70" cy="70" r="{{ analytics.split.r }}" stroke-dasharray="{{ analytics.split.paid_dash }}" transform="rotate(-90 70 70)"/>
+                  <circle class="dash-donut__credit" cx="70" cy="70" r="{{ analytics.split.r }}" stroke-dasharray="{{ analytics.split.credit_dash }}" stroke-dashoffset="{{ analytics.split.credit_offset }}" transform="rotate(-90 70 70)"/>
+                  <text class="dash-donut__pct" x="70" y="72" text-anchor="middle">{{ analytics.split.paid_pct }}%</text>
+                  <text class="dash-donut__cap" x="70" y="90" text-anchor="middle">{{ split_paid }}</text>
+                </svg>
+                <ul class="dash-donut__legend">
+                  <li><span class="dash-key dash-key--now" aria-hidden="true"></span><span>{{ split_paid }}</span><b>{{ analytics.split.paid|money }}</b><small>{{ analytics.split.paid_pct }}%</small></li>
+                  <li><span class="dash-key dash-key--two" aria-hidden="true"></span><span>{{ split_credit }}</span><b>{{ analytics.split.credit|money }}</b><small>{{ analytics.split.credit_pct }}%</small></li>
+                </ul>
+              </div>
+              <p class="dash-chart__note">{{ split_note }}</p>
+              {% endif %}
+            </figure>{% endif %}
+
+            {% if analytics.top %}<section class="dash-list dash-top"><h3>{% if analytics.top_by_profit %}{{ top_title_profit }}{% else %}{{ top_title_sales }}{% endif %}</h3><ol>{% for row in analytics.top %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{% if analytics.top_by_profit %}{{ row.profit|money }}{% else %}{{ row.sales|money }}{% endif %}</span></li>{% endfor %}</ol></section>{% endif %}
+          </div>
+        </div>
+
+        {% if analytics.stock.running_out or analytics.stock.slow %}
+        <div class="dash-lists">
+          {% if analytics.stock.running_out %}<section class="dash-list is-warning"><h3>{{ running_title }}</h3><p class="dash-list__note">{{ running_note }}</p><ol>{% for row in analytics.stock.running_out %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{{ row.cover_days|floatformat:1 }} {{ days_word }}</span></li>{% endfor %}</ol></section>{% endif %}
+          {% if analytics.stock.slow %}<section class="dash-list"><h3>{{ slow_title }} <small>{{ analytics.stock.slow_value|money }}</small></h3><p class="dash-list__note">{{ slow_note }}</p><ol>{% for row in analytics.stock.slow %}<li><span class="dash-list__name">{{ row.name }}</span><span class="dash-list__value">{{ row.value|money }} · {% if row.idle_days is None %}{{ never_sold }}{% else %}{{ row.idle_days }} {{ days_word }}{% endif %}</span></li>{% endfor %}</ol></section>{% endif %}
+        </div>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      {% if not analytics.available %}{% if today_cards or not hero_any %}
+      <section class="dash-section" aria-label="{{ kpi_title }}">
+        <h2 class="dash-section__title">{{ kpi_title }}</h2>
+        {% if today_cards %}
+          <div class="dash-kpi-grid">
+            {% for card in today_cards %}
+              <article class="dash-kpi{% if card.sensitive %} is-sensitive{% endif %}" data-kpi="{{ card.key }}" data-scope="{{ card.scope }}">
+                <span class="dash-kpi__label">{{ card.label }}</span>
+                <span class="dash-kpi__value{% if card.is_zero %} is-zero{% endif %}">
+                  {{ card.value }}{% if card.is_money and currency %}<small class="dash-kpi__unit">{{ currency }}</small>{% endif %}
+                </span>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="dash-empty-note">{{ no_cards }}</p>
+        {% endif %}
+      </section>
+      {% endif %}{% endif %}
+
+      <div class="dash-split">
+        <section class="dash-section dash-section--alerts" id="dash-alerts" aria-label="{{ alerts_title }}" tabindex="-1">
+          <h2 class="dash-section__title">{{ alerts_title }}</h2>
+          {% if alerts %}
+            <ul class="dash-alerts">
+              {% for alert in alerts %}
+                <li class="dash-alert is-{{ alert.severity }}" data-alert="{{ alert.key }}">{% if alert.path %}<a class="dash-alert__row" href="{{ alert.path }}?lang={{ lang }}">{% else %}<span class="dash-alert__row">{% endif %}
+                  <span class="hs-ichip hs-ichip--sm dash-alert__icon hs-ichip--{% if alert.severity == 'urgent' %}danger{% else %}warning{% endif %}" aria-hidden="true"><svg class="hs-icon" viewBox="0 0 24 24"><use href="#dm-alert-{{ alert.severity }}"/></svg></span>
+                  <span class="dash-alert__body">
+                    <span class="dash-alert__title">{{ alert.title }}</span>
+                    <span class="dash-alert__detail"><span class="dash-alert__badge">{{ alert.severity_label }}</span> {{ alert.detail }}</span>
+                  </span>
+                  {% if alert.amount %}<span class="dash-alert__amount">{{ alert.amount }}{% if currency %}<small>{{ currency }}</small>{% endif %}</span>{% endif %}
+                  {% if alert.path %}<svg class="hs-icon dash-alert__go" viewBox="0 0 24 24" aria-hidden="true"><use href="#dm-chevron"/></svg>{% endif %}
+                {% if alert.path %}</a>{% else %}</span>{% endif %}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="dash-empty-note">{{ alerts_empty }}</p>
+          {% endif %}
+        </section>
+
+        <section class="dash-section dash-section--actions" aria-label="{{ actions_title }}">
+          <h2 class="dash-section__title">{{ actions_title }}</h2>
+          <div class="dash-actions">
+            {% for action in quick_actions %}{% if action.url_name not in top_action_urls %}
+              <a class="dash-action{% if action.primary %} is-primary{% endif %}"
+                 href="{% url action.url_name %}?lang={{ lang }}" data-action="{{ action.key }}"><span>{{ action.label }}</span>{% if action.hint %}<small class="dash-action__hint">{{ action.hint }}</small>{% endif %}</a>
+            {% endif %}{% endfor %}
+          </div>
+        </section>
+      </div>
+
+      {% if show_onboarding %}
+        <section class="dash-section dash-onboarding" aria-label="{{ onboarding_title }}">
+          <h2 class="dash-section__title">{{ onboarding_title }}</h2>
+          <p class="dash-empty-note">{{ onboarding_note }}</p>
+          <ol class="dash-steps">
+            {% for step in onboarding_steps %}
+              <li class="dash-step{% if step.done %} is-done{% endif %}">
+                <span class="dash-step__index" aria-hidden="true">{% if step.done %}&#10003;{% else %}{{ forloop.counter }}{% endif %}</span>
+                <span class="dash-step__label">{{ step.label }}</span>
+                {% if step.done %}<span class="dash-step__state">{{ step_done }}</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ol>
+        </section>
+      {% endif %}
+
+  </main>
+</div>
+</div>
+</div>
+<script src="{% static 'hesba/js/shell.js' %}" defer></script>
+<script src="{% static 'hesba/js/dashboard.js' %}?v=bell-001" defer></script>
+{% if demo_tour %}<script src="{% static 'hesba/js/demo_first_run.js' %}?v=fr-1" defer></script>{% endif %}
+{% if voice_summary %}<script src="{% static 'hesba/js/voice_summary.js' %}?v=a1-2" defer></script>{% endif %}
+{% endblock %}

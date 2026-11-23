@@ -1,0 +1,2 @@
+{# Contracting C2b: «تقرير النهارده», the primary action of a project's pages, for those who may write reports. at="top": under the tabs on a wide screen; at="bar": a bar above the floating tab bar on a phone (thumb reach). CSS shows one of the two. #}
+{% if site_cta %}<div class="sr-cta sr-cta--{{ at }}" data-site-cta="{{ at }}"><a class="op-primary" href="{{ site_cta.url }}" data-today-report>{{ site_cta.label }}</a></div>{% endif %}

@@ -1,0 +1,262 @@
+"""ACT-PROFILE-002: each activity's dashboard leads with its own work."""
+
+from datetime import datetime, time, timedelta
+from decimal import Decimal as D
+
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from hesba_testing.factories import make_customer, make_item, make_location, stock_in
+from permissions.models import RoleCode
+
+from .tests_analytics import person
+from .tests_dashboard import prepared_client
+
+BASE_MODULES = "customers,suppliers,items_services,sales_operations,purchases,inventory,cashboxes,reports"
+
+
+class PanelSetup(TestCase):
+    activity, sub, extra = "commercial", "retail", ""
+
+    def setUp(self):
+        prepared_client(self.activity, self.sub, BASE_MODULES + ("," + self.extra if self.extra else ""))
+        self.owner = person(RoleCode.OWNER, f"ap_{self.activity}")
+        self.client.force_login(self.owner)
+
+    def page(self, **params):
+        return self.client.get(reverse("dashboard_snapshot"), params)
+
+    def nav_keys(self, response):
+        return [item["key"] for item in response.context["nav_items"]]
+
+
+class RestaurantPanelTests(PanelSetup):
+    activity, sub, extra = "restaurants", "restaurant", "tables_orders"
+
+    def test_open_tables_and_orders_lead(self):
+        from restaurant import services as tables
+
+        t1 = tables.save_table({"name": "1", "seats": 4}, self.owner)
+        tables.save_table({"name": "2", "seats": 2}, self.owner)
+        dish = make_item(item_code="DISH-1", item_name="كشري", default_sale_price="45.00", is_stock_tracked=False)
+        order = tables.open_order(self.owner, table=t1)
+        tables.add_item(order, dish, self.owner, quantity=2)
+        response = self.page()
+        panel = response.context["activity_panel"]
+        tiles = {t["key"]: t["value"] for t in panel["tiles"]}
+        self.assertEqual(panel["kind"], "kitchen")
+        self.assertEqual((tiles["open_orders"], tiles["open_value"], tiles["tables_busy"]), (1, D("90.00"), "1 من 2"))
+        self.assertContains(response, 'data-activity-panel="kitchen"')
+        self.assertEqual(self.nav_keys(response)[:2], ["dashboard", "restaurant"])
+        actions = response.context["quick_actions"]
+        self.assertEqual((actions[0]["key"], actions[0]["primary"]), ("open_tables", True))
+        self.assertEqual([a["key"] for a in actions if a["primary"]], ["open_tables"])
+        self.assertEqual(response.context["nav_items"][1]["label"], "الطاولات")
+
+
+class RestaurantPanelMoneyTests(PanelSetup):
+    """Restaurants video finding F1: the waiter's home said «مفيش أرقام تقدر تشوفها بصلاحياتك» under a panel that showed them the
+    floor's money. The money tiles now follow the whole-floor sales permission; the counts stay for everyone who opens the panel."""
+
+    activity, sub, extra = "restaurants", "restaurant", "tables_orders"
+    MONEY = ("open_value", "avg_order")
+    COUNTS = ("open_orders", "tables_busy", "paid_today")
+
+    def setUp(self):
+        super().setUp()
+        from restaurant import services as tables
+
+        table = tables.save_table({"name": "1", "seats": 4}, self.owner)
+        dish = make_item(item_code="DISH-1", item_name="كشري", default_sale_price="45.00", is_stock_tracked=False)
+        tables.add_item(tables.open_order(self.owner, table=table), dish, self.owner, quantity=2)
+
+    def tiles_for(self, role, name):
+        user = self.owner if role is None else person(role, name)
+        self.client.force_login(user)
+        response = self.page()
+        panel = response.context["activity_panel"]
+        return response, ({tile["key"]: tile["value"] for tile in panel["tiles"]} if panel else None)
+
+    def test_the_owner_sees_the_floor_counts_and_its_money(self):
+        _response, tiles = self.tiles_for(None, "")
+        self.assertEqual([tiles[key] for key in self.COUNTS + self.MONEY], [1, "1 من 1", 0, D("90.00"), D("0")])
+
+    def test_a_waiter_sees_the_counts_and_no_money(self):
+        response, tiles = self.tiles_for(RoleCode.WAITER, "ap_waiter")
+        self.assertIsNotNone(tiles, "the waiter opens the tables, so the panel is theirs too")
+        self.assertEqual([tiles[key] for key in self.COUNTS], [1, "1 من 1", 0])
+        self.assertFalse(set(self.MONEY) & set(tiles))
+        for label in ("قيمة الطلبات المفتوحة", "متوسط الطلب النهارده", "90.00"):
+            self.assertNotContains(response, label)
+
+    def test_a_cashier_sees_only_their_own_sales_so_no_floor_money_either(self):
+        response, tiles = self.tiles_for(RoleCode.CASHIER, "ap_cashier")
+        if tiles is not None:
+            self.assertFalse(set(self.MONEY) & set(tiles))
+        self.assertNotContains(response, "قيمة الطلبات المفتوحة")
+
+    def test_a_manager_who_sees_every_sale_sees_the_money(self):
+        _response, tiles = self.tiles_for(RoleCode.MANAGER, "ap_manager")
+        self.assertEqual(tiles["open_value"], D("90.00"))
+
+    def test_the_rule_is_the_existing_whole_floor_sales_permission(self):
+        from permissions.models import Permission
+
+        from .activity_panel import FLOOR_MONEY
+
+        self.assertEqual(FLOOR_MONEY, "reports.view_all_sales_report")
+        self.assertTrue(Permission.objects.filter(code=FLOOR_MONEY).exists())  # no new permission
+
+
+class ClinicPanelTests(PanelSetup):
+    activity, sub, extra = "medical", "clinic", "appointments_visits"
+
+    def test_todays_bookings_and_no_shows(self):
+        from appointments.models import Appointment, AppointmentStatus
+
+        patient = make_customer(customer_code="P-1", name="منى")
+        now = timezone.localtime()
+        later = now + timedelta(hours=2) if now.hour < 21 else now + timedelta(minutes=30)
+        # Earlier today, even in the first hour after midnight (an hour back would be yesterday).
+        earlier = max(now - timedelta(hours=1), now.replace(hour=0, minute=0, second=1, microsecond=0))
+        for status, when in ((AppointmentStatus.DONE, earlier), (AppointmentStatus.NO_SHOW, earlier),
+                             (AppointmentStatus.BOOKED, later)):
+            Appointment.objects.create(number=f"AP-{status}", customer=patient, starts_at=when, status=status, created_by=self.owner)
+        response = self.page()
+        tiles = {t["key"]: t for t in response.context["activity_panel"]["tiles"]}
+        self.assertEqual(tiles["done_today"]["value"], 1)
+        self.assertEqual(tiles["no_show_today"]["tone"], "bad")
+        self.assertEqual(tiles["no_show_rate"]["value"], "50%")
+        if later.date() == now.date():
+            self.assertIn("منى", tiles["next"]["value"])
+        self.assertEqual(self.nav_keys(response)[:2], ["dashboard", "appointments"])
+        self.assertEqual(response.context["nav_items"][1]["label"], "الحجوزات")
+        self.assertEqual(response.context["quick_actions"][0]["key"], "bookings")
+
+
+class ContractingPanelTests(PanelSetup):
+    activity, sub, extra = "contracting", "general", "projects"
+
+    def test_projects_and_losers(self):
+        from projects.services import save_project
+
+        save_project({"name": "فيلا التجمع", "customer": make_customer(customer_code="O-1"), "contract_value": "100000"}, self.owner)
+        response = self.page()
+        tiles = {t["key"]: t["value"] for t in response.context["activity_panel"]["tiles"]}
+        self.assertEqual((tiles["active_projects"], tiles["contract_total"], tiles["billed_pct"]), (1, D("100000.00"), "0%"))
+        self.assertEqual(self.nav_keys(response)[:2], ["dashboard", "projects"])
+
+
+class ContractingPanelMoneyTests(PanelSetup):
+    """Contracting video finding: the site engineer's home showed the contract value and what is owed right above «مفيش أرقام
+    تقدر تشوفها بصلاحياتك». The panel now follows the project pages' own rule: contract, billing, dues and overdue certificates
+    need the sales invoices; which projects lose money needs the profit report; the counts stay for everyone who opens it."""
+
+    activity, sub, extra = "contracting", "general", "projects"
+    SALES = ("contract_total", "billed_pct", "project_dues", "overdue_certs")
+
+    def setUp(self):
+        super().setUp()
+        from projects.services import save_project
+
+        save_project({"name": "فيلا التجمع", "customer": make_customer(customer_code="O-1"), "contract_value": "100000"}, self.owner)
+
+    def tiles_for(self, role, name):
+        user = self.owner if role is None else person(role, name)
+        self.client.force_login(user)
+        response = self.page()
+        panel = response.context["activity_panel"]
+        return response, ({tile["key"]: tile["value"] for tile in panel["tiles"]} if panel else None)
+
+    def test_the_owner_sees_every_tile(self):
+        _response, tiles = self.tiles_for(None, "")
+        self.assertEqual((tiles["active_projects"], tiles["contract_total"], tiles["billed_pct"], tiles["losing"]), (1, D("100000.00"), "0%", 0))
+        self.assertTrue({"project_dues", "overdue_certs", "behind_schedule"} <= set(tiles))
+
+    def test_a_site_engineer_sees_the_counts_and_no_money(self):
+        response, tiles = self.tiles_for(RoleCode.SITE_ENGINEER, "ap_engineer")
+        self.assertIsNotNone(tiles, "the engineer opens the projects, so the panel is theirs too")
+        self.assertEqual(tiles["active_projects"], 1)
+        self.assertIn("behind_schedule", tiles)
+        self.assertFalse((set(self.SALES) | {"losing"}) & set(tiles))
+        for text in ("قيمة العقود", "100,000.00"):
+            self.assertNotContains(response, text)
+
+    def test_a_manager_sees_the_sales_tiles_but_not_who_is_losing_money(self):
+        from permissions.services import user_has_permission
+
+        from .activity_panel import PROJECT_PROFIT, PROJECT_SALES
+
+        manager = person(RoleCode.MANAGER, "ap_manager")
+        self.client.force_login(manager)
+        tiles = {tile["key"] for tile in self.page().context["activity_panel"]["tiles"]}
+        self.assertEqual(set(self.SALES) <= tiles, user_has_permission(manager, PROJECT_SALES))
+        self.assertEqual("losing" in tiles, user_has_permission(manager, PROJECT_PROFIT))
+
+    def test_the_rule_is_the_project_pages_existing_codes(self):
+        from permissions.models import Permission
+        from projects import views
+
+        from .activity_panel import PROJECT_PROFIT, PROJECT_SALES
+
+        self.assertEqual((PROJECT_SALES, PROJECT_PROFIT), (views.VIEW, views.PROFIT))
+        self.assertEqual(Permission.objects.filter(code__in=(PROJECT_SALES, PROJECT_PROFIT)).count(), 2)  # no new permission
+
+
+class ManufacturingPanelTests(PanelSetup):
+    activity, sub, extra = "manufacturing", "food", "manufacturing"
+
+    def test_recipes_short_of_materials_are_named(self):
+        from manufacturing.services import save_recipe
+
+        make_location(location_code="MAIN", is_default=True)
+        flour = make_item(item_code="RAW-1", item_name="دقيق")
+        bread = make_item(item_code="FG-1", item_name="عيش فينو")
+        save_recipe({"product": bread, "output_quantity": "10"}, [(flour, "5")], self.owner)
+        response = self.page()
+        tiles = {t["key"]: t for t in response.context["activity_panel"]["tiles"]}
+        self.assertEqual(tiles["short_recipes"]["value"], 1)
+        self.assertIn("عيش فينو", tiles["short_recipes"]["sub"])
+        self.assertEqual(self.nav_keys(response)[:2], ["dashboard", "manufacturing"])
+
+
+class ShopHasNoPanelTests(PanelSetup):
+    def test_a_shop_keeps_the_sale_as_its_lead(self):
+        response = self.page()
+        self.assertIsNone(response.context["activity_panel"])
+        self.assertEqual([a["key"] for a in response.context["quick_actions"] if a["primary"]], ["record_sale"])
+
+    def test_a_panel_is_hidden_without_its_section(self):
+        cashier = person(RoleCode.CASHIER, "ap_cashier")
+        self.client.force_login(cashier)
+        self.assertIsNone(self.page().context["activity_panel"])
+
+
+class DemoSwitchTests(PanelSetup):
+    def test_only_a_demo_install_can_switch_and_the_words_follow(self):
+        from django.test import override_settings
+
+        self.assertEqual(self.client.post(reverse("demo_activity"), {"activity": "medical:clinic"}).status_code, 404)
+        self.assertNotContains(self.page(), "data-demo-activity")
+        with override_settings(DEMO_MODE=True):
+            self.assertContains(self.page(), "data-demo-activity")
+            self.client.post(reverse("demo_activity"), {"activity": "medical:clinic"})
+            self.assertContains(self.page(), ">المرضى<")
+            self.client.post(reverse("demo_activity"), {"activity": "evil:thing"})
+            self.assertContains(self.page(), ">المرضى<")  # unknown choices are ignored
+            self.client.force_login(person(RoleCode.CASHIER, "ap_demo_cashier"))
+            self.assertEqual(self.client.post(reverse("demo_activity"), {"activity": "commercial:retail"}).status_code, 403)
+
+    def test_the_salon_is_one_of_the_demo_choices_and_switching_to_it_works(self):
+        from django.test import override_settings
+
+        from config.demo import DEMO_ACTIVITIES, demo_activity_choices
+        from settings_core.models import ClientProfile
+
+        self.assertIn(("services", "beauty"), DEMO_ACTIVITIES)
+        self.assertIn("services:beauty", [value for value, _label in demo_activity_choices("ar")])
+        with override_settings(DEMO_MODE=True):
+            self.client.post(reverse("demo_activity"), {"activity": "services:beauty"})
+        profile = ClientProfile.get_active()
+        self.assertEqual((profile.activity_slug, profile.sub_activity_slug), ("services", "beauty"))

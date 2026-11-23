@@ -1,0 +1,190 @@
+/* App shell (SHELL-001): navy sidebar with the reversed lockup from 1024px up,
+   a top bar and drawer below that, and a tab bar on phones. Every value comes
+   from tokens.css. */
+
+.hs-app{display:grid;grid-template-columns:264px minmax(0,1fr);min-height:100vh}
+@media (max-width: 1279px){.hs-app{grid-template-columns:236px minmax(0,1fr)}}
+.hs-main{min-width:0}
+#hs-main:focus{outline:0}
+
+.hs-skip{position:absolute;inset-inline-start:12px;top:-60px;z-index:60;padding:10px 14px;border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font-weight:600;text-decoration:none}
+.hs-skip:focus{top:12px}
+
+/* Sidebar */
+.hs-sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;gap:var(--hs-space-4);padding:var(--hs-space-6) var(--hs-space-4);background:var(--hs-navy);color:var(--hs-surface);overflow:hidden}
+.hs-sidebar__head{display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-2);padding:0 var(--hs-space-2)}
+.hs-sidebar__brand{display:block;line-height:0}
+.hs-sidebar__brand img{width:160px;height:auto}
+.hs-sidebar .hs-sidebar__close{display:none}
+/* DEMO-FEEDBACK: the list scrolls on its own, so the language and logout
+   buttons at the foot stay on screen however long the menu gets. */
+.hs-nav{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
+.hs-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.hs-nav__link{display:flex;align-items:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border-radius:var(--hs-radius-md);color:var(--hs-on-navy-muted);font-weight:600;text-decoration:none;border-inline-start:3px solid transparent}
+.hs-nav__link:hover{background:var(--hs-navy-raised);color:var(--hs-surface)}
+.hs-nav__link.is-current{background:var(--hs-navy-raised);color:var(--hs-surface);border-inline-start-color:var(--hs-teal)}
+.hs-sidebar__foot{display:flex;flex-direction:column;gap:var(--hs-space-3);padding:var(--hs-space-4) var(--hs-space-2) 0;border-top:1px solid var(--hs-navy-raised)}
+.hs-sidebar__user{font-weight:600;color:var(--hs-gold-bright);overflow-wrap:anywhere}
+.hs-sidebar__actions{display:flex;flex-wrap:wrap;gap:var(--hs-space-2)}
+.hs-sidebar__actions form{margin:0}
+
+/* Icons and the rail (SHELL-003) */
+.hs-icon{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.hs-nav__link{gap:var(--hs-space-3)}
+.hs-sidebar__mark,.hs-chip__short{display:none}
+.hs-rail-toggle{display:none;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);flex:none;border:1px solid var(--hs-navy-raised);border-radius:var(--hs-radius-md);background:transparent;color:var(--hs-on-navy-muted);cursor:pointer}
+.hs-rail-toggle:hover{background:var(--hs-navy-raised);color:var(--hs-surface)}
+.hs-rail-toggle:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+@media (min-width: 1024px){
+  .hs-rail-toggle{display:inline-grid}
+  body.hs-rail .hs-app{grid-template-columns:80px minmax(0,1fr)}
+  body.hs-rail .hs-sidebar{padding-inline:var(--hs-space-3);align-items:center}
+  body.hs-rail .hs-sidebar__head{flex-direction:column;padding:0}
+  body.hs-rail .hs-sidebar__lockup,body.hs-rail .hs-nav__label,body.hs-rail .hs-sidebar__user,body.hs-rail .hs-chip__long{display:none}
+  body.hs-rail .hs-sidebar__mark{display:block;width:38px;height:auto}
+  body.hs-rail .hs-chip__short{display:inline}
+  body.hs-rail .hs-nav{width:100%}
+  body.hs-rail .hs-nav__link{justify-content:center;padding:0}
+  body.hs-rail .hs-sidebar__foot{width:100%;padding-inline:0;align-items:center}
+  body.hs-rail .hs-sidebar__actions{flex-direction:column;align-items:center}
+  body.hs-rail .hs-sidebar__actions .hs-chip{width:48px;padding:0;display:inline-grid;place-items:center}
+}
+
+/* Shared controls */
+.hs-chip{min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:600;cursor:pointer}
+.hs-chip--on-navy{border-color:var(--hs-navy-raised);background:transparent;color:var(--hs-surface)}
+.hs-chip--on-navy:hover{background:var(--hs-navy-raised)}
+.hs-icon-button{display:inline-grid;place-items:center;width:var(--hs-control-height);height:var(--hs-control-height);border:1px solid var(--hs-line);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font-size:24px;line-height:1;cursor:pointer}
+.hs-burger,.hs-burger::before,.hs-burger::after{display:block;width:20px;height:2px;border-radius:2px;background:currentColor}
+.hs-burger{position:relative}
+.hs-burger::before,.hs-burger::after{content:"";position:absolute;inset-inline-start:0}
+.hs-burger::before{top:-6px}
+.hs-burger::after{top:6px}
+.hs-chip:focus-visible,.hs-icon-button:focus-visible,.hs-nav__link:focus-visible,.hs-tab:focus-visible,.hs-skip:focus-visible,.hs-sidebar__brand:focus-visible,.hs-topbar__brand:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+
+/* Short landscape screens (1024x768 tablets): keep logout on screen without scrolling the sidebar. */
+@media (min-width: 1024px) and (max-height: 860px){
+  .hs-sidebar{padding-block:var(--hs-space-4);gap:var(--hs-space-3)}
+  .hs-sidebar__foot{gap:var(--hs-space-2);padding-top:var(--hs-space-3)}
+  .hs-sidebar__actions .hs-chip{padding:0 var(--hs-space-3)}
+}
+
+/* Top bar and tab bar exist only below the sidebar breakpoint. */
+.hs-topbar,.hs-tabbar{display:none}
+.hs-backdrop{position:fixed;inset:0;z-index:40;background:var(--hs-scrim)}
+.hs-backdrop[hidden]{display:none}
+
+@media (max-width: 1023px){
+  .hs-app{display:block}
+  /* UX Wave 4: below the sidebar breakpoint the top bar takes the sidebar's navy; its controls sit on navy.
+     Rules are scoped under .hs-topbar because lists.css (loaded later) also styles .hs-chip. */
+  .hs-topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;gap:var(--hs-space-3);min-height:60px;padding:var(--hs-space-2) var(--hs-gutter);background:var(--hs-navy);color:var(--hs-on-navy)}
+  .hs-topbar .hs-icon-button,.hs-topbar .hs-chip{border:1px solid transparent;border-radius:var(--hs-radius-lg);background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  .hs-topbar .hs-chip{min-height:var(--hs-control-height);padding:0 var(--hs-space-4)}
+  .hs-topbar .hs-icon-button:hover,.hs-topbar .hs-chip:hover{background:var(--hs-on-navy-wash-strong)}
+  .hs-topbar .hs-icon-button:focus-visible,.hs-topbar .hs-chip:focus-visible,.hs-topbar__brand:focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  .hs-topbar__brand{display:inline-grid;place-items:center;min-width:var(--hs-control-height);min-height:var(--hs-control-height);line-height:0;border-radius:var(--hs-radius-md)}
+  .hs-sidebar{position:fixed;top:0;bottom:0;inset-inline-start:0;z-index:50;width:min(300px,86vw);height:auto;display:none;box-shadow:var(--hs-shadow-md)}
+  .hs-sidebar.is-open{display:flex}
+  .hs-sidebar .hs-sidebar__close{display:inline-grid;border-color:var(--hs-navy-raised);background:transparent;color:var(--hs-surface)}
+  body.hs-drawer-open{overflow:hidden}
+}
+
+/* UX Wave 4: the phone tab bar is a navy pill floating above the bottom edge. The selling tab sits in the
+   middle as a raised teal circle (navy icon on teal); the current tab is teal-tinted. Anything docked to the
+   bottom edge clears --hs-tabbar-space (or --hs-tabbar-clear to clear the raised circle as well). */
+@media (max-width: 700px){
+  .hs-tabbar{position:fixed;bottom:calc(var(--hs-tabbar-gap) + env(safe-area-inset-bottom));inset-inline:var(--hs-space-3);z-index:30;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);align-items:stretch;height:var(--hs-tabbar-height);padding:0 var(--hs-space-1);border-radius:var(--hs-tabbar-radius);background:var(--hs-navy);box-shadow:var(--hs-shadow-fab)}
+  /* .hs-tabbar .hs-tab: one class more than the dashboard's ".dashboard-page a{color:inherit}" */
+  .hs-tabbar .hs-tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:var(--hs-tabbar-height);padding:0 2px;border:0;border-radius:var(--hs-tabbar-radius);background:transparent;color:var(--hs-on-navy-muted);font:inherit;font-size:11px;font-weight:600;line-height:var(--hs-leading-tight);text-align:center;text-decoration:none;cursor:pointer}
+  .hs-tab__label{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hs-tab .hs-icon{width:22px;height:22px}
+  .hs-tabbar .hs-tab:hover{color:var(--hs-on-navy)}
+  .hs-tabbar .hs-tab.is-current{color:var(--hs-on-navy);font-weight:700}
+  .hs-tab.is-current .hs-icon{box-sizing:content-box;padding:3px 13px;border-radius:var(--hs-radius-pill);background:var(--hs-tab-active-wash);color:var(--hs-teal);stroke-width:2.2}
+  .hs-tabbar .hs-tab:focus-visible{outline:0;box-shadow:inset 0 0 0 3px var(--hs-teal)}
+  .hs-tabbar .hs-tab--sell{justify-content:flex-start;color:var(--hs-on-navy);font-weight:700}
+  .hs-tab__orb{display:grid;place-items:center;box-sizing:border-box;width:58px;height:58px;margin-top:calc(-1 * var(--hs-tab-rise));margin-bottom:1px;border:4px solid var(--hs-page);border-radius:20px;background:var(--hs-teal);color:var(--hs-on-teal);box-shadow:var(--hs-shadow-fab)}
+  .hs-tab--sell .hs-icon,.hs-tab--sell.is-current .hs-icon{width:26px;height:26px;padding:0;background:transparent;color:var(--hs-on-teal);stroke-width:2}
+  .hs-tab--sell.is-current .hs-tab__label{color:var(--hs-teal)}
+  .hs-tabbar .hs-tab--sell:focus-visible{box-shadow:none}
+  .hs-tabbar .hs-tab--sell:focus-visible .hs-tab__orb{box-shadow:var(--hs-focus-ring-on-navy)}
+  .hs-main{padding-bottom:calc(var(--hs-tabbar-clear) + var(--hs-space-4) + env(safe-area-inset-bottom))}
+}
+@media (max-width: 700px) and (prefers-reduced-motion: no-preference){
+  .hs-tab__orb{transition:transform .15s ease}
+  .hs-tab--sell:active .hs-tab__orb{transform:scale(.96)}
+}
+
+@media print{
+  .hs-sidebar,.hs-topbar,.hs-tabbar,.hs-skip,.hs-backdrop{display:none !important}
+  .hs-app{display:block}
+  .hs-main{padding-bottom:0}
+}
+
+/* SEARCH-001: search box at the top of the sidebar; an icon on the phone top bar and in the rail. */
+.hs-search{position:relative;margin:4px 12px 10px;display:flex;align-items:center}
+.hs-search .hs-icon{position:absolute;inset-inline-start:10px;width:16px;height:16px;opacity:.7;pointer-events:none;stroke:currentColor}
+.hs-search input[type=search]{width:100%;min-height:var(--hs-control-height);border-radius:10px;border:1px solid var(--hs-navy-raised);background:var(--hs-navy-raised);color:var(--hs-surface);padding:0 12px 0 34px;padding-inline-start:34px;font:inherit;font-size:13px}
+.hs-search input::placeholder{color:var(--hs-on-navy-muted)}
+.hs-topbar__search{margin-inline-start:auto}
+@media(min-width:1024px){.hs-topbar__search{display:none}body.hs-rail .hs-search input[type=search]{padding:0;width:38px;color:transparent;cursor:pointer}body.hs-rail .hs-search input::placeholder{color:transparent}body.hs-rail .hs-search .hs-icon{inset-inline-start:11px}}
+/* ENT-002: the entity bar — which entity this screen is working in. */
+.hs-entities{display:flex;align-items:center;gap:6px;overflow-x:auto;margin:0 0 14px;padding:6px;border:var(--hs-card-border);border-radius:var(--hs-card-radius-sm);background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
+.hs-entities form{margin:0;flex:0 0 auto}
+.hs-entities__label{flex:0 0 auto;padding:0 6px;font-size:13px;color:var(--hs-muted)}
+.hs-entities__tab{min-height:36px;padding:0 14px;border:0;border-radius:999px;background:transparent;color:var(--hs-ink);font:inherit;font-weight:600;white-space:nowrap;cursor:pointer}
+.hs-entities__tab:hover{background:var(--hs-teal-wash)}
+.hs-entities__tab.is-current{background:var(--hs-navy);color:var(--hs-surface)}
+
+/* UX Wave 1: the menu in groups (البيع، المخزون، الناس، الفلوس، التقارير، الإعدادات، إضافات). Headings fold away in the rail. */
+.hs-nav__group+.hs-nav__group{margin-top:var(--hs-space-3)}
+.hs-nav__heading{margin:0 0 var(--hs-space-1);padding:0 var(--hs-space-4);font-size:var(--hs-text-xs);font-weight:700;color:var(--hs-on-navy-muted)}
+@media (min-width: 1024px){
+  body.hs-rail .hs-nav__heading{display:none}
+  body.hs-rail .hs-nav__group+.hs-nav__group{margin-top:var(--hs-space-2);padding-top:var(--hs-space-2);border-top:1px solid var(--hs-navy-raised)}
+}
+/* UX Wave 1: «الأكثر استخداماً» at the top of the phone drawer only. */
+.hs-quick{display:none}
+@media (max-width: 1023px){
+  .hs-quick{display:block;margin:0 var(--hs-space-1) var(--hs-space-4)}
+  .hs-quick__title{margin:0 0 var(--hs-space-2);padding:0 var(--hs-space-2);font-size:var(--hs-text-xs);font-weight:700;color:var(--hs-on-navy-muted)}
+  .hs-quick__row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hs-space-2)}
+  .hs-quick__link{display:flex;align-items:center;gap:var(--hs-space-2);min-height:var(--hs-control-height-lg);padding:var(--hs-space-2) var(--hs-space-3);border-radius:var(--hs-radius-md);background:var(--hs-navy-raised);color:var(--hs-surface);font-size:var(--hs-text-sm);font-weight:600;text-decoration:none}
+  .hs-quick__link:hover{background:var(--hs-teal-deep)}
+  .hs-quick__link:focus-visible{outline:0;box-shadow:var(--hs-focus-ring)}
+  .hs-quick__link .hs-icon{width:20px;height:20px;color:var(--hs-teal)}
+}
+
+/* UX Wave 4: the phone header band. The page's own head (the first .op-title-row / .md-title-row of the page,
+   with its title, back arrow and actions) becomes a navy band that continues the navy top bar, with 28px rounded
+   bottom corners; the saved toast or entity bar that a page shows above its head sits inside the navy too.
+   Screen only: printing from a phone never prints navy. Pages with another head keep a dark title on the wash.
+   The entity bar is recoloured for navy under exactly the condition that paints it navy (a title row right after it,
+   or after one messages block): on a page with another head (the till) it keeps its own colours. */
+@media screen and (max-width: 700px){
+  .op-shell,.md-shell{width:calc(100% - 2 * var(--hs-gutter))}
+  :is(.op-shell,.md-shell):has(> :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *)){margin-top:0}
+  :is(.op-shell,.md-shell) > :is(.op-messages,.md-messages,.hs-entities,.op-subnav):is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))){display:flow-root;margin:0 calc(-1 * var(--hs-gutter));padding:var(--hs-space-2) var(--hs-gutter) 0;border:0;border-radius:0;background:var(--hs-navy);box-shadow:none}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))){display:flex}
+  .op-shell > .op-subnav:has(+ .op-title-row){display:flex;padding-bottom:var(--hs-space-2)}
+  .op-shell > .op-subnav:has(+ .op-title-row) :is(a,.op-subnav__sep,.op-subnav__label){color:var(--hs-on-navy-muted)}
+  .op-shell > .op-subnav:has(+ .op-title-row) a[aria-current="page"]{color:var(--hs-on-navy);background:var(--hs-on-navy-wash)}
+  .op-shell > .op-subnav:has(+ .op-title-row) a:focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))) .hs-entities__label{color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))) .hs-entities__tab:not(.is-current){color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > .hs-entities:is(:has(+ :is(.op-title-row,.md-title-row)),:has(+ :is(.op-messages,.md-messages) + :is(.op-title-row,.md-title-row))) .hs-entities__tab.is-current{background:var(--hs-teal);color:var(--hs-on-teal)}
+
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *){position:relative;margin:0 calc(-1 * var(--hs-gutter)) var(--hs-space-5);padding:var(--hs-space-1) var(--hs-gutter) var(--hs-space-6);border-radius:0 0 var(--hs-band-radius) var(--hs-band-radius);background:var(--hs-navy);color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(h1,h2){color:var(--hs-on-navy);font-size:var(--hs-text-xl)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(p,small,.op-muted,.hs-row-sub):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *){color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-back,.md-back-link){color:var(--hs-on-navy-muted)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-back,.md-back-link):hover{color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) a:not([class]):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *){color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-secondary,.md-secondary):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *),:is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more>summary{border-color:transparent;background:var(--hs-on-navy-wash);color:var(--hs-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(.op-secondary,.md-secondary):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *):hover,:is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more>summary:hover{background:var(--hs-on-navy-wash-strong)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more[open]>summary{border-color:var(--hs-teal);box-shadow:none}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) :is(a,button,summary,input,select):not(:is(.hs-more__menu,.op-card,.hs-totals,.op-summary-grid) *):focus-visible{box-shadow:var(--hs-focus-ring-on-navy)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-more__menu{color:var(--hs-ink)}
+  :is(.op-shell,.md-shell) > :is(.op-title-row,.md-title-row):not(:is(.op-shell,.md-shell) > :not(.op-messages,.md-messages,.hs-entities,.op-subnav,.hs-print-head,[hidden],dialog,script,style,link,svg,template,input) ~ *) .hs-contact .hs-contact__icon{color:var(--hs-on-navy)}
+}

@@ -1,0 +1,62 @@
+{% extends "operations/base.html" %}
+{% load static hesba_format %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'hesba/css/project_cheques.css' %}?v=c9-1">{% endblock %}
+{% block operation_content %}
+{% include "projects/_head.html" %}
+<p class="op-muted">{{ cwords.payments_intro }}</p>
+<section class="op-summary-grid">
+<article><small>{% if lang == 'en' %}Advance received{% else %}الدفعة المقدمة المستلمة{% endif %}</small><strong data-position="advance">{{ position.advance|money }}</strong><small>{{ cwords.recovery }}: {{ position.recovered|money }}</small></article>
+<article><small>{{ cwords.collections }}</small><strong data-position="collections">{{ position.collections|money }}</strong></article>
+<article><small>{{ cwords.under_collection }}</small><strong data-position="under_collection">{{ position.under_collection|money }}</strong></article>
+</section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>#</th><th>{{ cwords.date }}</th><th>{{ cwords.kind }}</th><th>{{ cwords.cashbox }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.status }}</th>{% if can_collect %}<th></th>{% endif %}</tr></thead><tbody>
+{% for row in links %}{% with payment=row.link.payment %}<tr data-project-payment="{{ payment.payment_number }}"><td dir="ltr">{{ payment.payment_number|ltr }}</td><td dir="ltr">{{ payment.payment_date|date:"Y-m-d" }}</td><td>{{ row.kind_label }}</td><td>{{ payment.cashbox }}</td><td>{{ payment.amount|money }}</td><td>{{ row.status_label }}{% if row.cheque_label %}<small class="chq-status-line" data-payment-cheque="{{ payment.cheque.status }}">{{ row.cheque_label }}</small>{% endif %}</td>{% if can_collect %}<td><form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="unlink"><input type="hidden" name="link" value="{{ row.link.pk }}"><button class="op-secondary" type="submit">{{ cwords.unlink }}</button></form></td>{% endif %}</tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+<section class="chq-card" data-project-cheques aria-labelledby="chq-title">
+<div class="chq-head"><h2 id="chq-title">{{ cwords.cheques_title }}</h2>{% if can_open_cheques and cheques_on %}<a class="op-secondary chq-open" href="{% url 'cheques:register' %}?lang={{ lang }}">{{ cwords.open_cheques }}</a>{% endif %}</div>
+{% if cheques_due_soon %}<p class="chq-soon" data-cheques-due-soon role="status"><b>{{ cwords.due_soon }}</b> {{ cheques_due_note }}</p>{% endif %}
+{% if cheques %}<ul class="chq-list">
+{% for row in cheques %}{% with cheque=row.cheque %}<li class="chq-row{% if row.soon %} chq-row--soon{% endif %}" data-project-cheque="{{ cheque.number }}" data-cheque-status="{{ cheque.status }}">
+<div class="chq-row__main"><b><bdi>{{ cheque.number }}</bdi></b><span>{{ cheque.bank_name }}</span></div>
+<div class="chq-row__meta"><span>{{ cwords.due_on }} <bdi>{{ cheque.due_date|date:"Y-m-d" }}</bdi></span><strong>{{ cheque.amount|money }}</strong></div>
+<span class="chq-chip chq-chip--{{ cheque.status }}">{{ row.status_label }}</span>
+</li>{% endwith %}{% endfor %}
+</ul><p class="op-muted chq-hint">{{ cwords.cheques_hint }}</p>
+{% else %}<p class="op-empty chq-empty">{{ cwords.no_cheques }}</p>{% endif %}
+</section>
+{% if can_collect and is_open %}
+<form class="op-form" method="post" data-receive-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="receive"><h2>{{ cwords.receive }}</h2>
+<div class="op-form-grid"><div class="op-field"><label for="pp-kind">{{ cwords.kind }}</label><select id="pp-kind" name="kind">{% for value, label in kinds %}<option value="{{ value }}"{% if value == 'collection' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pp-cashbox">{{ cwords.cashbox }}</label><select id="pp-cashbox" name="cashbox">{% for cashbox in cashboxes %}<option value="{{ cashbox.pk }}"{% if cashbox.is_default %} selected{% endif %}>{{ cashbox }}</option>{% endfor %}</select></div>
+<div class="op-field"><label for="pp-amount">{{ cwords.amount }}</label><input id="pp-amount" name="amount" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="pp-date">{{ cwords.date }}</label><input id="pp-date" type="date" name="payment_date" value="{{ today }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.receive_btn }}</button></div></form>
+{% if cheques_on %}<form class="op-form chq-form" method="post" data-cheque-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="cheque"><input type="hidden" name="kind" value="collection"><h2>{{ cwords.receive_cheque }}</h2><p class="op-muted">{{ cwords.cheque_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="pc-number">{{ cwords.cheque_number }}</label><input id="pc-number" name="number" maxlength="40" dir="ltr" value="{{ cheque_form.number|default:'' }}" required></div>
+<div class="op-field"><label for="pc-bank">{{ cwords.cheque_bank }}</label><input id="pc-bank" name="bank_name" maxlength="120" value="{{ cheque_form.bank_name|default:'' }}" required></div>
+<div class="op-field"><label for="pc-amount">{{ cwords.amount }}</label><input id="pc-amount" name="amount" inputmode="decimal" dir="ltr" value="{{ cheque_form.amount|default:'' }}" required></div>
+<div class="op-field"><label for="pc-due">{{ cwords.due_date }}</label><input id="pc-due" type="date" name="due_date" value="{{ cheque_form.due_date|default:'' }}" required></div>
+<div class="op-field"><label for="pc-on">{{ cwords.received_on }}</label><input id="pc-on" type="date" name="received_on" value="{{ cheque_form.received_on|default:today }}"></div>
+<div class="op-field"><label for="pc-notes">{{ cwords.notes }}</label><input id="pc-notes" name="notes" maxlength="255" value="{{ cheque_form.notes|default:'' }}"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.receive_cheque_btn }}</button></div></form>{% endif %}
+{% if free_payments %}<form class="op-filters" method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="link"><select name="payment" aria-label="{{ cwords.link_payment }}">{% for payment in free_payments %}<option value="{{ payment.pk }}">{{ payment.payment_number }} · {{ payment.payment_date|date:"Y-m-d" }} · {{ payment.amount|money }}</option>{% endfor %}</select><select name="kind" aria-label="{{ cwords.kind }}">{% for value, label in kinds %}<option value="{{ value }}"{% if value == 'collection' %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="op-secondary" type="submit">{{ cwords.link_payment }}</button></form>{% endif %}
+{% endif %}
+
+<h2>{{ cwords.retention_title }}</h2>
+<section class="op-summary-grid">
+<article><small>{{ cwords.held_total }}</small><strong data-position="retention_held_2">{{ position.retention_held|money }}</strong></article>
+<article><small>{{ cwords.released_total }}</small><strong>{{ position.released|money }}</strong></article>
+</section>
+<div class="op-table-wrap"><table class="op-table"><thead><tr><th>{{ cwords.date }}</th><th>{{ cwords.amount }}</th><th>{{ cwords.notes }}</th><th>{{ cwords.status }}</th></tr></thead><tbody>
+{% for release in releases %}<tr data-retention-release><td dir="ltr">{{ release.release_date|date:"Y-m-d" }}</td><td>{{ release.amount|money }}</td><td>{{ release.notes }}</td><td>{% if release.reversed_on %}{{ cwords.reversed_on }} <span dir="ltr">{{ release.reversed_on|date:"Y-m-d" }}</span>{% elif can_manage %}<form method="post">{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="reverse_release"><input type="hidden" name="release" value="{{ release.pk }}"><button class="op-secondary" type="submit">{{ cwords.reverse_release }}</button></form>{% else %}✓{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4" class="op-empty">{{ cwords.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if can_manage and position.retention_held %}
+<form class="op-form" method="post" data-release-form novalidate>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="action" value="release"><h2>{{ cwords.release }}</h2><p class="op-muted">{{ cwords.release_hint }}</p>
+<div class="op-form-grid"><div class="op-field"><label for="rr-amount">{{ cwords.amount }}</label><input id="rr-amount" name="amount" value="{{ position.retention_held|stringformat:'s' }}" inputmode="decimal" dir="ltr" required></div>
+<div class="op-field"><label for="rr-date">{{ cwords.date }}</label><input id="rr-date" type="date" name="release_date" value="{{ today }}"></div>
+<div class="op-field"><label for="rr-notes">{{ cwords.notes }}</label><input id="rr-notes" name="notes" maxlength="255"></div></div>
+<div class="op-form-actions"><button class="op-primary" type="submit">{{ cwords.release_btn }}</button></div></form>
+{% endif %}
+{% endblock %}

@@ -1,5 +1,8 @@
 from django.contrib import admin
 
+from cashboxes.models import OpeningBalanceTarget
+from cashboxes.services import target_has_operational_use
+
 from .models import Category, Customer, Item, Location, Supplier
 
 
@@ -31,9 +34,21 @@ class CustomerAdmin(admin.ModelAdmin):
     search_fields = ("customer_code", "name", "phone", "whatsapp", "email")
     list_filter = ("active",)
 
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if obj and target_has_operational_use(OpeningBalanceTarget.CUSTOMER, obj):
+            fields.append("opening_balance")
+        return tuple(dict.fromkeys(fields))
+
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
     list_display = ("supplier_code", "name", "phone", "active")
     search_fields = ("supplier_code", "name", "phone", "whatsapp", "email")
     list_filter = ("active",)
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if obj and target_has_operational_use(OpeningBalanceTarget.SUPPLIER, obj):
+            fields.append("opening_balance")
+        return tuple(dict.fromkeys(fields))

@@ -1,0 +1,6 @@
+<form method="post" action="{% url 'inventory:operation_cancel' operation.pk %}">
+  {% csrf_token %}
+  <input type="hidden" name="lang" value="{{ lang }}">
+  {% for field in reversal_form %}<label>{{ field.label }}{{ field }}</label>{% endfor %}
+  <button class="op-danger" type="submit">{% if lang == 'en' %}Reverse{% else %}عكس{% endif %}</button>
+</form>

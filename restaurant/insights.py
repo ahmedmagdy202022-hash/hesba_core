@@ -1,0 +1,278 @@
+"""RESTO-002: what each dish costs and earns, and how the floor is doing.
+
+Read-only. Dish cost is the sum of its ingredients (``DishIngredient``) at each
+ingredient's current average cost; it is an estimate for pricing, and nothing
+here takes ingredients out of stock (HG-044's deduction waits for Ahmed).
+
+Sales figures come from paid orders whose invoice is posted, in the entity
+being worked in (HG-034):
+
+- dish figures are the order lines at their menu price, before the order's
+  discount; a priced add-on (R1a) counts in its dish's money, never as a dish;
+- R1b (HG-112): a combo's components count as dishes at their menu price too, and what the combos took off them is the
+  period's «خصم الكومبو» (``totals["combo_discount"]``), so the dishes less that discount come to the lines' net money;
+- order totals are the invoice's net sales (before tax, after posted returns);
+- R3 (HG-113): the service charge and the minimum's top-up are invoice lines, never order lines, so they are never dishes;
+  the period's «الخدمة» and «فرق الحد الأدنى» (``totals["service"]``, ``totals["min_topup"]``) are the posted invoices' lines
+  of ``SERVICE-CHARGE`` and ``MIN-CHARGE``, before returns, so dishes − combo discount + service + top-up come to the
+  orders' net sales (with no delivery fee and no return in the period);
+- R2a (HG-111): a bill paid in parts is one order. A part (``Order.split_from``) adds its sales, but it is counted in its
+  parent's order, table, waiter, kind, guests and stay: the order is counted once, at the first of its invoices in the
+  period (the parent's when it is there), with the parent's table and guests, and its stay runs from the parent's opening.
+  A merged order (MERGED) is never paid, so it is never counted: its lines are the receiving order's.
+- R11 (HG-117): ``brands`` is the same orders and the same net sales split by the brand of the order a bill belongs to (a part counts under
+  its parent's brand, as it counts in its parent's order). An order opened with no brand (before any was set up) is a row of its own with
+  ``brand`` None: it is never moved to the default brand, so history is not relabelled. The overall totals are the sum of the rows.
+- R14 (HG-120): ``platforms`` is the period's orders of each delivery platform (an order paid in the name of a customer set up as a
+  platform): its orders, net sales and average as above, and the commission recorded on its shipments when they were handed to the
+  platform's rider (a parcel that came back counts none). A platform order is a delivery order too, so it is also in ``kinds``.
+
+Waste is what was taken out of stock by an adjustment in the period, with its
+reason, at movement cost.
+"""
+
+from collections import OrderedDict
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.utils import timezone
+
+from audit.models import AuditEventType, AuditLog
+from config.money import money_round
+from entities import scope as entity_scope
+
+from .charges import CHARGE_CODES, MIN_ITEM_CODE, SERVICE_ITEM_CODE
+from .models import DishIngredient, Order, OrderKind, OrderStatus
+
+ZERO = Decimal("0")
+MESSAGES = {
+    "ar": {"ingredient": "المكوّن لازم يكون صنف مخزني (خامة).", "self": "الطبق مينفعش يبقى مكوّن لنفسه.", "qty": "كمية «{item}» لازم تكون رقم أكبر من صفر.",
+           "twice": "«{item}» متكرر."},
+    "en": {"ingredient": "An ingredient must be a stocked item (a raw material).", "self": "A dish cannot be its own ingredient.",
+           "qty": "The quantity of “{item}” must be a number above zero.", "twice": "“{item}” appears twice."},
+}
+
+
+# ---- dish cost ----
+
+def plate_cost(dish, ingredients=None):
+    """Cost of one plate at the ingredients' current average cost, or None when the dish has no ingredients."""
+
+    rows = ingredients if ingredients is not None else list(dish.dish_ingredients.select_related("ingredient"))
+    if not rows:
+        return None
+    return money_round(sum((Decimal(row.quantity) * Decimal(row.ingredient.average_cost or 0) for row in rows), ZERO))
+
+
+def menu_costing(dishes):
+    """[{dish, price, cost, margin, margin_pct, ingredients}] for the given dishes (items), most profitable share first."""
+
+    lines = {}
+    for row in DishIngredient.objects.filter(dish__in=dishes).select_related("ingredient"):
+        lines.setdefault(row.dish_id, []).append(row)
+    result = []
+    for dish in dishes:
+        ingredients = lines.get(dish.pk, [])
+        cost = plate_cost(dish, ingredients)
+        price = Decimal(dish.default_sale_price or 0)
+        margin = price - cost if cost is not None else None
+        pct = round(margin / price * 100) if margin is not None and price > 0 else None
+        result.append({"dish": dish, "price": price, "cost": cost, "margin": margin, "margin_pct": pct, "ingredients": ingredients})
+    return sorted(result, key=lambda row: (row["margin_pct"] is None, -(row["margin_pct"] or 0), row["dish"].item_name))
+
+
+@transaction.atomic
+def save_ingredients(dish, lines, user, lang="ar"):
+    """Replace the dish's ingredients. ``lines``: [(item, raw quantity)]; blank rows are skipped."""
+
+    words = MESSAGES["en" if lang == "en" else "ar"]
+    clean, seen = [], set()
+    for ingredient, raw in lines:
+        if ingredient is None and not (raw or "").strip():
+            continue
+        if ingredient is None or not ingredient.is_stock_tracked:
+            raise ValidationError(words["ingredient"])
+        if ingredient.pk == dish.pk:
+            raise ValidationError(words["self"])
+        if ingredient.pk in seen:
+            raise ValidationError(words["twice"].format(item=ingredient.item_name))
+        try:
+            quantity = Decimal(str(raw or "").strip().replace(",", ""))
+        except (InvalidOperation, ValueError):
+            raise ValidationError(words["qty"].format(item=ingredient.item_name))
+        if not quantity.is_finite() or quantity >= 100000 or quantity.quantize(Decimal("0.001")) <= 0:  # 0.0004 rounds to nothing
+            raise ValidationError(words["qty"].format(item=ingredient.item_name))
+        seen.add(ingredient.pk)
+        clean.append((ingredient, quantity.quantize(Decimal("0.001"))))
+    before = [{"item": row.ingredient.item_code, "quantity": str(row.quantity)} for row in dish.dish_ingredients.select_related("ingredient")]
+    dish.dish_ingredients.all().delete()
+    DishIngredient.objects.bulk_create([DishIngredient(dish=dish, ingredient=item, quantity=qty) for item, qty in clean])
+    AuditLog.objects.create(event_type=AuditEventType.UPDATE, actor=user, module="restaurant", action="save_dish_ingredients", object_type="master_data.Item",
+                            object_id=str(dish.pk), before_data={"ingredients": before},
+                            after_data={"ingredients": [{"item": item.item_code, "quantity": str(qty)} for item, qty in clean]})
+    return clean
+
+
+# ---- the floor ----
+
+def _span(first, last):
+    start = timezone.make_aware(timezone.datetime.combine(first, timezone.datetime.min.time()))
+    return start, timezone.make_aware(timezone.datetime.combine(last + timedelta(days=1), timezone.datetime.min.time()))
+
+
+def _paid(first, last):
+    start, end = _span(first, last)
+    return (entity_scope.scope(Order.objects, "invoice__" + entity_scope.SALES_INVOICE)
+            .filter(status=OrderStatus.PAID, invoice__status="posted", closed_at__gte=start, closed_at__lt=end)
+            .select_related("invoice", "table", "waiter", "split_from__table", "brand__entity", "split_from__brand__entity").prefetch_related("lines__item"))
+
+
+def period_report(first, last):
+    """The period's orders by hour, top dishes, tables, waiters and kinds."""
+
+    from django.db.models import Sum
+
+    from sales.models import SalesReturn
+
+    from . import platforms as platform_setup
+
+    orders = list(_paid(first, last))
+    named = {one.customer.pk: one for one in platform_setup.platforms()}
+    returned = dict(SalesReturn.objects.filter(source_invoice__in=[order.invoice_id for order in orders], status="posted")
+                    .values("source_invoice").annotate(total=Sum("total_amount")).values_list("source_invoice", "total"))
+
+    def net_sales(invoice):  # appointments.services.net_sales, with the returns read once for the whole period
+        total = Decimal(invoice.total_amount)
+        if total <= 0:
+            return Decimal("0.00")
+        before_tax = total - Decimal(invoice.tax_amount or 0)
+        back = Decimal(returned.get(invoice.pk) or 0)
+        return money_round(max(before_tax - back * before_tax / total, Decimal("0")))
+
+    # R2a: which of the period's paid orders stands for its bill (the parent if it is there, else its first part)
+    present = {order.pk for order in orders}
+    counted, standing = set(), set()
+    for order in sorted(orders, key=lambda one: (one.split_from_id is not None, one.closed_at, one.pk)):
+        root = order.split_from_id or order.pk
+        if root not in counted and (order.split_from_id is None or order.split_from_id not in present):
+            counted.add(root)
+            standing.add(order.pk)
+    days = (last - first).days + 1
+    hours = OrderedDict((hour, {"hour": hour, "orders": 0, "sales": ZERO}) for hour in range(24))
+    dishes, tables, waiters, kinds, by_brand, by_platform = {}, {}, {}, {}, {}, {}
+    total, guests, minutes, combo_discount = ZERO, 0, [], ZERO
+    for order in orders:
+        sales = net_sales(order.invoice)
+        total += sales
+        root = order.split_from if order.split_from_id else order  # R2a: a part is counted in its parent's order
+        stands = order.pk in standing
+        hour = timezone.localtime(order.closed_at).hour
+        hours[hour]["orders"] += 1 if stands else 0
+        hours[hour]["sales"] += sales
+        lines = [line for line in order.lines.all() if not line.voided]
+        by_pk = {line.pk: line for line in lines}
+        for line in lines:
+            if line.item.item_code in CHARGE_CODES:  # R3: never a dish (the order screens refuse them; an old line is kept out too)
+                continue
+            # R1a (HG-109): an add-on is not a dish; its money counts in its dish's row, so the table's money is as before
+            dish = by_pk.get(line.parent_id, line)
+            row = dishes.setdefault(dish.item_id, {"item": dish.item, "quantity": ZERO, "sales": ZERO})
+            if dish is line:
+                row["quantity"] += line.quantity
+            row["sales"] += money_round(line.quantity * line.unit_price)
+            combo_discount += line.line_discount  # R1b: the combo's saving, kept out of the dish figures
+        kind = kinds.setdefault(order.kind, {"kind": order.kind, "orders": 0, "sales": ZERO})
+        kind["orders"] += 1 if stands else 0
+        kind["sales"] += sales
+        if order.kind == OrderKind.DINE_IN and root.table_id:
+            table = tables.setdefault(root.table_id, {"table": root.table, "orders": 0, "sales": ZERO, "guests": 0, "minutes": []})
+            table["sales"] += sales
+            if stands:
+                stay = (order.closed_at - root.opened_at).total_seconds() / 60
+                table["orders"] += 1
+                table["guests"] += root.guests
+                table["minutes"].append(stay)
+                guests += root.guests
+                minutes.append(stay)
+        brand = by_brand.setdefault(root.brand_id, {"brand": root.brand, "orders": 0, "sales": ZERO})  # R11: the bill's brand, a part's being its parent's
+        brand["orders"] += 1 if stands else 0
+        brand["sales"] += sales
+        if order.customer_id in named:  # R14: a delivery platform's order (a platform order is never split: it is a delivery)
+            platform = by_platform.setdefault(order.customer_id, {"platform": named[order.customer_id], "orders": 0, "sales": ZERO, "invoices": []})
+            platform["orders"] += 1 if stands else 0
+            platform["sales"] += sales
+            platform["invoices"].append(order.invoice_id)
+        # R2a: a part's sales belong to its bill's waiter (after a merge, the receiving order's), with the bill's one order
+        waiter = waiters.setdefault(root.waiter_id, {"waiter": root.waiter, "orders": 0, "sales": ZERO})
+        waiter["orders"] += 1 if stands else 0
+        waiter["sales"] += sales
+    for row in tables.values():
+        row["per_day"] = round(row["orders"] / days, 1)
+        row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else row["sales"]
+        row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"])) if row["minutes"] else None
+    if by_platform:
+        from shipping.models import Shipment, ShipmentStatus
+
+        fees = dict(Shipment.objects.filter(invoice_id__in=[pk for row in by_platform.values() for pk in row["invoices"]])
+                    .exclude(status=ShipmentStatus.RETURNED).values("invoice__customer").annotate(total=Sum("fee")).values_list("invoice__customer", "total"))
+        for customer_pk, row in by_platform.items():
+            row["commission"] = money_round(fees.get(customer_pk) or ZERO)
+            del row["invoices"]
+    for row in list(waiters.values()) + list(kinds.values()) + list(by_brand.values()) + list(by_platform.values()):
+        row["average"] = money_round(row["sales"] / row["orders"]) if row["orders"] else ZERO
+    busy = [row for row in hours.values() if row["orders"] or row["sales"]]
+    count = len(standing)
+    from sales.models import SalesLine
+
+    charged = dict(SalesLine.objects.filter(invoice_id__in=[order.invoice_id for order in orders], item__item_code__in=CHARGE_CODES)
+                   .values("item__item_code").annotate(total=Sum("line_total_amount")).values_list("item__item_code", "total"))
+    return {
+        "hours": busy,
+        "peak": max(busy, key=lambda row: row["orders"]) if busy else None,
+        "dishes": sorted(dishes.values(), key=lambda row: (-row["quantity"], row["item"].item_name))[:20],
+        "tables": sorted(tables.values(), key=lambda row: (-row["orders"], row["table"].sort_order, row["table"].name)),
+        "waiters": sorted(waiters.values(), key=lambda row: -row["sales"]),
+        "kinds": sorted(kinds.values(), key=lambda row: -row["orders"]),
+        "platforms": sorted(by_platform.values(), key=lambda row: (-row["sales"], row["platform"].name)),
+        "brands": sorted(by_brand.values(), key=lambda row: (row["brand"] is None, -row["sales"], row["brand"].name_ar if row["brand"] else "")),
+        "totals": {"orders": count, "sales": money_round(total), "average": money_round(total / count) if count else ZERO,
+                   "guests": guests, "minutes": round(sum(minutes) / len(minutes)) if minutes else None, "combo_discount": money_round(combo_discount),
+                   "service": money_round(charged.get(SERVICE_ITEM_CODE) or ZERO), "min_topup": money_round(charged.get(MIN_ITEM_CODE) or ZERO)},
+    }
+
+
+def waste(first, last):
+    """Stock thrown away in the period: [{movement, value}] and the total value.
+
+    An outbound adjustment that a production run or an order consumed is cooking, not waste."""
+
+    from inventory.models import StockMovement, StockMovementType
+
+    rows = list(entity_scope.scope(StockMovement.objects, entity_scope.STOCK_MOVEMENT)
+                .filter(movement_type=StockMovementType.ADJUSTMENT_OUT, movement_date__gte=first, movement_date__lte=last)
+                .exclude(stock_operation__status="cancelled")  # a cancelled adjustment put the stock back
+                # W16: ingredients cooked into plates (RESTO-004) or issued to an order are used, not wasted
+                .exclude(stock_operation__production_consumption__isnull=False)
+                .exclude(stock_operation__order_issue__isnull=False)
+                .select_related("item", "stock_operation").order_by("-movement_date", "-pk"))
+    out = [{"movement": row, "value": money_round(abs(Decimal(row.quantity)) * Decimal(row.unit_cost or 0)),
+            "reason": getattr(row.stock_operation, "reason", "") if getattr(row, "stock_operation_id", None) else ""} for row in rows]
+    return out, money_round(sum((row["value"] for row in out), ZERO))
+
+
+def deliveries(first, last):
+    """RESTO-003: paid deliveries per driver: count, delivery fees, average minutes from leaving to closing."""
+
+    rows = {}
+    for order in _paid(first, last).filter(kind=OrderKind.DELIVERY).select_related("driver"):
+        row = rows.setdefault(order.driver_id, {"driver": order.driver, "orders": 0, "fees": ZERO, "minutes": []})
+        row["orders"] += 1
+        row["fees"] += order.delivery_fee or ZERO
+        if order.dispatched_at and order.closed_at and order.closed_at >= order.dispatched_at:
+            row["minutes"].append((order.closed_at - order.dispatched_at).total_seconds() / 60)
+    for row in rows.values():
+        row["fees"] = money_round(row["fees"])
+        row["minutes"] = round(sum(row["minutes"]) / len(row["minutes"])) if row["minutes"] else None
+    return sorted(rows.values(), key=lambda row: (row["driver"] is None, -row["orders"]))

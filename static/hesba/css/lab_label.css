@@ -1,0 +1,48 @@
+/* M9 (HG-092): the lab's sample label. A common 50 x 25 mm label (one per page for a label printer), or a sheet of the same
+   labels on A4 when there is no label printer. Tokens only; the barcode itself is drawn in black on white by its own SVG. */
+*{box-sizing:border-box}
+body.ls-body{margin:0;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body)}
+.ls-toolbar{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:var(--hs-space-3);align-items:center;padding:var(--hs-space-3) var(--hs-space-4);background:var(--hs-surface);border-bottom:1px solid var(--hs-line)}
+.ls-toolbar p{flex-basis:100%;margin:0;color:var(--hs-muted);font-size:var(--hs-text-xs)}
+.ls-toolbar form{display:flex;flex-wrap:wrap;gap:var(--hs-space-3);align-items:center;margin:0}
+.ls-button{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hs-control-height);padding:0 var(--hs-space-4);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);background:var(--hs-surface);color:var(--hs-navy);font:inherit;font-weight:var(--hs-weight-semibold);text-decoration:none;cursor:pointer}
+.ls-button[aria-current="true"]{background:var(--hs-navy);border-color:var(--hs-navy);color:var(--hs-on-navy)}
+.ls-button--primary{border:0;background:var(--hs-teal);color:var(--hs-on-teal);margin-inline-start:auto}
+.ls-button:focus-visible,.ls-toolbar input:focus-visible{outline:none;box-shadow:var(--hs-focus-ring)}
+.ls-toolbar label{display:flex;align-items:center;gap:var(--hs-space-2);color:var(--hs-muted);font-size:var(--hs-text-sm)}
+.ls-toolbar input[type=number]{width:72px;min-height:var(--hs-control-height);padding:0 var(--hs-space-2);border:1px solid var(--hs-line-strong);border-radius:var(--hs-radius-md);font:inherit}
+
+/* one label: name, day, barcode, code, tests. The barcode takes what the text lines leave, so nothing is squeezed out. */
+.ls-label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;overflow:hidden;background:var(--hs-surface);text-align:center}
+.ls-label>p{flex-shrink:0;margin:0;line-height:1.15;max-width:100%}
+.ls-name{font-size:7.5pt;font-weight:var(--hs-weight-bold);max-height:2.3em;overflow:hidden}
+.ls-date{font-size:6pt;color:var(--hs-muted)}
+.ls-code{flex:1 1 0;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+.ls-code svg{display:block;max-width:100%;max-height:100%;width:auto;height:100%}
+.ls-text{font-size:6.5pt;letter-spacing:.06em;font-weight:var(--hs-weight-semibold)}
+.ls-tests{font-size:5.5pt;color:var(--hs-muted);max-height:2.4em;overflow:hidden}
+
+/* the label printer's roll: one 50 x 25 mm label per page */
+.ls-roll .ls-sheet{display:flex;flex-direction:column;align-items:center;gap:var(--hs-space-2);padding:var(--hs-space-4)}
+.ls-roll .ls-label{width:50mm;height:25mm;padding:.8mm 1.5mm;outline:1px dashed var(--hs-line)}
+/* the fallback: the same labels in a grid on one A4 sheet */
+.ls-a4 .ls-sheet{width:210mm;margin:var(--hs-space-4) auto;padding:10mm 5mm;display:grid;justify-content:center;grid-template-columns:repeat(4,50mm);grid-auto-rows:25mm;gap:0;background:var(--hs-surface)}
+.ls-a4 .ls-label{padding:.8mm 1.5mm;outline:1px dashed var(--hs-line)}
+
+@page{size:A4;margin:0}
+@page roll{size:50mm 25mm;margin:0}
+.ls-roll .ls-label{page:roll}
+@media print{
+  body.ls-body{background:var(--hs-surface)}
+  .ls-toolbar{display:none}
+  .ls-sheet{margin:0!important}
+  .ls-label{outline:none!important;break-inside:avoid}
+  .ls-roll .ls-sheet{padding:0;gap:0}
+  .ls-roll .ls-label{break-after:page}
+  .ls-a4 .ls-sheet{padding:10mm 5mm}
+}
+@media (max-width:640px){
+  .ls-button--primary{flex:1 1 100%;margin-inline-start:0}
+}
+.hs-back-arrow{flex:none;width:18px;height:18px;margin-inline-end:var(--hs-space-2)}
+[dir="rtl"] .hs-back-arrow{transform:scaleX(-1)}

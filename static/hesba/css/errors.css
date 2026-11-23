@@ -1,0 +1,14 @@
+/* UX Wave 3: the branded "page not found" (404) and "something went wrong" (500) pages.
+   Standalone: no shell, no context, tokens only. The navy band carries the reversed logo; one teal button goes home. */
+*{box-sizing:border-box}
+body.hs-error{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--hs-ground);color:var(--hs-ink);font-family:var(--hs-font-body);font-size:var(--hs-text-base);line-height:var(--hs-leading)}
+.hs-error__band{display:flex;align-items:center;justify-content:center;padding:var(--hs-space-4) var(--hs-space-4);background:var(--hs-navy)}
+.hs-error__band img{display:block;width:150px;height:auto}
+.hs-error__main{flex:1;display:flex;align-items:center;justify-content:center;padding:var(--hs-space-6) var(--hs-space-4)}
+.hs-error__card{width:100%;max-width:480px;padding:var(--hs-space-8) var(--hs-space-6);background:var(--hs-surface);border:1px solid var(--hs-line);border-radius:var(--hs-radius-xl);box-shadow:var(--hs-shadow-md);text-align:center}
+.hs-error__code{display:inline-block;margin:0 0 var(--hs-space-3);padding:var(--hs-space-1) var(--hs-space-4);border-radius:var(--hs-radius-pill);background:var(--hs-gold-wash);color:var(--hs-gold);font-weight:var(--hs-weight-bold);font-size:var(--hs-text-sm)}
+.hs-error h1{margin:0 0 var(--hs-space-2);color:var(--hs-navy);font-family:var(--hs-font-head);font-size:var(--hs-text-2xl);line-height:var(--hs-leading-tight)}
+.hs-error p{margin:0 0 var(--hs-space-6);color:var(--hs-muted)}
+.hs-error .op-primary{min-width:200px}
+.hs-error [hidden]{display:none!important}
+@media (max-width:560px){.hs-error__card{padding:var(--hs-space-6) var(--hs-space-4)}.hs-error .op-primary{width:100%}}

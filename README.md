@@ -24,6 +24,9 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 
 ## Current checkpoints
 
+The live project status and task board is `docs/HESBA_ROADMAP.md`. The list
+below is the historical foundation checkpoint log.
+
 - `047_GITHUB_INITIAL_STRUCTURE_MERGED`
 - `048_FOUNDATION_APPS_SKELETON_READY`
 - `049_FOUNDATION_MODELS_SETTINGS_ROLES_PERMISSIONS = OK`
@@ -91,3 +94,32 @@ Supplier -> Purchase Invoice -> Inventory by Location -> Sales Invoice -> Custom
 7. Dashboard
 8. Security tests
 9. Delivery package
+
+## Runtime configuration
+
+Local development uses SQLite by default, so no environment file is required:
+
+```powershell
+python manage.py migrate
+python manage.py runserver
+```
+
+Production settings are environment-driven. Copy `.env.example` outside source
+control (or configure the same variables in the deployment platform), replace
+every placeholder, and use `DATABASE_BACKEND=postgresql`. The PostgreSQL driver
+is included in `requirements.txt`; database credentials and the target host are
+intentionally not stored in this repository.
+
+Before deployment, run:
+
+```powershell
+python manage.py check --deploy
+python manage.py makemigrations --check --dry-run
+python manage.py migrate
+python manage.py collectstatic --noinput
+python manage.py test
+```
+
+TLS is assumed in production. Secure cookies, HTTPS redirection, and HSTS default
+on whenever `DEBUG=False`. Set `TRUST_PROXY_SSL_HEADER=True` only when the named
+deployment proxy is trusted to replace the forwarded-protocol header.

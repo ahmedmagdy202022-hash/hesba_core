@@ -1,0 +1,5 @@
+{# AN5: tick standard sizes or colours, or type others. Posts <kind>_std and <kind>_extra (variants.standard.picked). #}
+<fieldset class="hs-variant-pick__group" data-variant-kind="{{ kind }}"><legend>{{ legend }}</legend>
+  {% if options %}<div class="hs-pick-chips">{% for value in options %}<label class="hs-pick-chip"><input type="checkbox" name="{{ kind }}_std" value="{{ value }}"><span>{{ value }}</span></label>{% endfor %}</div>{% endif %}
+  <label class="hs-pick-extra"><span>{{ words.extra }}</span><input name="{{ kind }}_extra" maxlength="400" autocomplete="off" data-variant-extra="{{ kind }}"></label>
+</fieldset>

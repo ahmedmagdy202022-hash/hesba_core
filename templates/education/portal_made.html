@@ -1,0 +1,11 @@
+{% extends "operations/base.html" %}
+{# E3 (HG-101): shown once, right after a link is made: the address, WhatsApp, and (when only the phone protects it) the warning. The address is never kept anywhere. #}
+{% block operation_content %}
+<section class="op-title-row"><div><a class="op-back" href="{{ back_url }}">{% include "partials/back_arrow.html" %}{{ gp.back }}</a><h1>{{ gp.made_h }}</h1><p class="op-muted">{{ gp.made_p }}</p></div></section>
+<section class="op-detail-meta" data-portal-made>
+{% if made.warning %}<div class="op-message op-message-error" role="note" data-portal-warning><strong>{{ gp.warn_h }}:</strong> {{ made.warning }}</div>{% endif %}
+<div class="op-field"><label for="gp-url">{{ student.payer.name }}</label><input id="gp-url" type="text" readonly dir="ltr" value="{{ made.url }}" data-portal-url></div>
+<div class="op-form-actions"><button class="op-primary" type="button" data-copy-link="{{ made.url }}">{{ gp.copy }}</button><a class="op-secondary" href="{{ made.whatsapp }}" target="_blank" rel="noopener noreferrer" data-portal-whatsapp>{{ gp.whatsapp }}</a></div>
+{% if not student.payer.whatsapp and not student.payer.phone %}<p class="op-muted">{{ gp.no_phone }}</p>{% endif %}
+</section>
+{% endblock %}

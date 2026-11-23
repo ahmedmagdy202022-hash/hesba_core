@@ -1,0 +1,24 @@
+{% extends "operations/base.html" %}
+{% load hesba_format %}
+{% block operation_content %}
+<section class="op-title-row"><div><h1>{{ words.title }}</h1><p>{{ words.intro }}</p></div></section>
+{% with tab="board" %}{% include "orders/_tabs.html" %}{% endwith %}
+<section class="op-summary-grid">
+<article><small>{{ words.f_offered }}</small><strong data-count-offered>{{ counts.offered }}</strong></article>
+<article><small>{{ words.f_orders }}</small><strong data-count-open>{{ counts.open }}</strong></article>
+</section>
+<form class="op-filters" method="get"><input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="show" value="{{ show }}">
+<label class="sr-only" for="so-q">{{ words.search }}</label><input id="so-q" type="search" name="q" value="{{ query }}" placeholder="{{ words.search }}"><button type="submit">{{ words.find }}</button></form>
+<nav class="op-form-actions wo-tabs" data-orders-filter>
+<a class="{% if show == 'offered' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=offered">{{ words.f_offered }}</a>
+<a class="{% if show == 'orders' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=orders">{{ words.f_orders }}</a>
+<a class="{% if show == 'done' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=done">{{ words.f_done }}</a>
+<a class="{% if show == 'all' %}op-primary{% else %}op-secondary{% endif %}" href="?lang={{ lang }}&show=all">{{ words.f_all }}</a>
+</nav>
+<div class="op-table-wrap"><table class="op-table" data-sales-orders><thead><tr><th>{{ words.number }}</th><th>{{ words.customer }}</th><th>{{ words.date }}</th><th>{{ words.valid_until }}</th><th>{{ words.status }}</th><th>{{ words.total }}</th></tr></thead><tbody>
+{% for row in rows %}<tr data-order="{{ row.pk }}"><td><a href="{% url 'orders:detail' row.pk %}?lang={{ lang }}"><bdi>{{ row.display_number }}</bdi></a>{% if row.order_number %} <small class="op-muted"><bdi>{{ row.number }}</bdi></small>{% endif %}</td>
+<td class="op-cell-text">{{ row.customer.name }}</td><td><bdi>{{ row.quote_date|date:"Y-m-d" }}</bdi></td><td>{% if row.valid_until and not row.order_number %}<bdi>{{ row.valid_until|date:"Y-m-d" }}</bdi>{% else %}—{% endif %}</td>
+<td>{% with state=row.state %}{% include "orders/_state.html" %}{% endwith %}</td><td>{{ row.total|money }}</td></tr>
+{% empty %}<tr><td colspan="6" class="op-empty">{{ words.none }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}
