@@ -19,7 +19,9 @@
 {% if card.due %}<p class="tc-ref">{{ words.due }} <bdi>{{ card.due|date:"Y-m-d" }}</bdi>{% if card.late %} · <span class="tc-late" data-floor-late>{{ words.late }}</span>{% endif %}</p>{% endif %}
 </div>
 {% if card.error %}<div class="op-message op-message-error" role="alert" data-floor-card-error>{{ card.error }}</div>{% endif %}
-{% if card.state == 'ready' %}
+{% if card.state == 'ready' and card.stopped %}
+<p class="fl-wait" data-floor-stopped>{{ card.stopped }}</p>
+{% elif card.state == 'ready' %}
 <form method="post" data-floor-start>{% csrf_token %}<input type="hidden" name="lang" value="{{ lang }}"><input type="hidden" name="order" value="{{ card.pk }}"><input type="hidden" name="stage" value="{{ card.stage_index }}"><input type="hidden" name="action" value="start">
 <button class="op-primary fl-btn" type="submit">{{ words.start }}</button></form>
 {% elif card.state == 'running' %}

@@ -278,8 +278,15 @@ def checked_batch(master, recipe, quantity, actor):
 
     from . import orders, quality
 
+    from . import schedule
+    from .models import OrderStep
+
     order = orders.create_order({"recipe": recipe, "location": master["location"], "quantity": quantity, "due_date": timezone.localdate(),
                                  "labor_cost": "0", "overhead_cost": "0", "notes": DAILY_NOTE}, actor)
+    # The day's batch is already made when it is recorded: its stages count as started, so a machine the demo keeps down for
+    # maintenance (the mixer's open breakdown, F10) does not refuse recording them (video finding F12 holds only unstarted stages).
+    schedule.ensure_steps(order)
+    OrderStep.objects.filter(order=order, started_at__isnull=True).update(started_at=timezone.now())
     for _stage in order.stages:
         order = orders.advance(order, actor)
     order = orders.finish(order, actor)

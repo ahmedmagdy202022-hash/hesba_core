@@ -31,6 +31,10 @@ Manufacturing F4 (HG-137) adds, through ``outside``: a stage that is at an outsi
 (it is closed by its return), an order is not cancelled while a stage is out, and the finish first turns each posted
 processing bill into an ``OrderCostLine(kind=outside)`` (and is refused while a bill is missing or still draft), so
 the fee joins the conversion below.
+
+Manufacturing video finding F12 (approved 23 Nov 2026), through ``maintenance.stage_down``: ``advance`` refuses a stage whose
+work centre is down (an open breakdown, F10) unless it was started on the floor before the machine stopped, so work in
+progress is always closed. The refusal comes before anything is issued; nothing about the issue, the cost or the finish changes.
 """
 
 from decimal import ROUND_DOWN, Decimal
@@ -163,6 +167,11 @@ def advance(order, user, *, good=None, defect=None, note="", minutes=None, lang=
     if order.status not in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) or order.stage_index >= len(order.stages):
         raise ValidationError(words["state"])
     outside_rules.check_in_house(order, lang)  # F4 (HG-137): a stage at an outside supplier is closed by its return
+    from . import maintenance
+
+    down = maintenance.stage_down(order)  # video finding F12: not on a down work centre, unless it was started before it stopped
+    if down is not None:
+        raise ValidationError(maintenance.down_text(down, "down_start", lang))
     defect_qty = Decimal("0") if defect in (None, "") else services._decimal(defect)
     if defect_qty is None or defect_qty < 0:
         raise ValidationError(words["defect"])

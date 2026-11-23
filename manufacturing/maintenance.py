@@ -18,7 +18,13 @@ Rules, stated once:
   open on that calendar day, never more than the day's capacity (the schedule has no shift clock, so every minute of a
   breakdown counts as a working minute). A breakdown that is still open also takes the whole of today, because nobody
   knows when the machine comes back; the days after today are left as they are. ``workcentres.load``,
-  ``schedule.grid`` and ``schedule.warnings_for`` read it; «رتّب» does not plan around it.
+  ``schedule.grid`` and ``schedule.warnings_for`` read it.
+* **A work centre with an open breakdown is down** (``down_centres``; manufacturing video findings F4 and F12, approved
+  23 Nov 2026). A breakdown has no expected end, so nothing new is put on a down centre until its job is closed: «رتّب»
+  and a move to a day leave a stage on it, and the stages after it on the same order, waiting with no planned day; a
+  stage cannot be moved onto it; the load table counts a waiting stage apart; «ابدأ» is not offered and ``floor.start``
+  refuses it; the order page records a stage on it only when it was started before (work in progress is never trapped).
+  A planned job takes no capacity and stops nothing.
 * **Spare parts** leave stock through the unchanged ``inventory.services.adjust_stock`` (out, at the average of that
   moment), from a location of the job's entity, while the job is open; a ``MaintenancePart`` row links the operation
   to the job. That link is what makes the ledger book the part to maintenance expense instead of stock-count loss
@@ -96,6 +102,11 @@ MESSAGES = {
         "invoice_stock": "الفاتورة دي فيها أصناف مخزون؛ قطع الغيار بتتحسب على المكنة لما تتصرف من المخزن.",
         "bill_other": "الفاتورة دي مش على أمر الصيانة ده.",
         "unlink_blocked": "الفاتورة المسودة مرتبطة بمستندات تانية، فمينفعش تتسحب.",
+        "down_note": "المركز واقف للصيانة من {since} بسبب «{cause}» لحد ما أمر الصيانة يتقفل.",
+        "down_start": "المركز «{centre}» واقف للصيانة من {since} بسبب «{cause}»، فالمرحلة دي مش هتبدأ عليه لحد ما أمر الصيانة يتقفل.",
+        "down_wait": "مستنية المكنة: «{centre}» واقف للصيانة من {since} بسبب «{cause}»، والمرحلة دي واللي بعدها هيترتبوا لما أمر الصيانة يتقفل.",
+        "down_move": "المركز ده واقف للصيانة دلوقتي؛ اختار مركز شغال.",
+        "down_replan": "المركز «{centre}» واقف للصيانة من {since} بسبب «{cause}»، والمرحلة دي لسه متخططة عليه؛ اضغط «رتّب» تاني عشان الجدول يتعدّل.",
     },
     "en": {
         "plan_permission": "Maintenance plans need the permission to manage items.",
@@ -130,6 +141,11 @@ MESSAGES = {
         "invoice_stock": "That invoice has stock items; spare parts count on the machine when they are taken from stock.",
         "bill_other": "That bill is not on this maintenance job.",
         "unlink_blocked": "The draft bill is linked to other documents, so it cannot be withdrawn.",
+        "down_note": "The work centre is down for maintenance since {since} (“{cause}”) until its maintenance job is closed.",
+        "down_start": "The work centre “{centre}” is down for maintenance since {since} (“{cause}”), so this stage cannot start on it until the maintenance job is closed.",
+        "down_wait": "Waiting for the machine: “{centre}” is down for maintenance since {since} (“{cause}”); this stage and the ones after it are planned once the maintenance job is closed.",
+        "down_move": "That work centre is down for maintenance right now; choose one that is running.",
+        "down_replan": "The work centre “{centre}” is down for maintenance since {since} (“{cause}”) and this stage is still planned on it; press «Arrange» again to update the schedule.",
     },
 }
 
@@ -450,6 +466,61 @@ def downtime(centre_ids, first, last, now=None):
                     taken[(job.work_centre_id, day)] += (Decimal(int(seconds)) / 60).quantize(Decimal("0.01"))
             day += timedelta(days=1)
     return taken
+
+
+def down_centres(centre_ids):
+    """{work centre id: its open breakdown} for the given work centres: the ones that are down now (see the module's rules).
+    Read by id, whatever the entity: the caller has already scoped the orders and centres it asks about."""
+
+    ids = {pk for pk in centre_ids if pk}
+    if not ids:
+        return {}
+    jobs = MaintenanceJob.objects.filter(kind=MaintenanceKind.BREAKDOWN, closed_at__isnull=True, work_centre_id__in=ids).select_related("work_centre")
+    return {job.work_centre_id: job for job in jobs}
+
+
+def down_text(job, key, lang="ar"):
+    """One of the down sentences (``down_note``, ``down_start``, ``down_wait``) for an open breakdown: the centre's name,
+    since when (the business's own clock) and the cause typed when it was opened."""
+
+    since = timezone.localtime(job.opened_at).strftime("%Y-%m-%d %H:%M")
+    return _words(lang)[key].format(centre=job.work_centre.name(lang), since=since, cause=job.cause)
+
+
+def outside_stages(order_ids):
+    """{(order id, stage key)} of the stages sent to an outside supplier (F4, HG-137; sent or back, never a cancelled send)."""
+
+    from .models import OutsideJob, OutsideStatus
+
+    return set(OutsideJob.objects.filter(order_id__in=list(order_ids)).exclude(status=OutsideStatus.CANCELLED).values_list("order_id", "stage_key"))
+
+
+def holds(order_id, stage_key, centre_id, started_at, down, outside):
+    """**The one rule of «waiting for the machine»** (video findings F4 and F12): a stage may not start, and so waits, when its
+    work centre is down (``down``: {centre id: open breakdown}), it was not started on the floor before the machine stopped,
+    and it was not sent to an outside supplier (``outside``: ``outside_stages``). A stage started before is never held, so
+    work in progress is always finished; a stage sent out is not done on the centre, so its return still closes it. The
+    floor, the order page, «رتّب», the grid, the order's plan and the load table all ask this."""
+
+    return bool(centre_id) and centre_id in down and started_at is None and (order_id, stage_key) not in outside
+
+
+def stage_down(order):
+    """F12: the open breakdown that keeps the order's current stage from starting (``holds``), or None. The stage's centre is
+    its schedule step's, else the one its routing gave it."""
+
+    from .models import OrderStep
+
+    if order.stage_index >= len(order.stages):
+        return None
+    step = OrderStep.objects.filter(order=order, index=order.stage_index).first()
+    key = order.stages[order.stage_index][0]
+    centre_id = step.work_centre_id if step is not None else workcentres.stage_plan(order.stages[order.stage_index])[0]
+    down = down_centres([centre_id])
+    if not down:
+        return None
+    started = step.started_at if step is not None else None
+    return down[centre_id] if holds(order.pk, key, centre_id, started, down, outside_stages([order.pk])) else None
 
 
 def capacity_left(capacity, down):

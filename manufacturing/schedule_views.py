@@ -35,6 +35,7 @@ WORDS = {
         "plan": "جدول الأمر", "planned_min": "دقايق مخططة", "start_day": "يبدأ", "end_day": "ينتهي", "finished": "خلصت", "not_yet": "مخططة", "order_late_overdue": "الأمر عدّى ميعاد تسليمه.",
         "order_late_planned": "آخر مرحلة في الجدول بتنتهي يوم {end}، بعد المطلوب يوم {due}.", "unplanned_note": "الأمر ده لسه مترتبش؛ اضغط «رتّب» من جدول الإنتاج أو انقله ليوم.",
         "late_count": "أوامر متأخرة", "day_list": "قايمة الأيام", "no_orders": "مفيش أوامر مفتوحة.", "open_schedule": "افتح جدول الإنتاج", "date_bad": "اكتب تاريخ صحيح.",
+        "waiting": "مستني المكنة", "arranged_waiting": "فيه {count} أمر مستني مكنة واقفة للصيانة؛ السبب مكتوب جنب كل أمر في جدول الأوامر.",
     },
     "en": {
         "title": "Production schedule", "intro": "One row per work centre, days across, and orders as bars with their stage and minutes. «Arrange» lays the open orders out from a day you choose, the earliest delivery first.",
@@ -50,6 +51,7 @@ WORDS = {
         "plan": "The order's plan", "planned_min": "Planned minutes", "start_day": "Starts", "end_day": "Ends", "finished": "Finished", "not_yet": "Planned", "order_late_overdue": "This order is past its delivery date.",
         "order_late_planned": "The last planned stage ends on {end}, after the due date {due}.", "unplanned_note": "This order is not planned yet; press «Arrange» on the production schedule or move it to a day.",
         "late_count": "Late orders", "day_list": "Day list", "no_orders": "No open orders.", "open_schedule": "Open the production schedule", "date_bad": "Enter a valid date.",
+        "waiting": "Waiting for the machine", "arranged_waiting": "Orders waiting for a machine down for maintenance: {count}. The reason is beside each order in the orders table.",
     },
 }
 
@@ -83,7 +85,8 @@ def schedule_context(request, order, lang, late_reason=""):
     last, due = max((row["end"] for row in rows if row["end"]), default=None), schedule.effective_due(order)
     # Manufacturing video finding F3: a finished or cancelled order is never «not planned yet; press Arrange» (arrange only takes
     # open orders), so the note is for an open order with no planned day only.
-    planned = any(row["start"] for row in rows) or order.status not in schedule.OPEN
+    # F4: an order that waits for a machine down for maintenance is not «press Arrange» either: its row says what it waits for.
+    planned = any(row["start"] or row["waiting"] for row in rows) or order.status not in schedule.OPEN
     return {"plan_rows": rows, "plan_words": words, "can_move": can_move, "plan_planned": planned,
             "plan_last": last, "plan_due": due,
             "plan_late_text": (words["order_late_overdue"] if late_reason == "overdue"
@@ -112,7 +115,9 @@ def schedule_screen(request):
                 if start is None:
                     raise ValidationError(words["date_bad"])
                 done = schedule.arrange(start, request.user, lang)
-                messages.success(request, words["arranged"].format(**done))
+                messages.success(request, words["arranged"].format(orders=done["orders"], steps=done["steps"]))
+                if done["waiting"]:
+                    messages.warning(request, words["arranged_waiting"].format(count=len(done["waiting"])))
             elif action == "move":
                 day = _date(request.POST.get("day"))
                 if request.POST.get("day") and day is None:
@@ -121,6 +126,10 @@ def schedule_screen(request):
                 result = schedule.move_order(order, request.user, day=day, step_index=int(request.POST["step"]) if str(request.POST.get("step", "")).isdigit() else None,
                                              centre=centre, lang=lang)
                 messages.success(request, words["moved"])
+                for wait in result["waiting"]:  # F4: a stage on a machine down for maintenance waits; say why
+                    from . import maintenance
+
+                    messages.warning(request, maintenance.down_text(wait["job"], "down_wait", lang))
                 for warning in result["warnings"]:
                     messages.warning(request, words["warning"].format(centre=warning["centre"].name(lang), day=warning["day"].isoformat(),
                                                                        minutes=f"{warning['minutes'].normalize():f}", capacity=f"{warning['capacity'].normalize():f}"))

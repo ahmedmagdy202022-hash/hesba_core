@@ -188,13 +188,16 @@ def item_detail(request, pk):
     item = get_object_or_404(Item, pk=pk, active=True, is_stock_tracked=True)
     locations = entity_scope.locations(Location.objects).filter(active=True)
     location_rows = []
+    from reports.selectors import made_to_order_ids
+
+    by_design = item.pk in made_to_order_ids()  # the stock list's rule (RS-03, HG-142): made to order, so empty is not "out"
     for location in locations:
         quantity = get_item_location_stock_quantity(item, location)
         location_rows.append(
             {
                 "location": location,
                 "quantity": quantity,
-                "state": _stock_state(quantity, item.min_stock),
+                "state": "healthy" if quantity <= 0 and by_design else _stock_state(quantity, item.min_stock),
             }
         )
     # UX Wave 2: the movements a page at a time (20 by default, the shared pager) instead of the latest 100 in one long table.
