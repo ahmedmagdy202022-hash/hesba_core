@@ -240,14 +240,20 @@ class JobTests(OvenPlant):
         self.assertEqual((lane["broken"], lane["days"][0]["capacity"], lane["days"][1]["capacity"]), (job, D("0"), D("480.00")))
         self.assertEqual(maintenance.counts(), (1, 0))
         self.assertEqual(maintenance.marks()[self.oven.pk]["down"], job)
-        # An order planned on the oven today is now over capacity, and the warning says so.
+        # Video finding F4 (approved 23 Nov 2026): «رتّب» books nothing on the down oven. The stage waits for it, with no planned
+        # day, so the day is not over capacity and nothing warns; the load counts its 45 minutes apart.
         order = orders.create_order({"recipe": self.recipe, "location": self.plant, "quantity": "10"}, self.owner)
-        schedule.arrange(TODAY, self.owner)
-        self.assertTrue(self.oven_day(TODAY)["over"])
-        warning = schedule.warnings_for({(self.oven.pk, TODAY)})
-        self.assertEqual([(w["centre"], w["day"], w["minutes"], w["capacity"]) for w in warning], [(self.oven, TODAY, D("45.00"), D("0"))])
+        result = schedule.arrange(TODAY, self.owner)
+        self.assertEqual([(w["order"], w["centre"], w["job"]) for w in result["waiting"]], [(order, self.oven, job)])
+        self.assertEqual((order.steps.get().planned_start, order.steps.get().planned_end), (None, None))
+        self.assertEqual((self.oven_day(TODAY)["minutes"], self.oven_day(TODAY)["over"]), (D("0"), False))
+        self.assertEqual(next(b for b in workcentres.load(TODAY) if b["centre"].pk == self.oven.pk)["waiting"], D("45.00"))
+        self.assertEqual(schedule.warnings_for({(self.oven.pk, TODAY)}), [])
+        # Back in service: the next «رتّب» plans it on the oven today, within the day's full capacity.
         maintenance.close_job(job, self.owner)
-        self.assertEqual((self.oven_day(TODAY)["capacity"], self.oven_day(TODAY)["over"]), (D("480.00"), False))
+        schedule.arrange(TODAY, self.owner)
+        self.assertEqual(schedule.day_of(order.steps.get().planned_start), TODAY)
+        self.assertEqual((self.oven_day(TODAY)["capacity"], self.oven_day(TODAY)["minutes"], self.oven_day(TODAY)["over"]), (D("480.00"), D("45.00"), False))
         self.assertEqual(schedule.warnings_for({(self.oven.pk, TODAY)}), [])
         self.assertEqual(order.steps.get().work_centre, self.oven)
 

@@ -258,6 +258,10 @@ def order_detail(request, pk):
     for row in routing:
         row["recorded"] = recorded.get(row["key"])
     cost = orders.cost_card(order)
+    from . import maintenance
+
+    # Video finding F12: a stage on a work centre that is down, and not started before it stopped, is not recorded here.
+    stopped = maintenance.stage_down(order) if order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS) else None
     return render(request, "manufacturing/order.html", _ctx(
         request, order=order, status_label=choice_label(order, "status", lang), stages=stage_rows, logs=logs, error=error,
         material_rows=material_rows, on_floor=on_floor, routing=routing,
@@ -274,6 +278,7 @@ def order_detail(request, pk):
         current_label=stage_rows[order.stage_index]["label"] if order.stage_index < len(stage_rows) else "",
         ready=order.status == OrderStatus.IN_PROGRESS and order.stage_index >= len(order.stages),
         open=order.status in (OrderStatus.PLANNED, OrderStatus.IN_PROGRESS), late=late_reason != "", late_reason=late_reason, **plan_context,
+        stage_stopped=maintenance.down_text(stopped, "down_note", lang) if stopped else "",
         **quality_views.order_quality_context(request, order, lang), **outside_views.order_context(request, order, lang),
         **floor_views.order_photos_context(request, order, lang)))  # F8 (HG-140): the photos of defects taken on the floor screen
 

@@ -84,7 +84,7 @@ class ArrangeTests(SchedulePlant):
 
     def test_three_orders_on_the_oven_two_fit_day_one_and_the_third_goes_to_day_two(self):
         first, second, third = self.three()
-        self.assertEqual(schedule.arrange(DAY1, self.owner), {"orders": 3, "steps": 3})
+        self.assertEqual(schedule.arrange(DAY1, self.owner), {"orders": 3, "steps": 3, "waiting": []})
         self.assertEqual((self.span(first), self.span(second), self.span(third)), ((DAY1, DAY1), (DAY1, DAY1), (DAY2, DAY2)))
         self.assertEqual(self.totals(), {(self.oven.pk, DAY1): D("270.00"), (self.oven.pk, DAY2): D("300.00")})
         self.assertNotIn((self.oven.pk, FRIDAY), self.totals())                       # the Friday holiday is skipped

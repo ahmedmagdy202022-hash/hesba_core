@@ -12,7 +12,9 @@ Rules, stated once:
   The stage's centre is its schedule step's (a move on the schedule changes it), else the one its routing gave it.
 * **Start.** «ابدأ» writes ``OrderStep.started_at`` and nothing else: no stock moves and the order's status does not
   change. On an order that has not begun, the start is refused while a material is short at the order's place, so the
-  worker hears it before the work and not after it.
+  worker hears it before the work and not after it. A stage whose work centre is down (an open breakdown, F10; video
+  finding F12) is not offered «ابدأ» and its start is refused, with the centre, since when and why; a stage started before
+  the breakdown is still closed with «خلصت» (``maintenance.stage_down``).
 * **Done.** «خلصت» closes the stage through the same ``orders.advance`` the order page uses: good and defective units, a
   note, and the minutes since the start (the clock's minutes, to two decimals, never typed here). On the first stage that
   ``advance`` issues the order's materials; this is the only place that passes the stand-in permission
@@ -150,6 +152,9 @@ def cards(user, lang="ar", today=None):
         step = steps.get((order.pk, order.stage_index))
         centre_of[order.pk] = step.work_centre_id if step is not None else workcentres.stage_plan(order.stages[order.stage_index])[0]
     centres = WorkCentre.objects.in_bulk([pk for pk in centre_of.values() if pk])
+    from . import maintenance
+
+    down = maintenance.down_centres(centre_of.values())  # F12: a stage not started on a down centre is not offered «ابدأ»
     words = _words(lang)
     found = []
     for order in rows:
@@ -172,6 +177,7 @@ def cards(user, lang="ar", today=None):
             "units": orders.good_units(order), "stage": stage_label(stage, lang), "stage_index": order.stage_index, "stage_number": order.stage_index + 1,
             "stage_count": len(order.stages), "centre": centre.name(lang) if centre is not None else "", "centre_id": centre_id, "due": due, "late": due is not None and due < today,
             "state": state, "wait": wait, "started_at": started, "first": order.status == OrderStatus.PLANNED,
+            "stopped": maintenance.down_text(down[centre_id], "down_note", lang) if state == READY and centre_id in down else "",
             "last": order.stage_index == len(order.stages) - 1,
         })
     found.sort(key=lambda card: (card["due"] is None, card["due"] or today, card["pk"]))
@@ -227,6 +233,11 @@ def start(order, user, *, stage=None, lang="ar"):
     _check_floor(order, lang)
     if step.started_at is not None:
         raise ValidationError(words["started"])
+    from . import maintenance
+
+    job = maintenance.stage_down(order)  # F12: never on a work centre that is down for maintenance
+    if job is not None:
+        raise ValidationError(maintenance.down_text(job, "down_start", lang))
     if order.status == OrderStatus.PLANNED and order.recipe.output_quantity:
         _check_materials(order, words)
     step.started_at = timezone.now()

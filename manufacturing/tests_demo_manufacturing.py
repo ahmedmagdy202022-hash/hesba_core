@@ -187,13 +187,22 @@ class FoodDemo(FactoryDemo, TestCase):
     def test_three_work_centres_with_routed_stages_and_a_schedule_over_several_days(self):
         self.assertEqual(list(WorkCentre.objects.values_list("code", "kind", "rate_per_hour")),
                          [("DEMO-MIX", "machine", D("80.00")), ("DEMO-OVEN", "machine", D("150.00")), ("DEMO-PACK", "line", D("70.00"))])
+        mixer, waiting = WorkCentre.objects.get(code="DEMO-MIX"), []
         for order in ProductionOrder.objects.filter(status__in=(OrderStatus.PLANNED, OrderStatus.IN_PROGRESS)):
             self.assertTrue(all(stage[3] for stage in order.stages), order.number)  # every stage is on a work centre, the sample's own three included
             pending = OrderStep.objects.filter(order=order, finished_at__isnull=True)
             self.assertEqual(pending.exists(), order.stage_index < len(order.stages), order.number)  # an order with every stage closed waits to be finished
-            self.assertFalse(pending.filter(planned_start__isnull=True).exists(), order.number)
+            stop = pending.filter(work_centre=mixer).order_by("index").first()
+            if stop is None:
+                self.assertFalse(pending.filter(planned_start__isnull=True).exists(), order.number)
+                continue
+            # Video finding F4: the mixer is down now, so its stage and the ones after it wait for it; nothing is booked on it.
+            waiting.append(order)
+            self.assertFalse(pending.filter(index__gte=stop.index, planned_start__isnull=False).exists(), order.number)
+            self.assertFalse(pending.filter(index__lt=stop.index, planned_start__isnull=True).exists(), order.number)
+        self.assertIn(ProductionOrder.objects.get(notes=demo.LATE_NOTE), waiting)
         days = {timezone.localtime(step.planned_start).date() for step in OrderStep.objects.filter(finished_at__isnull=True, planned_start__isnull=False)}
-        self.assertGreaterEqual(len(days), 3)
+        self.assertGreaterEqual(len(days), 2)  # three before F4: the orders that wait for the down mixer no longer queue on it
         self.assertEqual(min(days), self.today)
 
     def test_one_order_is_late_one_is_due_today_and_the_rest_are_later(self):
@@ -322,9 +331,14 @@ class FoodDemo(FactoryDemo, TestCase):
         mixer = WorkCentre.objects.get(code="DEMO-MIX")
         job = maintenance.open_job_of(mixer)
         self.assertEqual((job.kind, job.cause, job.closed_at), ("breakdown", "سير الخلاط اتقطع", None))
-        today = schedule.grid(self.today, 7)["day_list"][0]
-        lane = next(line for line in today["lines"] if line["centre"] == mixer)
-        self.assertEqual((lane["row"]["capacity"], lane["row"]["over"], lane["row"]["down"]), (D("0"), True, True))
+        data = schedule.grid(self.today, 7)
+        lane = next(lane for lane in data["lanes"] if lane["centre"] == mixer)
+        self.assertEqual((lane["broken"], lane["days"][0]["capacity"], lane["days"][0]["down"]), (job, D("0"), True))
+        # Video finding F4: nothing is booked on the down mixer, so no day of it is over; the late order says it waits for it.
+        self.assertEqual([row["items"] for row in lane["days"]], [[]] * 7)
+        self.assertFalse(lane["over"])
+        late = next(row for row in data["orders"] if row["order"].notes == demo.LATE_NOTE)
+        self.assertEqual((late["waiting"]["centre"], late["waiting"]["job"]), (mixer, job))
 
     # ---- F8: the production worker's «شغلي» ----------------------------------------------------------------------------------------------
 

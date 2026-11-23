@@ -16,6 +16,8 @@ Rules, stated once:
   an order due after the window or with no date is counted apart and never against a day. A holiday
   (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity. A breakdown (F10, HG-141)
   takes the minutes it was open out of its day's capacity, and an open one the whole of today (``maintenance.downtime``).
+  A stage with no planned day whose centre (its schedule step's, else its routing's) is down now waits for the machine
+  (video finding F4): its minutes are counted apart (``waiting``), never against a day.
 * **Cost**: the minutes typed on a finished stage, times the stage's work centre's rate per hour, are a *suggested*
   labour line (never a booking). Confirming one adds an ordinary F12 cost line through ``actuals.add_cost_line`` with the
   amount ``minutes x rate / 60`` rounded once (never hours rounded first: 70 minutes is 70.00 at 60.00 an hour, not
@@ -364,18 +366,23 @@ def parse_minutes(value, lang="ar"):
 
 def load(today, days=DAYS):
     """Per active work centre of the entity: ``days`` days from ``today`` with the planned minutes, the capacity in
-    minutes and whether it is over, plus the minutes with no date and those due after the window."""
+    minutes and whether it is over, plus the minutes with no date, those due after the window and those waiting for the
+    centre to come back from a breakdown (F4)."""
+
+    from . import maintenance
 
     from . import schedule
 
     last = today + timedelta(days=days - 1)
     holidays = schedule.holidays()
     centres = list(scoped().filter(active=True).order_by("code"))
-    per_day, unscheduled, later = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
+    per_day, unscheduled, later, waiting = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
+    down_now = maintenance.down_centres([centre.pk for centre in centres])
     orders = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN).prefetch_related("steps__work_centre")
     for order in orders:
         # Manufacturing F6b (HG-134): a stage with planned dates loads the days and the centre it is planned on; the rest keep the due-date rule.
-        planned = {step.index: step for step in order.steps.all() if step.planned_start and step.planned_end and step.finished_at is None and step.work_centre_id}
+        steps = {step.index: step for step in order.steps.all()}
+        planned = {index: step for index, step in steps.items() if step.planned_start and step.planned_end and step.finished_at is None and step.work_centre_id}
         for index, stage in enumerate(order.stages):
             if index < order.stage_index:
                 continue
@@ -387,6 +394,10 @@ def load(today, days=DAYS):
                         per_day[(planned[index].work_centre_id, max(day, today))] += minutes
                 continue
             centre_id, minutes = stage_plan(stage)
+            here = steps[index].work_centre_id if index in steps else centre_id
+            if here and here in down_now:  # F4: it waits for the machine, so it is on no day
+                waiting[here] += minutes
+                continue
             if not centre_id:
                 continue
             if order.due_date is None:
@@ -395,8 +406,6 @@ def load(today, days=DAYS):
                 later[centre_id] += minutes
             else:
                 per_day[(centre_id, max(order.due_date, today))] += minutes
-    from . import maintenance
-
     down = maintenance.downtime([centre.pk for centre in centres], today, last)  # F10 (HG-141): what breakdowns take out of each day
     result = []
     for centre in centres:
@@ -407,6 +416,6 @@ def load(today, days=DAYS):
             minutes, holiday = per_day[(centre.pk, day)], day in holidays
             cap = ZERO if holiday else maintenance.capacity_left(capacity, down[(centre.pk, day)])
             rows.append({"date": day, "minutes": minutes, "capacity": cap, "holiday": holiday, "over": minutes > cap, "down": not holiday and cap < capacity})
-        result.append({"centre": centre, "days": rows, "unscheduled": unscheduled[centre.pk], "later": later[centre.pk],
+        result.append({"centre": centre, "days": rows, "unscheduled": unscheduled[centre.pk], "later": later[centre.pk], "waiting": waiting[centre.pk],
                        "over": any(row["over"] for row in rows)})
     return result
