@@ -16,6 +16,9 @@ Rules, stated once:
   an order due after the window or with no date is counted apart and never against a day. A holiday
   (``attendance.Holiday``) has no capacity, so any minute planned on it is over capacity. A breakdown (F10, HG-141)
   takes the minutes it was open out of its day's capacity, and an open one the whole of today (``maintenance.downtime``).
+  A stage with no planned day is counted on its schedule step's centre (a move changes it), else its routing's. From the
+  first stage of an order that may not start (``maintenance.holds``: video finding F4), every stage with no planned day
+  waits for the machine: its minutes are counted apart (``waiting``) on its own centre, never against a day.
 * **Cost**: the minutes typed on a finished stage, times the stage's work centre's rate per hour, are a *suggested*
   labour line (never a booking). Confirming one adds an ordinary F12 cost line through ``actuals.add_cost_line`` with the
   amount ``minutes x rate / 60`` rounded once (never hours rounded first: 70 minutes is 70.00 at 60.00 an hour, not
@@ -364,21 +367,32 @@ def parse_minutes(value, lang="ar"):
 
 def load(today, days=DAYS):
     """Per active work centre of the entity: ``days`` days from ``today`` with the planned minutes, the capacity in
-    minutes and whether it is over, plus the minutes with no date and those due after the window."""
+    minutes and whether it is over, plus the minutes with no date, those due after the window and those waiting for the
+    centre to come back from a breakdown (F4)."""
+
+    from . import maintenance
 
     from . import schedule
 
     last = today + timedelta(days=days - 1)
     holidays = schedule.holidays()
     centres = list(scoped().filter(active=True).order_by("code"))
-    per_day, unscheduled, later = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
-    orders = entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN).prefetch_related("steps__work_centre")
+    per_day, unscheduled, later, waiting = defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO), defaultdict(lambda: ZERO)
+    down_now = maintenance.down_centres([centre.pk for centre in centres])
+    orders = list(entity_scope.scope(ProductionOrder.objects, "location__entity").filter(status__in=OPEN).prefetch_related("steps__work_centre"))
+    sent = maintenance.outside_stages([order.pk for order in orders]) if down_now else set()
     for order in orders:
         # Manufacturing F6b (HG-134): a stage with planned dates loads the days and the centre it is planned on; the rest keep the due-date rule.
-        planned = {step.index: step for step in order.steps.all() if step.planned_start and step.planned_end and step.finished_at is None and step.work_centre_id}
+        steps = {step.index: step for step in order.steps.all()}
+        planned = {index: step for index, step in steps.items() if step.planned_start and step.planned_end and step.finished_at is None and step.work_centre_id}
+        held = False  # F4: from the first stage that may not start (``maintenance.holds``) the order waits for the machine
         for index, stage in enumerate(order.stages):
             if index < order.stage_index:
                 continue
+            step = steps.get(index)
+            centre_id, minutes = stage_plan(stage)
+            here = step.work_centre_id if step is not None else centre_id  # the schedule step's centre (a move changes it), else the routing's
+            held = held or maintenance.holds(order.pk, stage[0], here, step.started_at if step is not None else None, down_now, sent)
             if index in planned:
                 for day, minutes in schedule.day_minutes(planned[index], holidays):
                     if day > last:
@@ -386,17 +400,16 @@ def load(today, days=DAYS):
                     else:
                         per_day[(planned[index].work_centre_id, max(day, today))] += minutes
                 continue
-            centre_id, minutes = stage_plan(stage)
-            if not centre_id:
+            if not here:
                 continue
-            if order.due_date is None:
-                unscheduled[centre_id] += minutes
+            if held:  # it waits for the machine, so it is on no day
+                waiting[here] += minutes
+            elif order.due_date is None:
+                unscheduled[here] += minutes
             elif order.due_date > last:
-                later[centre_id] += minutes
+                later[here] += minutes
             else:
-                per_day[(centre_id, max(order.due_date, today))] += minutes
-    from . import maintenance
-
+                per_day[(here, max(order.due_date, today))] += minutes
     down = maintenance.downtime([centre.pk for centre in centres], today, last)  # F10 (HG-141): what breakdowns take out of each day
     result = []
     for centre in centres:
@@ -407,6 +420,6 @@ def load(today, days=DAYS):
             minutes, holiday = per_day[(centre.pk, day)], day in holidays
             cap = ZERO if holiday else maintenance.capacity_left(capacity, down[(centre.pk, day)])
             rows.append({"date": day, "minutes": minutes, "capacity": cap, "holiday": holiday, "over": minutes > cap, "down": not holiday and cap < capacity})
-        result.append({"centre": centre, "days": rows, "unscheduled": unscheduled[centre.pk], "later": later[centre.pk],
+        result.append({"centre": centre, "days": rows, "unscheduled": unscheduled[centre.pk], "later": later[centre.pk], "waiting": waiting[centre.pk],
                        "over": any(row["over"] for row in rows)})
     return result
