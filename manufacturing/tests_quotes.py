@@ -195,6 +195,38 @@ class ExampleTests(PrintingPlant):
         self.assertEqual(sales.state(order), "done")
 
 
+class StockAlertTests(PrintingPlant):
+    """HG-142: a custom job's own item holds nothing until its production order finishes, and nothing again once the job
+    is delivered. It is never «خلص من المخزون»: not in the dashboard count, not on the stock screen."""
+
+    def out(self):
+        from reports.selectors import stock_alert_counts
+
+        return stock_alert_counts()["out_of_stock"]
+
+    def test_a_job_item_is_never_counted_out_of_stock_while_a_real_empty_item_still_is(self):
+        self.assertEqual(self.out(), 1)                                      # the catalogue placeholder: tracked, none on hand
+        order, production = self.job()
+        job_item = self.line(order).item
+        self.assertTrue(job_item.item_code.startswith(quotes.JOB_PREFIX))
+        self.assertEqual(self.out(), 1)                                      # the order is on the floor: the job item is not "run out"
+
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("inventory:stock"))
+        states = {row["item"].item_code: row["state"] for row in page.context["rows"]}
+        self.assertEqual((states[job_item.item_code], states["PR-CATALOGUE"], page.context["counts"]["out"]), ("healthy", "out", 1))
+        detail = self.client.get(reverse("inventory:item_detail", args=[job_item.pk]))  # the item's own page says the same
+        self.assertEqual({row["state"] for row in detail.context["location_rows"]}, {"healthy"})
+
+        make_item(item_code="JOB-LOT-7", item_name="صنف عادي كوده مكتوب باليد", is_stock_tracked=True)
+        self.assertEqual(self.out(), 2)                                      # only a real job item is exempt, never a look-alike code
+
+        self.walk(production)                                                # finished: the job item is on hand
+        self.assertEqual(self.out(), 2)
+        self.invoice(order, "SI-JOB-1")                                      # delivered: zero on hand again, still not "run out"
+        self.assertEqual(self.out(), 2)
+
+
 class TwoJobsTests(PrintingPlant):
     def test_each_job_sells_at_its_own_cost_beside_another_job_of_the_same_description(self):
         first_order, first = self.job()
