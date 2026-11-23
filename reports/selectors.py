@@ -159,11 +159,18 @@ def stock_levels_by_item():
 
 
 def made_to_order_ids():
-    """Items made in the kitchen when ordered (RESTO-004): no plates on hand is not "out of stock"."""
+    """Items that hold nothing by design, so none on hand is not "out of stock".
 
+    A dish made in the kitchen when ordered (RESTO-004), and a custom job's own
+    item (HG-142): it is empty until its production order finishes and empty
+    again once the job is delivered.
+    """
+
+    from manufacturing.quotes import JOB_PREFIX
     from restaurant.kitchen import kitchen_dish_ids
 
-    return kitchen_dish_ids()
+    jobs = Item.objects.filter(item_code__startswith=JOB_PREFIX, is_stock_tracked=True)
+    return kitchen_dish_ids() | set(jobs.values_list("pk", flat=True))
 
 
 def stock_alert_counts():
