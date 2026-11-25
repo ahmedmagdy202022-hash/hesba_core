@@ -210,7 +210,10 @@
 @media (min-width:1024px){
   .pos{grid-template-columns:minmax(0,1fr) 380px;gap:var(--hs-space-5)}
   .pos-side{position:sticky;top:16px;display:flex;flex-direction:column;max-height:calc(100vh - 32px);overflow:hidden;gap:var(--hs-space-3);padding:var(--hs-space-4);border:0;background:var(--hs-card-bg);box-shadow:var(--hs-card-shadow)}
-  .pos-side__scroll{flex:1 1 auto;min-height:0;display:grid;align-content:start;gap:var(--hs-space-3);margin:calc(-1 * var(--hs-space-1)) calc(-1 * var(--hs-space-2));padding:var(--hs-space-1) var(--hs-space-2);overflow-y:auto;overscroll-behavior:contain}
+  .pos-side__scroll{flex:1 1 auto;min-height:0;display:grid;align-content:start;gap:var(--hs-space-3);margin:calc(-1 * var(--hs-space-1)) calc(-1 * var(--hs-space-2));padding:var(--hs-space-1) var(--hs-space-2);overflow-y:auto;overscroll-behavior:contain;
+    /* Promo-capture defect 2: when the details do not all fit above the pay panel, the cut-off edge says so (a soft shadow that
+       goes away at the end of the scroll) instead of looking like the panel sits on a field. */
+    background:linear-gradient(var(--hs-card-bg),var(--hs-card-bg)) bottom/100% 16px no-repeat local,linear-gradient(transparent,var(--hs-line)) bottom/100% 16px no-repeat scroll}
   .pos-paybar{flex:none;position:static;gap:var(--hs-space-2);margin-inline:calc(-1 * var(--hs-space-2));padding:var(--hs-space-3) var(--hs-space-4) var(--hs-space-4)}
   .pos-paybar.is-empty .pos-cashrow{opacity:.55}
   .pos-cashrow{flex-wrap:wrap;row-gap:var(--hs-space-2)}
@@ -221,6 +224,15 @@
   .pos-today{padding:0;box-shadow:none}
 }
 @media (min-width:1024px) and (max-width:1280px){.pos{grid-template-columns:minmax(0,1fr) 340px;gap:var(--hs-space-4)}}
+/* Promo-capture defect 2: a short window (a laptop's 1366x768 with its browser bars is about 650 tall). The pay panel and the column
+   tighten so that «كوبون» still clears the pay panel down to about 620 px; below that the details scroll, with the cue above. */
+@media (min-width:1024px) and (max-height:700px){
+  .pos-side{gap:var(--hs-space-2);padding:var(--hs-space-3)}
+  .pos-details__body{gap:var(--hs-space-2)}
+  .pos-paybar{gap:var(--hs-space-1);padding:var(--hs-space-2) var(--hs-space-3) var(--hs-space-3)}
+  .pos-actions .pos-pay,.pos-actions__more{min-height:48px;height:48px}
+  .pos-actions__more{width:48px}
+}
 
 /* Phones and tablets: the selling mode. */
 @media (max-width:1023px){
@@ -250,6 +262,12 @@
   /* The pay sheet: fixed to the bottom edge, its corners rounded upward. */
   .pos-paybar{position:fixed;inset:auto 0 0 0;z-index:25;gap:var(--hs-space-3);padding:var(--hs-space-4) var(--hs-gutter) calc(var(--hs-space-4) + env(safe-area-inset-bottom));border-radius:var(--hs-band-radius) var(--hs-band-radius) 0 0;box-shadow:var(--hs-shadow-up)}
   .pos-paybar.is-empty{display:none}
+  /* Promo-capture defect 3: «المدفوع» and the five cash buttons did not fit one row at 390 and the row scrolled sideways with no sign, so
+     50/100/200/500 were cut off. The buttons now share the row when it fits (a tablet) and drop to a row of their own when it does not. */
+  .pos-cashrow{flex-wrap:wrap;row-gap:var(--hs-space-2)}
+  .pos-paybar .pos-cash{flex:1 1 17rem;overflow:visible}
+  .pos-paybar .pos-cash button{flex:1 1 0;min-width:var(--hs-control-height);padding:0 var(--hs-space-1)}
+  .pos-paybar .pos-cash button[data-cash="exact"]{flex-grow:1.6}
   .pos-today{margin-top:var(--hs-space-4)}
   body.pos-layer-open{overflow:hidden}
 }

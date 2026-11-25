@@ -136,3 +136,19 @@ class ContractingNoCarPartsTests(NoCarPartsDemo, AiTestCase):
 @override_settings(**DEMO)
 class FactoryNoCarPartsTests(NoCarPartsDemo, AiTestCase):
     activity, sub = "manufacturing", "food"
+
+
+@override_settings(**DEMO)
+class GroceryNoCarPartsTests(NoCarPartsDemo, AiTestCase):
+    """Promo-capture defect 1: a supermarket's item list and till never showed spare parts (they came from the AI invoice sample)."""
+
+    activity, sub = "commercial", "grocery"
+
+    def test_the_till_search_and_the_item_list_show_no_spare_parts(self):
+        self.client.force_login(self.owner)
+        for path in ("/sales/pos/?lang=ar", "/master-data/items/?lang=ar&q=DEMO-AI"):
+            page = self.client.get(path)
+            self.assertEqual(page.status_code, 200, path)
+            for code, name, *_ in demo_ai.ITEMS:
+                self.assertNotContains(page, code)
+                self.assertNotContains(page, name)

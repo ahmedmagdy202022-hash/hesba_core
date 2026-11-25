@@ -103,7 +103,7 @@
 .dash-hero__live span{width:7px;height:7px;border-radius:50%;background:var(--hs-success-line);box-shadow:0 0 0 0 var(--hs-success-line);animation:dh-live 2s ease-out infinite}
 @keyframes dh-live{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--hs-success-line) 70%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
 .dash-greeting{margin:4px 0 0;font-size:clamp(26px,3.4vw,40px);font-weight:700;color:var(--hs-surface);letter-spacing:-.01em;line-height:1.25}
-.dash-greeting__name{background:linear-gradient(100deg,var(--hs-gold-bright) 0%,var(--hs-gold-wash) 45%,var(--hs-teal) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.dash-greeting__name{display:inline-block;max-width:100%;background:linear-gradient(100deg,var(--hs-gold-bright) 0%,var(--hs-gold-wash) 45%,var(--hs-teal) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
 .dash-hero__line{margin:0;font-size:14.5px;color:var(--hs-on-navy-muted)}
 .dash-hero__note{margin:0;font-size:14.5px;color:var(--hs-on-navy-muted)}
 .dash-hero__client{display:inline-block;margin-inline-start:6px;padding:1px 10px;border-radius:999px;background:color-mix(in srgb,var(--hs-gold-bright) 16%,transparent);color:var(--hs-gold-bright);font-weight:600;font-size:12.5px}
