@@ -19,7 +19,7 @@ posting, a ledger or a cashbox row by hand.
 
 Only when the capability is on (``ai_invoice_photo``, with purchases on, for the A3 records; ``ai_voice_summary`` for the
 collection), and only once: the item ``DEMO-AI-01`` and the payment ``DEMO-CR-AI`` say each part is already there.
-A restaurant, a contractor, a factory and any medical business get the supplier but no car parts (S2-01, video finding 10),
+A restaurant, a contractor, a factory, a supermarket and any medical business get the supplier but no car parts (S2-01, video finding 10),
 and their three lines are mapped by hand.
 A pharmacy gets no car parts (R1: they showed in its till search and drug lists). Its invoice-photo sample is a medicine
 distributor's (``PHARMACY_SAMPLE_READING``) and needs nothing seeded here: the supplier «الشركة المتحدة لتوزيع الأدوية»
@@ -58,6 +58,9 @@ COLLECTION_NUMBER = "DEMO-CR-AI"
 #: Video finding 10: a clinic, a lab and a vet are the same case — «زيت محرك 4 لتر» and «تيل فرامل أمامي» were in the
 #: lab's invoice form and in the vet's vaccine item list.
 NO_CAR_PARTS_ACTIVITIES = ("restaurants", "contracting", "manufacturing", "medical")
+#: Promo-capture defect 1: the same case one level down. A supermarket's item list and till showed «زيت محرك 4 لتر»,
+#: «فلتر زيت تويوتا» and brake pads next to its bread and tomatoes, so a grocery gets the sample's supplier only too.
+NO_CAR_PARTS_SUB_ACTIVITIES = ("grocery",)
 
 
 def seed(master, owner, modules=()):
@@ -91,7 +94,7 @@ def no_car_parts():
     from settings_core.models import ClientProfile
 
     profile = ClientProfile.get_active()
-    return profile is not None and profile.activity_slug in NO_CAR_PARTS_ACTIVITIES
+    return profile is not None and (profile.activity_slug in NO_CAR_PARTS_ACTIVITIES or profile.sub_activity_slug in NO_CAR_PARTS_SUB_ACTIVITIES)
 
 
 def pharmacy():
