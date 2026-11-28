@@ -15,7 +15,7 @@
  {
   "id": "p3",
   "script": "حِسبة. نظام واحد تدير بيه مبيعاتك ومخزونك وحساباتك.",
-  "sent_to_voice": "[strong Egyptian accent] حِسبَه. نظام واحد تدير بيه مبيعاتك ومخزونك وحساباتك.",
+  "sent_to_voice": "[strong Egyptian accent] حِسبا. نظام واحد تدير بيه مبيعاتك ومخزونك وحساباتك.",
   "caption": "مبيعات ومخزون وحسابات في نظام واحد"
  },
  {
@@ -45,20 +45,21 @@
  {
   "id": "p7",
   "script": "من أول محل واحد لحد سلسلة فروع، حِسبة بتكبر معاك.",
-  "sent_to_voice": "[strong Egyptian accent] من أول محل واحد لحد سلسلة فروع، حِسبَه، بتكبر معاك.",
+  "sent_to_voice": "[strong Egyptian accent] من أول محل واحد لحد سلسلة فروع، حِسبا بتكبر معاك.",
   "caption": "من محل واحد لسلسلة فروع"
  },
  {
   "id": "p8",
   "script": "حِسبة. قرارك مبني على أرقام.",
-  "sent_to_voice": "[strong Egyptian accent] حِسبَه. قرارك مبني على أرقام.",
+  "sent_to_voice": "[strong Egyptian accent] حِسبا. قرارك مبني على أرقام.",
   "caption": "قرارك مبني على أرقام"
  },
  {
   "id": "p8b",
   "script": "حِسبة. الصورة كاملة، والقرار في إيدك.",
   "sent_to_voice": "[strong Egyptian accent] حِسبَه. الصورة كاملة، والقرار في إيدك.",
-  "caption": "الصورة كاملة، والقرار في إيدك"
+  "caption": "الصورة كاملة، والقرار في إيدك",
+  "note": "recorded with the old spelling of the name; re-record before use"
  },
  {
   "id": "p9",
