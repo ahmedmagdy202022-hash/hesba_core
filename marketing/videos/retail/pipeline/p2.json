@@ -1,0 +1,352 @@
+{
+ "comment": "v2 promo settings. Times called 'at' / 'from' / 'to' are seconds INTO THE LINE'S CLIP (vo3/lines/<id>.wav), measured from the clip (silencedetect -30 dB d=0.035 + 30 ms energy; see 'words'). A seg 'at' is the moment the new screen is fully in (its dip ends there). Rects: [shot, target, pad] from shots_p2/<shot>.rects.json, or [x, y, w, h] CSS px of the capture. Revision 2 (QA): screen changes inside a line are direct crossfades of 'xfade' s (no blank page); 'at' = new screen fully in. Card changes keep their own 'dip'.",
+ "lead": 0.6,
+ "xf": 0.8,
+ "dip": 0.8,
+ "min_len": 5.6,
+ "tail": 0.7,
+ "hl_fade": 0.5,
+ "push_dur": 1.8,
+ "max_zoom": 2.0,
+ "phone_fade": 0.6,
+ "end_hold": 2.5,
+ "end_fade": 1.0,
+ "p8_hold": 1.0,
+ "band": {
+  "opaque_to": 190,
+  "soft_to": 204,
+  "safe_top": 214,
+  "margin": 48
+ },
+ "head_px": 66,
+ "layout": {
+  "screen_scale": 1.2,
+  "screen_x": 600,
+  "screen_y": 240,
+  "phone": {
+   "w": 300,
+   "h": 649,
+   "cx": 300,
+   "top": 262
+  }
+ },
+ "lines": {
+  "p1": {
+   "words": "والأرقام 1.33, بتزيد 1.70",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "dash_hero_desk",
+     "phone": "dash_phone"
+    }
+   ],
+   "slow_push": {
+    "zoom": 1.08,
+    "target": [
+     "dash_hero_desk",
+     "sales",
+     0
+    ]
+   },
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "dash_hero_desk",
+     "rect": [
+      "dash_hero_desk",
+      "sales",
+      6
+     ],
+     "from": 1.33
+    }
+   ]
+  },
+  "p2": {
+   "words": "فروع 0.09, ومخازن 0.83, وفريق 1.73, بس مين شايف 2.86",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "ent_desk",
+     "phone": "dash_phone"
+    },
+    {
+     "at": 0.88,
+     "desk": "wh_desk"
+    },
+    {
+     "at": 1.78,
+     "desk": "users_desk"
+    },
+    {
+     "at": 3.26,
+     "card": "q",
+     "band_off": true,
+     "dip": 0.4,
+     "min_read": 3.5
+    }
+   ]
+  },
+  "p3": {
+   "words": "حِسبة 0.08-0.59, نظام 1.03, تدير 1.81",
+   "segs": [
+    {
+     "at": 0,
+     "card": "logo_big"
+    },
+    {
+     "at": 1.43,
+     "desk": "dash_top_desk",
+     "phone": "dash_phone"
+    }
+   ],
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "dash_top_desk",
+     "rect": [
+      "dash_top_desk",
+      "bar",
+      4
+     ],
+     "from": 1.51
+    }
+   ]
+  },
+  "p4": {
+   "words": "في كل فرع 1.26-1.77, وصلاحيات 2.11, لكل موظف 3.63",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "pos_desk",
+     "phone": "pos_phone"
+    },
+    {
+     "at": 2.15,
+     "desk": "roles_desk",
+     "phone": "roles_phone"
+    }
+   ],
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "pos_desk",
+     "rect": [
+      "pos_desk",
+      "bar",
+      4
+     ],
+     "from": 0.95
+    },
+    {
+     "on": "desk",
+     "shot": "roles_desk",
+     "rect": [
+      10,
+      162,
+      222,
+      138
+     ],
+     "from": 2.15
+    }
+   ]
+  },
+  "p5a": {
+   "words": "كل فرع 0.67, وكل مخزن 1.55",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "where_desk",
+     "phone": "where_phone"
+    }
+   ],
+   "push": {
+    "at": 0.67,
+    "target": [
+     "where_desk",
+     "block",
+     8
+    ],
+    "max_zoom": 1.42
+   },
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "where_desk",
+     "rect": [
+      "where_desk",
+      "block",
+      6
+     ],
+     "from": 0.67
+    }
+   ]
+  },
+  "p5b": {
+   "words": "تنبيه 0.30, يخلص ends 1.86, واقتراح 1.98, بالكميات 2.24",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "stock_desk",
+     "phone": "stock_phone"
+    },
+    {
+     "at": 1.8,
+     "desk": "reorder_desk",
+     "phone": "reorder_phone"
+    }
+   ],
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "stock_desk",
+     "rect": [
+      11,
+      437,
+      922,
+      150
+     ],
+     "from": 0.05
+    },
+    {
+     "on": "desk",
+     "shot": "reorder_desk",
+     "rect": [
+      "reorder_desk",
+      "col",
+      6
+     ],
+     "from": 1.48
+    }
+   ]
+  },
+  "p6": {
+   "words": "المبيعات 2.00, والأرباح 2.47, والخزنة 2.71-3.00, من الموبايل 4.73, أو الكمبيوتر 5.47",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "profit_desk",
+     "phone": "dash_phone"
+    },
+    {
+     "at": 2.4,
+     "desk": "daily_desk"
+    }
+   ],
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "profit_desk",
+     "rect": [
+      "profit_desk",
+      "summary",
+      6
+     ],
+     "from": 1.5
+    },
+    {
+     "on": "desk",
+     "shot": "daily_desk",
+     "rect": [
+      "daily_desk",
+      "khazna",
+      6
+     ],
+     "from": 2.21,
+     "to": 4.43
+    },
+    {
+     "on": "phone",
+     "rect": [
+      4,
+      4,
+      382,
+      836
+     ],
+     "from": 4.43
+    },
+    {
+     "on": "desk",
+     "rect": [
+      4,
+      4,
+      1016,
+      634
+     ],
+     "from": 5.17
+    }
+   ]
+  },
+  "p7": {
+   "words": "من أول محل واحد 0.06-1.35, لحد 1.47, سلسلة فروع 1.83-2.72, حِسبة 3.04, بتكبر معاك 3.76",
+   "segs": [
+    {
+     "at": 0,
+     "desk": "ent_desk",
+     "phone": "ent_phone"
+    },
+    {
+     "at": 1.95,
+     "desk": "entnew_desk"
+    },
+    {
+     "at": 3.8,
+     "desk": "dash_top_desk",
+     "phone": "dash_phone"
+    }
+   ],
+   "highlights": [
+    {
+     "on": "desk",
+     "shot": "ent_desk",
+     "rect": [
+      "ent_desk",
+      "newbtn",
+      6
+     ],
+     "from": 0.06
+    },
+    {
+     "on": "desk",
+     "shot": "entnew_desk",
+     "rect": [
+      "entnew_desk",
+      "kind",
+      6
+     ],
+     "from": 1.95
+    },
+    {
+     "on": "desk",
+     "shot": "dash_top_desk",
+     "rect": [
+      "dash_top_desk",
+      "bar",
+      4
+     ],
+     "from": 3.8
+    }
+   ]
+  },
+  "p8": {
+   "words": "حِسبة 0.08-0.52, قرارك 0.96",
+   "band": false,
+   "segs": [
+    {
+     "at": 0,
+     "card": "p8"
+    }
+   ]
+  },
+  "p9": {
+   "words": "",
+   "band": false,
+   "segs": [
+    {
+     "at": 0,
+     "card": "p9"
+    }
+   ]
+  }
+ },
+ "xfade": 0.2
+}

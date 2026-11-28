@@ -31,3 +31,29 @@ Tests run during the research: `sales.tests_pos`, `shifts`, `offline_pos`, `repo
 ## Wording on the screens
 
 «الكاشير», «الخزنة» (plural «الخزن»; «خزينة» is not used anywhere), «المخزن», «فاتورة», «مرتجع», «وردية», «آجل», «ملخص النهارده», «تقرير الأرباح», «مخزون منخفض», «نفد المخزون».
+
+## Second research pass: larger businesses (28 Nov 2026)
+
+Ahmed rejected the first script on 28 Nov: not premium, and it spoke only to small shops. The new script speaks to owners of any size, so these claims were verified on `develop` (code, templates and tests read; no tests run in this pass).
+
+| Claim in the script | Verdict | Evidence | Limits |
+|---|---|---|---|
+| A till in every branch | Built | `sales/pos.py` scopes the selectable warehouses and cashboxes to the branch selected in the «شغال في» bar; `entities/tests_scope.py` | No test opens `/sales/pos/` itself with a branch selected |
+| Roles and permissions per employee | Built | `/settings/roles/` «الأدوار والصلاحيات», `/settings/users/`; custom roles (HG-049); `permissions/tests_role_matrix.py`, `tests_custom_roles.py`, `accounts/tests_users.py` | A role is not a branch assignment |
+| Stock of every branch and warehouse | Built | `/entities/stock/` «فين الصنف ده؟» («الإجمالي في الشركة», «الكيان», «المخزن», «الكمية»), `/inventory/warehouses/`; `entities/tests.py::GroupStockTests`, `inventory/tests_warehouses.py` | Figures are computed on page load, no live refresh. `/inventory/` with no location chosen shows the company total |
+| Alert before an item runs out, and a suggested quantity | Built | «مخزون منخفض», «نفد المخزون»; `/inventory/reorder/` column «المقترح»; `inventory/tests_reorder.py` | The reorder page is company-wide, not per branch |
+| Reports for sales, profit and cashboxes | Built | `/reports/sales/`, `/reports/profit/`, `/reports/cashboxes/`, `/reports/daily/`; scoped in `reports/selectors.py`; `entities/tests_scope.py` (branch + main = group) | One branch at a time or the whole group summed; no side-by-side comparison |
+| From the phone or the computer | Partly | Responsive layout; dashboard and daily summary have a phone layout (`reports/tests_ux_wave4_dashboard.py`) | The wide report tables scroll sideways on a phone, so the phone shot uses the dashboard or the daily summary. It is the phone browser, not an app |
+| One shop up to a chain of branches | Built | Settings → «الفروع» (`/entities/`, «فرع جديد», kinds «فرع (نفس الشركة)» and «شركة مستقلة»); `entities/tests.py::EntityScreenTests` | |
+
+### Added to the do-not-claim list
+
+- An employee limited to one branch: the rule exists in code (`EntityMembership`) but no screen assigns it.
+- A side-by-side comparison or ranking of branches.
+- «لحظة بلحظة» or live sync wording (the script says «أول بأول»).
+- A mobile app.
+- «من أي مكان» as a guarantee (it depends on hosting).
+
+### Demo data used for filming
+
+The seeded demo has one branch and one warehouse. Two more branches, with a warehouse, a cashbox, transferred stock and a few sales each, were added through the product's own screens as the demo owner, inside a throwaway demo box. Nothing in the repository's demo seed was changed.
