@@ -1,0 +1,361 @@
+{
+ "total": 57.414,
+ "scenes": [
+  {
+   "id": "p1",
+   "caption": "تجارتك بتكبر كل يوم",
+   "voice_file": "vo3/lines/p1.wav",
+   "start": 0.0,
+   "len": 5.6,
+   "end": 5.6,
+   "voice_start": 0.6,
+   "voice_dur": 3.273,
+   "voice_end": 3.873,
+   "cues": [
+    {
+     "what": "slow push x1.08",
+     "t": [
+      0.0,
+      5.6
+     ]
+    },
+    {
+     "what": "outline 0 (dash_hero_desk)",
+     "on": 1.93,
+     "full": 2.43,
+     "off": null
+    }
+   ],
+   "words": "والأرقام 1.33, بتزيد 1.70",
+   "caption_full": [
+    0.8,
+    4.8
+   ]
+  },
+  {
+   "id": "p2",
+   "caption": "فروع ومخازن وفريق شغل",
+   "voice_file": "vo3/lines/p2.wav",
+   "start": 4.8,
+   "len": 8.16,
+   "end": 12.96,
+   "voice_start": 5.4,
+   "voice_dur": 4.448,
+   "voice_end": 9.848,
+   "cues": [
+    {
+     "what": "screen -> wh_desk",
+     "dip": [
+      6.08,
+      6.28
+     ]
+    },
+    {
+     "what": "screen -> users_desk",
+     "dip": [
+      6.98,
+      7.18
+     ]
+    },
+    {
+     "what": "screen -> q",
+     "dip": [
+      8.26,
+      8.66
+     ]
+    }
+   ],
+   "words": "فروع 0.09, ومخازن 0.83, وفريق 1.73, بس مين شايف 2.86",
+   "caption_full": [
+    5.6,
+    12.16
+   ]
+  },
+  {
+   "id": "p3",
+   "caption": "مبيعات ومخزون وحسابات في نظام واحد",
+   "voice_file": "vo3/lines/p3.wav",
+   "start": 12.16,
+   "len": 6.013,
+   "end": 18.173,
+   "voice_start": 12.76,
+   "voice_dur": 4.713,
+   "voice_end": 17.473,
+   "cues": [
+    {
+     "what": "screen -> dash_top_desk/dash_phone",
+     "dip": [
+      13.34,
+      14.14
+     ]
+    },
+    {
+     "what": "outline 0 (dash_top_desk)",
+     "on": 14.22,
+     "full": 14.72,
+     "off": null
+    }
+   ],
+   "words": "حِسبة 0.08-0.55, نظام 0.98, تدير 1.80 (new clip 28 Nov 11:46)",
+   "caption_full": [
+    12.96,
+    17.37
+   ]
+  },
+  {
+   "id": "p4",
+   "caption": "نقطة بيع وصلاحيات لكل موظف",
+   "voice_file": "vo3/lines/p4.wav",
+   "start": 17.373,
+   "len": 5.856,
+   "end": 23.228,
+   "voice_start": 17.973,
+   "voice_dur": 4.556,
+   "voice_end": 22.528,
+   "cues": [
+    {
+     "what": "screen -> roles_desk/roles_phone",
+     "dip": [
+      19.92,
+      20.12
+     ]
+    },
+    {
+     "what": "outline 0 (pos_desk)",
+     "on": 18.92,
+     "full": 19.42,
+     "off": null
+    },
+    {
+     "what": "outline 1 (roles_desk)",
+     "on": 20.12,
+     "full": 20.62,
+     "off": null
+    }
+   ],
+   "words": "في كل فرع 1.26-1.77, وصلاحيات 2.11, لكل موظف 3.63",
+   "caption_full": [
+    18.17,
+    22.43
+   ]
+  },
+  {
+   "id": "p5a",
+   "caption": "مخزون كل فرع قدامك أول بأول",
+   "voice_file": "vo3/lines/p5a.wav",
+   "start": 22.428,
+   "len": 5.6,
+   "end": 28.028,
+   "voice_start": 23.028,
+   "voice_dur": 3.917,
+   "voice_end": 26.945,
+   "cues": [
+    {
+     "what": "push-in",
+     "t": [
+      23.7,
+      25.5
+     ]
+    },
+    {
+     "what": "phone fades out (before the push would crop it)",
+     "t": [
+      23.7,
+      24.3
+     ]
+    },
+    {
+     "what": "outline 0 (where_desk)",
+     "on": 23.7,
+     "full": 24.2,
+     "off": null
+    }
+   ],
+   "words": "كل فرع 0.67, وكل مخزن 1.55",
+   "caption_full": [
+    23.23,
+    27.23
+   ]
+  },
+  {
+   "id": "p5b",
+   "caption": "تنبيه قبل ما الصنف يخلص",
+   "voice_file": "vo3/lines/p5b.wav",
+   "start": 27.228,
+   "len": 5.6,
+   "end": 32.828,
+   "voice_start": 27.828,
+   "voice_dur": 3.847,
+   "voice_end": 31.676,
+   "cues": [
+    {
+     "what": "screen -> reorder_desk/reorder_phone",
+     "dip": [
+      29.43,
+      29.63
+     ]
+    },
+    {
+     "what": "outline 0 (stock_desk)",
+     "on": 27.88,
+     "full": 28.38,
+     "off": null
+    },
+    {
+     "what": "outline 1 (reorder_desk)",
+     "on": 29.31,
+     "full": 29.81,
+     "off": null
+    }
+   ],
+   "words": "تنبيه 0.30, يخلص ends 1.86, واقتراح 1.98, بالكميات 2.24",
+   "caption_full": [
+    28.03,
+    32.03
+   ]
+  },
+  {
+   "id": "p6",
+   "caption": "تقارير المبيعات والأرباح والخزن",
+   "voice_file": "vo3/lines/p6.wav",
+   "start": 32.028,
+   "len": 7.624,
+   "end": 39.652,
+   "voice_start": 32.628,
+   "voice_dur": 6.324,
+   "voice_end": 38.952,
+   "cues": [
+    {
+     "what": "screen -> daily_desk",
+     "dip": [
+      34.83,
+      35.03
+     ]
+    },
+    {
+     "what": "outline 0 (profit_desk)",
+     "on": 34.13,
+     "full": 34.63,
+     "off": null
+    },
+    {
+     "what": "outline 1 (daily_desk)",
+     "on": 34.84,
+     "full": 35.34,
+     "off": 37.06
+    },
+    {
+     "what": "outline 2 (phone)",
+     "on": 37.06,
+     "full": 37.56,
+     "off": null
+    },
+    {
+     "what": "outline 3 (desk)",
+     "on": 37.8,
+     "full": 38.3,
+     "off": null
+    }
+   ],
+   "words": "المبيعات 2.00, والأرباح 2.47, والخزنة 2.71-3.00, من الموبايل 4.73, أو الكمبيوتر 5.47",
+   "caption_full": [
+    32.83,
+    38.85
+   ]
+  },
+  {
+   "id": "p7",
+   "caption": "من محل واحد لسلسلة فروع",
+   "voice_file": "vo3/lines/p7.wav",
+   "start": 38.852,
+   "len": 5.807,
+   "end": 44.659,
+   "voice_start": 39.452,
+   "voice_dur": 4.507,
+   "voice_end": 43.959,
+   "cues": [
+    {
+     "what": "screen -> entnew_desk",
+     "dip": [
+      41.17,
+      41.37
+     ]
+    },
+    {
+     "what": "screen -> dash_top_desk/dash_phone",
+     "dip": [
+      42.87,
+      43.07
+     ]
+    },
+    {
+     "what": "outline 0 (ent_desk)",
+     "on": 39.52,
+     "full": 40.02,
+     "off": null
+    },
+    {
+     "what": "outline 1 (entnew_desk)",
+     "on": 41.37,
+     "full": 41.87,
+     "off": null
+    },
+    {
+     "what": "outline 2 (dash_top_desk)",
+     "on": 43.07,
+     "full": 43.57,
+     "off": null
+    }
+   ],
+   "words": "من أول محل واحد 0.07-1.30, لحد 1.38, سلسلة فروع 1.78-2.77, حِسبة 3.08, بتكبر معاك 3.60 (new clip)",
+   "caption_full": [
+    39.65,
+    43.86
+   ]
+  },
+  {
+   "id": "p8",
+   "caption": "قرارك مبني على أرقام",
+   "voice_file": "vo3/lines/p8.wav",
+   "start": 43.859,
+   "len": 5.6,
+   "end": 49.459,
+   "voice_start": 44.459,
+   "voice_dur": 2.681,
+   "voice_end": 47.139,
+   "cues": [],
+   "words": "حِسبة 0.10-0.55, قرارك 1.02 (new clip)",
+   "caption_full": [
+    44.66,
+    48.66
+   ]
+  },
+  {
+   "id": "p9",
+   "caption": "جرّب من غير تكلفة ولا تسجيل",
+   "voice_file": "vo3/lines/p9.wav",
+   "start": 48.659,
+   "len": 8.756,
+   "end": 57.414,
+   "voice_start": 49.259,
+   "voice_dur": 4.656,
+   "voice_end": 53.914,
+   "cues": [],
+   "words": "",
+   "caption_full": [
+    49.46,
+    56.61
+   ]
+  }
+ ],
+ "boxes": {
+  "p5a": [
+   490.3436619718308,
+   319.43661971830977,
+   1.42,
+   false
+  ]
+ },
+ "loudness_lufs": -16.0,
+ "true_peak_dbtp": -2.2
+}
